@@ -19,7 +19,6 @@
   let authToken = store.get(API_TOKEN_KEY, '');
   document.documentElement.setAttribute('data-accent', store.get('nova_accent', 'purple'));
 
-  // Локальный кэш resolved URL для моментального старта
   const localResolveCache = new Map();
   const LOCAL_RESOLVE_TTL = 30 * 60 * 1000;
 
@@ -429,47 +428,79 @@
   }
 
   async function search(query, options = {}){
-    const q = String(query || '').trim(); if (!q) return;
+    const q = String(query || '').trim();
+    console.log('[search] called:', q, options);
+    if (!q) return;
+
     state.query = q;
+
+    // СРАЗУ переключаемся на экран поиска
+    if (!options.startup){
+      try { showView('search'); } catch (e){ console.error('[search] showView:', e); }
+    }
+
     const reqId = ++state.searchRequest;
     if (searchAbort) searchAbort.abort();
-    const controller = new AbortController(); searchAbort = controller;
-    el.searchButton.disabled = true; el.searchButton.textContent = '…';
-    el.resultsInfo.textContent = 'Поиск…';
+    const controller = new AbortController();
+    searchAbort = controller;
+
+    if (el.searchButton){
+      el.searchButton.disabled = true;
+      el.searchButton.textContent = '…';
+    }
+    if (el.resultsInfo) el.resultsInfo.textContent = 'Поиск…';
+
     try {
-      const r = await fetch(apiBase() + '/api/search?q=' + encodeURIComponent(q), {
-        headers: { Accept: 'application/json' }, signal: controller.signal
+      const url = apiBase() + '/api/search?q=' + encodeURIComponent(q);
+      console.log('[search] fetch:', url);
+
+      const r = await fetch(url, {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal
       });
+
+      console.log('[search] status:', r.status);
       if (!r.ok) throw new Error('HTTP ' + r.status);
+
       const d = await r.json();
+      console.log('[search] results:', (d.results || []).length);
+
       if (reqId !== state.searchRequest) return;
+
       state.tracks = Array.isArray(d.results) ? d.results.map(normalizeTrack) : [];
       state.tracks = sortSearchResults(state.tracks, q);
-      renderTracks(); renderHome();
-      setConnection(true, 'API: online');
-      el.resultsInfo.textContent = state.tracks.length + ' результатов';
-      if (!options.startup) showView('search');
-      if (state.tracks.length && !options.startup) notify(state.tracks.length + ' результатов');
 
-      // ПРЕДЗАГРУЗКА первых 6 треков для моментального старта
-      if (!options.startup && state.tracks.length){
+      try { renderTracks(); } catch (e){ console.error('[renderTracks]', e); }
+      try { renderHome(); } catch (e){ console.error('[renderHome]', e); }
+
+      setConnection(true, 'API: online');
+      if (el.resultsInfo) el.resultsInfo.textContent = state.tracks.length + ' результатов';
+
+      if (!options.startup) showView('search');
+
+      if (state.tracks.length && !options.startup){
+        notify(state.tracks.length + ' результатов');
         prefetchTracks(state.tracks.slice(0, 6));
       }
     } catch (e){
       if (reqId !== state.searchRequest || e.name === 'AbortError') return;
+      console.error('[search] error:', e);
       state.tracks = [];
-      el.grid.innerHTML = '<div class="empty" style="grid-column:1/-1;"><div>Ошибка поиска</div></div>';
-      el.resultsInfo.textContent = 'Ошибка'; setConnection(false, 'API: ошибка');
+      if (el.grid) el.grid.innerHTML = '<div class="empty" style="grid-column:1/-1;"><div>Ошибка: ' + escapeHtml(e.message) + '</div></div>';
+      if (el.resultsInfo) el.resultsInfo.textContent = 'Ошибка';
+      setConnection(false, 'API: ошибка');
     } finally {
-      if (reqId === state.searchRequest){ el.searchButton.disabled = false; el.searchButton.textContent = 'Найти'; }
+      if (reqId === state.searchRequest && el.searchButton){
+        el.searchButton.disabled = false;
+        el.searchButton.textContent = 'Найти';
+      }
     }
   }
 
   // ============================================================
-  // PREFETCH — резолвим первые треки в фоне
+  // PREFETCH
   // ============================================================
   function prefetchTracks(tracks){
-    // Локальный prefetch — сразу запрашиваем URL
     tracks.forEach(t => {
       const q = [t.title, t.artist].filter(Boolean).join(' ');
       if (!q) return;
@@ -487,7 +518,6 @@
         .catch(() => {});
     });
 
-    // Отправляем батч на сервер для прогрева серверного кэша
     try {
       fetch(apiBase() + '/api/audio/prefetch', {
         method: 'POST',
@@ -498,7 +528,7 @@
   }
 
   // ============================================================
-  // RENDER
+  // RENDER HOME
   // ============================================================
   function renderHome(){
     const recent = state.history.slice(0, 8);
@@ -641,7 +671,7 @@
   function closeSongInfo(){ el.songInfoModal.classList.remove('open'); el.songInfoModal.setAttribute('aria-hidden', 'true'); }
 
   // ============================================================
-  // PLAYBACK — моментальный старт
+  // PLAYBACK
   // ============================================================
   async function playUrl(url){
     el.audio.pause();
@@ -676,14 +706,12 @@
 
     const ck = normalizeSearch(q);
 
-    // 1. Проверяем ЛОКАЛЬНЫЙ кэш — есть URL? Играем сразу
     let streamUrl = '';
     const local = localResolveCache.get(ck);
     if (local && Date.now() - local.time < LOCAL_RESOLVE_TTL){
       streamUrl = local.streamUrl;
     }
 
-    // Если нет — запрашиваем (сервер тоже с кэшем, ответит быстро)
     if (!streamUrl){
       try {
         const r = await fetch(apiBase() + '/api/audio/resolve?q=' + encodeURIComponent(q), { headers: { Accept: 'application/json' } });
@@ -701,7 +729,6 @@
       return;
     }
 
-    // 2. Играем моментально
     try {
       await playUrl(streamUrl);
       state.playState = 'playing';
