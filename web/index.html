@@ -220,6 +220,37 @@
 
   <div id="lyricsModal" class="lyrics-modal" aria-hidden="true"><div class="lyrics-panel"><div class="lyrics-top"><div class="lyrics-title"><strong id="lyricsTrackTitle">Текст</strong><span id="lyricsTrackArtist">—</span></div><button id="lyricsClose" class="lyrics-close">×</button></div><div id="lyricsBody" class="lyrics-body"><div class="lyrics-loading">Загрузка текста…</div></div></div></div>
 
+<!-- SONG INFO MODAL -->
+<div id="songInfoModal" class="song-info-modal" aria-hidden="true">
+  <div class="song-info-card">
+    <button id="songInfoClose" class="song-info-close">×</button>
+    <img id="songInfoCover" class="song-info-cover" alt="">
+    <div id="songInfoSource" class="song-source">CATALOG</div>
+    <h2 id="songInfoTitle" class="song-info-title">—</h2>
+    <div id="songInfoArtist" class="song-info-artist">—</div>
+    <div class="song-info-rows">
+      <div class="song-info-row"><span>Альбом</span><div id="songInfoAlbum" class="song-info-value">—</div></div>
+      <div class="song-info-row"><span>Длительность</span><div id="songInfoMeta" class="song-info-value">—</div></div>
+    </div>
+    <div class="song-info-actions">
+      <button id="songInfoPlay" class="song-info-btn primary">▶ Воспроизвести</button>
+      <button id="songInfoFavorite" class="song-info-btn">♡ В избранное</button>
+      <button id="songInfoDownload" class="song-info-btn">↓ Скачать</button>
+    </div>
+  </div>
+</div>
+
+<!-- EQUALIZER MODAL -->
+<div id="equalizerModal" class="eq-modal" aria-hidden="true">
+  <div class="eq-card">
+    <button id="equalizerClose" class="song-info-close">×</button>
+    <h2 class="eq-title">Эквалайзер</h2>
+    <p class="eq-sub">5-полосный · Web Audio API</p>
+    <div class="eq-presets" id="equalizerPresets"></div>
+    <div class="eq-bands" id="equalizerBands"></div>
+  </div>
+</div>
+  
   <div id="toast" class="toast"></div>
   <input id="backgroundInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
   <input id="localAudioInput" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.webm" hidden>
