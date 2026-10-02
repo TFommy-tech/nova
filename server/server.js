@@ -398,7 +398,7 @@ function mergeProviderResults(providers, query){
 // ============================================================
 // ROUTES
 // ============================================================
-api.get('/api/health', (req, res) => res.json({ ok: true, service: 'NOVA', version: '2.6.0' }));
+api.get('/api/health', (req, res) => res.json({ ok: true, service: 'NOVA', version: '2.7.0' }));
 
 api.get('/api/popular', async (req, res) => {
   const cacheKey = 'popular:v5';
@@ -645,8 +645,87 @@ api.get('/api/lyrics', async (req, res) => {
 });
 
 // ============================================================
-// YOUTUBE STREAM — через yt-dlp
+// YOUTUBE STREAM — yt-dlp + Piped + Invidious
 // ============================================================
+const PIPED_INSTANCES = [
+  'https://pipedapi.kavin.rocks',
+  'https://pipedapi.tokhmi.xyz',
+  'https://pipedapi.moomoo.me',
+  'https://pipedapi.adminforge.de',
+  'https://pipedapi.leptons.xyz',
+  'https://pipedapi.drgns.space',
+  'https://api.piped.yt'
+];
+
+const INVIDIOUS_INSTANCES = [
+  'https://inv.nadeko.net',
+  'https://yewtu.be',
+  'https://invidious.nerdvpn.de',
+  'https://iv.melmac.space',
+  'https://invidious.f5.si',
+  'https://invidious.privacyredirect.com'
+];
+
+async function tryYtDlp(videoId){
+  const url = 'https://www.youtube.com/watch?v=' + videoId;
+  const args = [
+    '-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
+    '-g',
+    '--no-playlist',
+    '--no-warnings',
+    '--no-check-certificates',
+    '--extractor-args', 'youtube:player_client=android,web_safari,ios',
+    url
+  ];
+  const result = await execFileAsync('/usr/local/bin/yt-dlp', args, {
+    timeout: 25000,
+    maxBuffer: 10 * 1024 * 1024,
+    env: { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin' }
+  });
+  const stdout = String(result.stdout || '').trim();
+  const streamUrl = stdout.split('\n')[0];
+  if (!streamUrl || !/^https?:\/\//i.test(streamUrl)) throw new Error('no url');
+  return streamUrl;
+}
+
+async function tryPiped(videoId){
+  for (const base of PIPED_INSTANCES){
+    try {
+      const r = await fetch(base + '/streams/' + videoId, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const streams = Array.isArray(d?.audioStreams) ? d.audioStreams : [];
+      const best = streams
+        .filter(s => s.url && s.mimeType && s.mimeType.includes('audio'))
+        .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+      if (best?.url){
+        console.log('[piped] ok via', base);
+        return best.url;
+      }
+    } catch (e){ /* next */ }
+  }
+  throw new Error('no stream');
+}
+
+async function tryInvidious(videoId){
+  for (const base of INVIDIOUS_INSTANCES){
+    try {
+      const r = await fetch(base + '/api/v1/videos/' + videoId, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const formats = Array.isArray(d?.adaptiveFormats) ? d.adaptiveFormats : [];
+      const best = formats
+        .filter(f => f.url && f.type && f.type.startsWith('audio'))
+        .sort((a, b) => (Number(b.bitrate) || 0) - (Number(a.bitrate) || 0))[0];
+      if (best?.url){
+        console.log('[invidious] ok via', base);
+        return best.url;
+      }
+    } catch (e){ /* next */ }
+  }
+  throw new Error('no stream');
+}
+
 async function getYtStreamUrl(videoId){
   const cacheKey = 's:' + videoId;
   const c = streamCache.get(cacheKey);
@@ -654,31 +733,28 @@ async function getYtStreamUrl(videoId){
 
   if (!/^[A-Za-z0-9_-]{6,20}$/.test(videoId)) throw new Error('invalid videoId');
 
-  const url = 'https://www.youtube.com/watch?v=' + videoId;
-  console.log('[yt-dlp] extracting:', videoId);
+  console.log('[yt] resolving:', videoId);
 
   try {
-    const { stdout } = await execFileAsync('yt-dlp', [
-      '-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
-      '-g',
-      '--no-playlist',
-      '--no-warnings',
-      '--no-check-certificates',
-      url
-    ], { timeout: 30000, maxBuffer: 10 * 1024 * 1024 });
+    const url = await tryYtDlp(videoId);
+    streamCache.set(cacheKey, { time: Date.now(), url });
+    console.log('[yt] ok via yt-dlp:', videoId);
+    return url;
+  } catch (e){ console.warn('[yt] yt-dlp failed:', e.message); }
 
-    const streamUrl = String(stdout || '').trim().split('\n')[0];
-    if (!streamUrl || !/^https?:\/\//i.test(streamUrl)) {
-      throw new Error('no valid stream url');
-    }
+  try {
+    const url = await tryPiped(videoId);
+    streamCache.set(cacheKey, { time: Date.now(), url });
+    return url;
+  } catch (e){ console.warn('[yt] piped failed:', e.message); }
 
-    streamCache.set(cacheKey, { time: Date.now(), url: streamUrl });
-    console.log('[yt-dlp] ok:', videoId, 'url len:', streamUrl.length);
-    return streamUrl;
-  } catch (e){
-    console.error('[yt-dlp] failed:', videoId, e.message);
-    throw new Error('yt-dlp failed: ' + e.message);
-  }
+  try {
+    const url = await tryInvidious(videoId);
+    streamCache.set(cacheKey, { time: Date.now(), url });
+    return url;
+  } catch (e){ console.warn('[yt] invidious failed:', e.message); }
+
+  throw new Error('no stream source available');
 }
 
 async function findPlayableAudio(query){
