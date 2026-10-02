@@ -536,7 +536,7 @@ api.post('/api/audio/prefetch', async (req, res) => {
 });
 
 // ============================================================
-// AUDIO PROXY
+// AUDIO PROXY (с проверкой Content-Type)
 // ============================================================
 const INVIDIOUS_INSTANCES = [
   'https://invidious.f5.si',
@@ -562,25 +562,54 @@ api.get('/api/audio/youtube/:videoId', async (req, res) => {
   for (const base of INVIDIOUS_INSTANCES){
     try {
       const url = base + '/latest_version?id=' + vid + '&itag=140&local=true';
-      const headers = { 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*' };
+      const headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9'
+      };
       if (range) headers.Range = range;
 
       const upstream = await fetch(url, { headers, redirect: 'follow', timeout: 15000 });
+
       if (!upstream.ok && upstream.status !== 206){
         console.warn('[proxy] invidious ' + base + ' status:', upstream.status);
+        try { upstream.body?.destroy(); } catch (_){}
         continue;
       }
 
-      console.log('[proxy] ok via', base);
-      res.setHeader('Content-Type', 'audio/mp4');
+      const ct = String(upstream.headers.get('content-type') || '').toLowerCase();
+      const cl = Number(upstream.headers.get('content-length') || 0);
+
+      if (!ct.startsWith('audio/') && !ct.startsWith('video/') && !ct.includes('octet-stream')){
+        console.warn('[proxy] ' + base + ' wrong content-type:', ct || '(empty)');
+        try { upstream.body?.destroy(); } catch (_){}
+        continue;
+      }
+
+      if (cl > 0 && cl < 50000){
+        console.warn('[proxy] ' + base + ' too small:', cl, 'bytes');
+        try { upstream.body?.destroy(); } catch (_){}
+        continue;
+      }
+
+      console.log('[proxy] ok via', base, '| type=' + ct + ' | len=' + (cl || 'chunked'));
+
+      res.setHeader('Content-Type', ct.startsWith('audio/') || ct.startsWith('video/') ? ct : 'audio/mp4');
       res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Cache-Control', 'no-store');
-      const cl = upstream.headers.get('content-length');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      if (cl > 0) res.setHeader('Content-Length', String(cl));
       const cr = upstream.headers.get('content-range');
-      if (cl) res.setHeader('Content-Length', cl);
       if (cr) res.setHeader('Content-Range', cr);
       res.status(upstream.status === 206 ? 206 : 200);
       upstream.body.pipe(res);
+
+      upstream.body.on('error', (err) => {
+        console.warn('[proxy] stream error after ok:', err.message);
+        if (!res.headersSent) res.status(502).end();
+        else res.end();
+      });
+      req.on('close', () => { try { upstream.body?.destroy(); } catch (_){} });
       return;
     } catch (e){
       console.warn('[proxy] invidious ' + base + ' failed:', e.message);
@@ -604,14 +633,29 @@ api.get('/api/audio/youtube/:videoId', async (req, res) => {
       const upstream = await fetch(proxyUrl, { headers, redirect: 'follow', timeout: 15000 });
       if (!upstream.ok && upstream.status !== 206) continue;
 
+      const ct = String(upstream.headers.get('content-type') || '').toLowerCase();
+      if (!ct.startsWith('audio/') && !ct.startsWith('video/') && !ct.includes('octet-stream')){
+        console.warn('[proxy] piped ' + base + ' wrong content-type:', ct);
+        try { upstream.body?.destroy(); } catch (_){}
+        continue;
+      }
+
       console.log('[proxy] ok via piped', base);
       res.setHeader('Content-Type', best.mimeType || 'audio/mp4');
       res.setHeader('Accept-Ranges', 'bytes');
       res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Access-Control-Allow-Origin', '*');
       const cl = upstream.headers.get('content-length');
       if (cl) res.setHeader('Content-Length', cl);
       res.status(upstream.status === 206 ? 206 : 200);
       upstream.body.pipe(res);
+
+      upstream.body.on('error', (err) => {
+        console.warn('[proxy] piped stream error:', err.message);
+        if (!res.headersSent) res.status(502).end();
+        else res.end();
+      });
+      req.on('close', () => { try { upstream.body?.destroy(); } catch (_){} });
       return;
     } catch (e){
       console.warn('[proxy] piped ' + base + ' failed:', e.message);
@@ -637,6 +681,7 @@ api.get('/api/audio/audius/:id', async (req, res) => {
       const v = upstream.headers.get(h);
       if (v) res.setHeader({ 'content-type': 'Content-Type', 'content-length': 'Content-Length', 'accept-ranges': 'Accept-Ranges', 'content-range': 'Content-Range' }[h], v);
     }
+    res.setHeader('Access-Control-Allow-Origin', '*');
     res.status(upstream.status);
     upstream.body.pipe(res);
   } catch (e){ if (!res.headersSent) res.status(502).send('err'); }
