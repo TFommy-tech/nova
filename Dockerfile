@@ -1,16 +1,15 @@
-# BUILD_VERSION: 2026-10-02-19-30
 FROM node:20-alpine
 
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install --omit=dev
+RUN apk add --no-cache git
 
-COPY . .
+# Cache bust — меняй значение чтобы форсировать свежий клон
+ARG CACHEBUST=2026-10-02-22-35
 
-ENV NODE_ENV=production
-ENV PORT=3123
+RUN git clone --depth 1 https://github.com/TFommy-tech/nova.git . && rm -rf .git
+
+RUN npm install --omit=dev --no-audit --no-fund
 
 EXPOSE 3123
-
 CMD ["node", "server/server.js"]
