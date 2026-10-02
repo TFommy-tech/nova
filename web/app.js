@@ -509,7 +509,8 @@
       if (reqId !== state.searchRequest || e.name === 'AbortError') return;
       console.error('[search] error:', e);
       state.tracks = [];
-      if (el.grid) el.grid.innerHTML = '<div class="empty" style="grid-column:1/-1;"><div>Ошибка: ' + escapeHtml(e.message) + '</div></div>';
+      const grid = document.getElementById('trackGrid');
+      if (grid) grid.innerHTML = '<div class="empty" style="grid-column:1/-1;"><div>Ошибка: ' + escapeHtml(e.message) + '</div></div>';
       if (el.resultsInfo) el.resultsInfo.textContent = 'Ошибка';
       setConnection(false, 'API: ошибка');
     } finally {
@@ -623,14 +624,32 @@
 
   function renderTracks(){
     console.log('[renderTracks] start, tracks:', state.tracks.length);
+
+    let grid = document.getElementById('trackGrid');
+    if (!grid){
+      console.warn('[renderTracks] #trackGrid не найден — создаём');
+      const searchView = document.getElementById('searchView');
+      if (searchView){
+        searchView.innerHTML = '<div class="search-view"><div class="meta-row"><span id="resultsInfo" class="results-info">Ожидание</span></div><div id="trackGrid" class="track-grid"></div></div>';
+        grid = document.getElementById('trackGrid');
+        el.grid = grid;
+        el.resultsInfo = document.getElementById('resultsInfo');
+      }
+    }
+    if (!grid){
+      console.error('[renderTracks] не удалось найти или создать #trackGrid');
+      return;
+    }
+
     try {
-      el.grid.innerHTML = '';
+      grid.innerHTML = '';
       if (!state.tracks.length){
-        el.grid.innerHTML = '<div class="empty" style="grid-column:1/-1;"><div>Ничего не найдено</div></div>';
+        grid.innerHTML = '<div class="empty" style="grid-column:1/-1;"><div>Ничего не найдено</div></div>';
         if (el.resultsInfo) el.resultsInfo.textContent = '0 результатов';
         return;
       }
       if (el.resultsInfo) el.resultsInfo.textContent = state.tracks.length + ' результатов';
+
       state.tracks.forEach((track, index) => {
         try {
           const card = document.createElement('article');
@@ -669,12 +688,12 @@
           card.appendChild(coverBox); card.appendChild(copy);
           card.addEventListener('click', () => playTrack(index));
           card.addEventListener('contextmenu', e => { e.preventDefault(); toggleFavorite(track); });
-          el.grid.appendChild(card);
+          grid.appendChild(card);
         } catch (itemErr){
           console.error('[renderTracks] card error on', index, itemErr);
         }
       });
-      console.log('[renderTracks] rendered', el.grid.children.length, 'cards');
+      console.log('[renderTracks] rendered', grid.children.length, 'cards');
     } catch (e){
       console.error('[renderTracks] fatal:', e);
     }
