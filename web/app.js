@@ -127,6 +127,7 @@
     loginModal: document.getElementById('loginModal'),
     loginClose: document.getElementById('loginClose'),
     loginDiscordBtn: document.getElementById('loginDiscordBtn'),
+    loginTabs: document.getElementById('loginTabs'),
     tabLogin: document.getElementById('tabLogin'),
     tabRegister: document.getElementById('tabRegister'),
     localAuthForm: document.getElementById('localAuthForm'),
@@ -134,6 +135,7 @@
     authPassword: document.getElementById('authPassword'),
     authError: document.getElementById('authError'),
     authSubmit: document.getElementById('authSubmit'),
+    authSubmitText: document.getElementById('authSubmitText'),
     continueAsGuest: document.getElementById('continueAsGuest')
   };
 
@@ -142,6 +144,7 @@
   let backgroundLoaded = false;
   let backgroundDbPromise = null;
   let searchAbort = null;
+  let authMode = 'login';
 
   function openLocalAudioPicker(){ el.localAudioInput.click(); }
   function openBackgroundPicker(){ el.backgroundInput.click(); }
@@ -269,8 +272,14 @@
     }
   }
 
-  function openLoginModal(){ el.loginModal.classList.add('open'); el.loginModal.setAttribute('aria-hidden', 'false'); }
-  function closeLoginModal(){ el.loginModal.classList.remove('open'); el.loginModal.setAttribute('aria-hidden', 'true'); }
+  function openLoginModal(){
+    el.loginModal.classList.add('open');
+    el.loginModal.setAttribute('aria-hidden', 'false');
+  }
+  function closeLoginModal(){
+    el.loginModal.classList.remove('open');
+    el.loginModal.setAttribute('aria-hidden', 'true');
+  }
   function toggleUserMenu(force){
     const open = force !== undefined ? force : !el.userMenu.classList.contains('open');
     el.userMenu.classList.toggle('open', open);
@@ -294,7 +303,6 @@
       renderUser();
       renderFavorites();
       renderLibrary();
-      notify('Добро пожаловать, ' + me.username + '!');
     } catch (e){
       console.warn('[auth] token invalid');
       authToken = '';
@@ -332,13 +340,12 @@
     return true;
   }
 
-  let authMode = 'login';
-
   function setAuthMode(mode){
     authMode = mode;
     el.tabLogin.classList.toggle('active', mode === 'login');
     el.tabRegister.classList.toggle('active', mode === 'register');
-    el.authSubmit.textContent = mode === 'login' ? 'Войти' : 'Создать аккаунт';
+    if (el.loginTabs) el.loginTabs.classList.toggle('indicator-right', mode === 'register');
+    if (el.authSubmitText) el.authSubmitText.textContent = mode === 'login' ? 'Войти' : 'Создать аккаунт';
     el.authUsername.value = '';
     el.authPassword.value = '';
     el.authError.classList.add('hidden');
@@ -356,7 +363,7 @@
     const password = el.authPassword.value;
     if (!username || !password){ showAuthError('Заполни оба поля'); return; }
     el.authSubmit.disabled = true;
-    el.authSubmit.textContent = '…';
+    if (el.authSubmitText) el.authSubmitText.textContent = 'Загрузка…';
     try {
       const url = authMode === 'register' ? '/api/register' : '/api/login';
       const r = await fetch(apiBase() + url, {
@@ -377,11 +384,11 @@
       showAuthError(err.message || 'Ошибка входа');
     } finally {
       el.authSubmit.disabled = false;
-      el.authSubmit.textContent = authMode === 'login' ? 'Войти' : 'Создать аккаунт';
+      if (el.authSubmitText) el.authSubmitText.textContent = authMode === 'login' ? 'Войти' : 'Создать аккаунт';
     }
   }
 
-  // ==================== RENDER HOME ====================
+  // ==================== HOME RENDER ====================
   function renderHome(){
     const recent = state.history.slice(0, 8);
     el.homeContinue.innerHTML = '';
