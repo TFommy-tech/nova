@@ -285,7 +285,7 @@ async function searchAudius(q){
 }
 
 // ============================================================
-// YOUTUBE SEARCH META (fallback для поиска)
+// YOUTUBE SEARCH META
 // ============================================================
 async function searchYouTubeMeta(q){
   try {
@@ -405,7 +405,7 @@ function mergeProviderResults(providers, query){
 // ============================================================
 // ROUTES
 // ============================================================
-api.get('/api/health', (req, res) => res.json({ ok: true, service: 'NOVA', version: '2.4.0' }));
+api.get('/api/health', (req, res) => res.json({ ok: true, service: 'NOVA', version: '2.5.0' }));
 
 api.get('/api/popular', async (req, res) => {
   const cacheKey = 'popular:v5';
@@ -461,44 +461,38 @@ api.get('/api/search', async (req, res) => {
 
   console.log('[search] query:', q);
 
-  const timeoutPromise = new Promise((resolve) => {
-    setTimeout(() => {
-      console.warn('[search] hard timeout');
-      resolve({ itunes: null, audius: null, yt: null, timedOut: true });
-    }, 7000);
-  });
+  const safeFetch = async (fn, name, ms) => {
+    try {
+      return await Promise.race([
+        fn(),
+        new Promise((_, r) => setTimeout(() => r(new Error(name + ' timeout')), ms))
+      ]);
+    } catch (e){
+      console.warn('[search/' + name + ']', e.message);
+      return { results: [], count: 0 };
+    }
+  };
 
-  const searchPromise = (async () => {
-    const safeFetch = async (fn, name, ms) => {
-      try {
-        return await Promise.race([
-          fn(),
-          new Promise((_, r) => setTimeout(() => r(new Error(name + ' timeout')), ms))
-        ]);
-      } catch (e){
-        console.warn('[search/' + name + ']', e.message);
-        return { results: [], count: 0 };
-      }
-    };
+  const [itunes, audius, yt] = await Promise.all([
+    safeFetch(() => searchItunes(q, { limit: '80' }), 'itunes', 3500),
+    safeFetch(() => searchAudius(q), 'audius', 3000),
+    safeFetch(() => searchYouTubeMeta(q), 'youtube', 5000)
+  ]);
 
-    const [itunes, audius, yt] = await Promise.all([
-      safeFetch(() => searchItunes(q, { limit: '80' }), 'itunes', 3500),
-      safeFetch(() => searchAudius(q), 'audius', 3000),
-      safeFetch(() => searchYouTubeMeta(q), 'youtube', 5000)
-    ]);
-    return { itunes, audius, yt, timedOut: false };
-  })();
-
-  const { itunes, audius, yt, timedOut } = await Promise.race([searchPromise, timeoutPromise]);
-
-  console.log('[search] itunes=' + (itunes?.count || 0) + ' audius=' + (audius?.count || 0) + ' yt=' + (yt?.count || 0) + (timedOut ? ' (TIMEOUT)' : ''));
+  console.log('[search] itunes=' + (itunes?.count || 0) + ' audius=' + (audius?.count || 0) + ' yt=' + (yt?.count || 0));
 
   const providers = [];
   if (itunes) providers.push(itunes);
   if (audius) providers.push(audius);
   if (yt) providers.push(yt);
 
-  const results = mergeProviderResults(providers, q);
+  let results = [];
+  try {
+    results = mergeProviderResults(providers, q);
+  } catch (e){
+    console.error('[search] merge error:', e.message);
+    results = [];
+  }
 
   const payload = {
     results,
@@ -508,7 +502,9 @@ api.get('/api/search', async (req, res) => {
       youtube: yt?.count || 0
     }
   };
+
   searchCache.set(cacheKey, { time: Date.now(), data: payload });
+  console.log('[search] sending results:', results.length);
   res.json(payload);
 });
 
