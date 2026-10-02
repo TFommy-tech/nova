@@ -1,3 +1,4 @@
+# BUILD_VERSION: 2026-10-02-19-30
 FROM node:20-alpine
 
 WORKDIR /app
