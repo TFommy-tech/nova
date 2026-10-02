@@ -5,9 +5,6 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { execFile } = require('child_process');
-const { promisify } = require('util');
-const execFileAsync = promisify(execFile);
 require('dotenv').config();
 
 const PORT = Number(process.env.PORT || 3123);
@@ -43,6 +40,33 @@ const searchCache = new Map();
 
 const STREAM_TTL = 30 * 60 * 1000;
 const RESOLVE_TTL = 30 * 60 * 1000;
+
+// ==== YouTube via youtubei.js ====
+let YT = null;
+let ytReady = false;
+let ytInitPromise = null;
+
+async function initYT(){
+  if (ytInitPromise) return ytInitPromise;
+  ytInitPromise = (async () => {
+    try {
+      const mod = await import('youtubei.js');
+      const { Innertube } = mod;
+      YT = await Innertube.create({
+        lang: 'en',
+        location: 'US',
+        retrieve_player: true,
+        generate_session_locally: true
+      });
+      ytReady = true;
+      console.log('[youtubei] ready');
+    } catch (e){
+      console.error('[youtubei] init failed:', e.message);
+      ytReady = false;
+    }
+  })();
+  return ytInitPromise;
+}
 
 const api = express();
 api.disable('x-powered-by');
@@ -398,7 +422,7 @@ function mergeProviderResults(providers, query){
 // ============================================================
 // ROUTES
 // ============================================================
-api.get('/api/health', (req, res) => res.json({ ok: true, service: 'NOVA', version: '2.7.0' }));
+api.get('/api/health', (req, res) => res.json({ ok: true, service: 'NOVA', version: '2.8.0' }));
 
 api.get('/api/popular', async (req, res) => {
   const cacheKey = 'popular:v5';
@@ -645,87 +669,8 @@ api.get('/api/lyrics', async (req, res) => {
 });
 
 // ============================================================
-// YOUTUBE STREAM — yt-dlp + Piped + Invidious
+// YOUTUBE STREAM — youtubei.js
 // ============================================================
-const PIPED_INSTANCES = [
-  'https://pipedapi.kavin.rocks',
-  'https://pipedapi.tokhmi.xyz',
-  'https://pipedapi.moomoo.me',
-  'https://pipedapi.adminforge.de',
-  'https://pipedapi.leptons.xyz',
-  'https://pipedapi.drgns.space',
-  'https://api.piped.yt'
-];
-
-const INVIDIOUS_INSTANCES = [
-  'https://inv.nadeko.net',
-  'https://yewtu.be',
-  'https://invidious.nerdvpn.de',
-  'https://iv.melmac.space',
-  'https://invidious.f5.si',
-  'https://invidious.privacyredirect.com'
-];
-
-async function tryYtDlp(videoId){
-  const url = 'https://www.youtube.com/watch?v=' + videoId;
-  const args = [
-    '-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
-    '-g',
-    '--no-playlist',
-    '--no-warnings',
-    '--no-check-certificates',
-    '--extractor-args', 'youtube:player_client=android,web_safari,ios',
-    url
-  ];
-  const result = await execFileAsync('/usr/local/bin/yt-dlp', args, {
-    timeout: 25000,
-    maxBuffer: 10 * 1024 * 1024,
-    env: { ...process.env, PATH: '/usr/local/bin:/usr/bin:/bin' }
-  });
-  const stdout = String(result.stdout || '').trim();
-  const streamUrl = stdout.split('\n')[0];
-  if (!streamUrl || !/^https?:\/\//i.test(streamUrl)) throw new Error('no url');
-  return streamUrl;
-}
-
-async function tryPiped(videoId){
-  for (const base of PIPED_INSTANCES){
-    try {
-      const r = await fetch(base + '/streams/' + videoId, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-      if (!r.ok) continue;
-      const d = await r.json();
-      const streams = Array.isArray(d?.audioStreams) ? d.audioStreams : [];
-      const best = streams
-        .filter(s => s.url && s.mimeType && s.mimeType.includes('audio'))
-        .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
-      if (best?.url){
-        console.log('[piped] ok via', base);
-        return best.url;
-      }
-    } catch (e){ /* next */ }
-  }
-  throw new Error('no stream');
-}
-
-async function tryInvidious(videoId){
-  for (const base of INVIDIOUS_INSTANCES){
-    try {
-      const r = await fetch(base + '/api/v1/videos/' + videoId, { headers: { 'User-Agent': 'Mozilla/5.0' } });
-      if (!r.ok) continue;
-      const d = await r.json();
-      const formats = Array.isArray(d?.adaptiveFormats) ? d.adaptiveFormats : [];
-      const best = formats
-        .filter(f => f.url && f.type && f.type.startsWith('audio'))
-        .sort((a, b) => (Number(b.bitrate) || 0) - (Number(a.bitrate) || 0))[0];
-      if (best?.url){
-        console.log('[invidious] ok via', base);
-        return best.url;
-      }
-    } catch (e){ /* next */ }
-  }
-  throw new Error('no stream');
-}
-
 async function getYtStreamUrl(videoId){
   const cacheKey = 's:' + videoId;
   const c = streamCache.get(cacheKey);
@@ -733,28 +678,56 @@ async function getYtStreamUrl(videoId){
 
   if (!/^[A-Za-z0-9_-]{6,20}$/.test(videoId)) throw new Error('invalid videoId');
 
+  if (!ytReady) await initYT();
+  if (!ytReady) throw new Error('youtubei not ready');
+
   console.log('[yt] resolving:', videoId);
 
-  try {
-    const url = await tryYtDlp(videoId);
-    streamCache.set(cacheKey, { time: Date.now(), url });
-    console.log('[yt] ok via yt-dlp:', videoId);
-    return url;
-  } catch (e){ console.warn('[yt] yt-dlp failed:', e.message); }
+  const info = await YT.getBasicInfo(videoId);
 
+  // 1. Попробуем chooseFormat
+  let streamUrl = '';
   try {
-    const url = await tryPiped(videoId);
-    streamCache.set(cacheKey, { time: Date.now(), url });
-    return url;
-  } catch (e){ console.warn('[yt] piped failed:', e.message); }
+    const format = info.chooseFormat({ type: 'audio', quality: 'best' });
+    if (format){
+      if (format.url && /^https?:\/\//i.test(format.url)) {
+        streamUrl = format.url;
+      } else if (format.decipher) {
+        const dec = await format.decipher(YT.session.player);
+        if (dec && /^https?:\/\//i.test(dec)) streamUrl = dec;
+      }
+    }
+  } catch (e){
+    console.warn('[yt] chooseFormat failed:', e.message);
+  }
 
-  try {
-    const url = await tryInvidious(videoId);
-    streamCache.set(cacheKey, { time: Date.now(), url });
-    return url;
-  } catch (e){ console.warn('[yt] invidious failed:', e.message); }
+  // 2. Если не вышло — перебираем все adaptive форматы
+  if (!streamUrl){
+    try {
+      const formats = info.streaming_data?.adaptive_formats || [];
+      const audioFormats = formats
+        .filter(f => f.has_audio && !f.has_video)
+        .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0));
+      for (const f of audioFormats){
+        try {
+          let u = f.url || '';
+          if (!u && f.decipher) u = await f.decipher(YT.session.player);
+          if (u && /^https?:\/\//i.test(u)){
+            streamUrl = u;
+            break;
+          }
+        } catch (e){ /* next */ }
+      }
+    } catch (e){
+      console.warn('[yt] adaptive scan failed:', e.message);
+    }
+  }
 
-  throw new Error('no stream source available');
+  if (!streamUrl) throw new Error('no stream url from youtubei');
+
+  streamCache.set(cacheKey, { time: Date.now(), url: streamUrl });
+  console.log('[yt] ok:', videoId, 'len:', streamUrl.length);
+  return streamUrl;
 }
 
 async function findPlayableAudio(query){
