@@ -20,11 +20,69 @@ const YT_STREAM_TTL = 4 * 60 * 1000;
 const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || '';
 const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || '';
 const AUDIUS_API_KEY = process.env.AUDIUS_API_KEY || '';
+const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '';
+const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
+const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || '';
 
 const api = express();
 api.disable('x-powered-by');
 api.use(cors());
 api.use(express.json({ limit: '1mb' }));
+
+// ============================================================
+// DISCORD AUTH
+// ============================================================
+api.get('/api/auth/discord', (req, res) => {
+  const params = new URLSearchParams({
+    client_id: DISCORD_CLIENT_ID,
+    redirect_uri: DISCORD_REDIRECT_URI,
+    response_type: 'code',
+    scope: 'identify email'
+  });
+  res.redirect('https://discord.com/api/oauth2/authorize?' + params.toString());
+});
+
+api.get('/api/auth/discord/callback', async (req, res) => {
+  const { code } = req.query;
+
+  if (!code) {
+    return res.status(400).send('Authorization code not received');
+  }
+
+  try {
+    const tokenParams = new URLSearchParams({
+      client_id: DISCORD_CLIENT_ID,
+      client_secret: DISCORD_CLIENT_SECRET,
+      grant_type: 'authorization_code',
+      code: code,
+      redirect_uri: DISCORD_REDIRECT_URI
+    });
+
+    const tokenResponse = await fetch('https://discord.com/api/oauth2/token', {
+      method: 'POST',
+      body: tokenParams,
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    const tokenData = await tokenResponse.json();
+
+    if (!tokenData.access_token) {
+      return res.status(400).send('Discord token acquisition error');
+    }
+
+    const userResponse = await fetch('https://discord.com/api/users/@me', {
+      headers: { Authorization: 'Bearer ' + tokenData.access_token }
+    });
+
+    const userData = await userResponse.json();
+
+    res.redirect('/?login=success&username=' + encodeURIComponent(userData.username) + '&avatar=' + encodeURIComponent(userData.avatar || ''));
+  } catch (error) {
+    console.error('[Discord Auth]', error.message);
+    res.status(500).send('Authorization error');
+  }
+});
+// ============================================================
 
 function jsonFetch(url, options = {}, timeoutMs = 15000) {
   const controller = new AbortController();
@@ -252,7 +310,7 @@ async function searchAudius(query) {
 
       return {
         id: trackId,
-        title: track.title || 'Без названия',
+        title: track.title || 'Untitled',
         artist:
           track.user && track.user.name
             ? track.user.name
@@ -309,7 +367,7 @@ async function searchDeezer(query) {
 
     const results = items.map(track => ({
       id: String(track.id || ''),
-      title: track.title || 'Без названия',
+      title: track.title || 'Untitled',
       artist:
         track.artist && track.artist.name
           ? track.artist.name
@@ -485,7 +543,7 @@ api.get('/api/lyrics', async (req, res) => {
   if (!trackName || !artistName) {
     return res.status(400).json({
       found: false,
-      message: 'Не хватает названия трека или исполнителя'
+      message: 'Missing track name or artist name'
     });
   }
 
@@ -566,14 +624,14 @@ api.get('/api/lyrics', async (req, res) => {
 
     return res.status(404).json({
       found: false,
-      message: 'Текст не найден'
+      message: 'Lyrics not found'
     });
   } catch (error) {
     console.error('[Lyrics]', error.message);
 
     return res.status(502).json({
       found: false,
-      message: 'Сервис текста временно недоступен'
+      message: 'Lyrics service temporarily unavailable'
     });
   }
 });
@@ -583,12 +641,12 @@ api.get('/api/lyrics', async (req, res) => {
 // ============================================================
 async function initYT(){
   if(ytInitPromise)return ytInitPromise;
-  ytInitPromise=(async()=>{try{ytModule=await import('youtubei.js');const {Innertube}=ytModule;yt=await Innertube.create({lang:'en',location:'US',retrieve_player:true,generate_session_locally:true});ytReady=true;console.log('[audio] youtubei.js готов')}catch(e){ytReady=false;console.error('[audio] youtubei.js ошибка:',e.message)}})();
+  ytInitPromise=(async()=>{try{ytModule=await import('youtubei.js');const {Innertube}=ytModule;yt=await Innertube.create({lang:'en',location:'US',retrieve_player:true,generate_session_locally:true});ytReady=true;console.log('[audio] youtubei.js ready')}catch(e){ytReady=false;console.error('[audio] youtubei.js error:',e.message)}})();
   return ytInitPromise;
 }
 function ytText(v){return typeof v==='string'?v:String(v?.text||'')}
 function scoreYt(v,q){const t=ytText(v.title).toLowerCase(),c=ytText(v.author).toLowerCase(),qq=normalizeSearchText(q);let s=0;for(const w of qq.split(/\s+/).filter(Boolean)){if(t.includes(w))s+=18;if(c.includes(w))s+=12}if(/(topic|vevo|official)/i.test(c))s+=50;if(/\b(cover|remix|live|reaction|instrumental|karaoke|8d|sped up|slowed|nightcore|tribute|parody|mix|compilation)\b/i.test(t))s-=100;const dur=Number(v.duration?.seconds||0);if(dur>=120&&dur<=420)s+=25;else if(dur>0&&(dur<45||dur>1200))s-=80;return s}
-async function searchYouTubeAudio(q){if(!ytReady)await initYT();if(!ytReady)return [];const key='yt:'+normalizeSearchText(q);try{const cached=ytStreamCache.get(key);if(cached&&Date.now()-cached.time<YT_STREAM_TTL)return cached.items;const search=await yt.search(q,{type:'video'});const videos=(search.videos||[]).filter(v=>v&&v.video_id).slice(0,15).map(v=>({v,score:scoreYt(v,q)})).sort((a,b)=>b.score-a.score).slice(0,7).map(x=>({videoId:x.v.video_id,title:ytText(x.v.title),duration:Number(x.v.duration?.seconds||0),url:'https://www.youtube.com/watch?v='+x.v.video_id}));ytStreamCache.set(key,{time:Date.now(),items:videos});console.log('[audio] YouTube нашёл: '+videos.length);return videos}catch(e){console.error('[audio] YouTube search:',e.message);return []}}
+async function searchYouTubeAudio(q){if(!ytReady)await initYT();if(!ytReady)return [];const key='yt:'+normalizeSearchText(q);try{const cached=ytStreamCache.get(key);if(cached&&Date.now()-cached.time<YT_STREAM_TTL)return cached.items;const search=await yt.search(q,{type:'video'});const videos=(search.videos||[]).filter(v=>v&&v.video_id).slice(0,15).map(v=>({v,score:scoreYt(v,q)})).sort((a,b)=>b.score-a.score).slice(0,7).map(x=>({videoId:x.v.video_id,title:ytText(x.v.title),duration:Number(x.v.duration?.seconds||0),url:'https://www.youtube.com/watch?v='+x.v.video_id}));ytStreamCache.set(key,{time:Date.now(),items:videos});console.log('[audio] YouTube found: '+videos.length);return videos}catch(e){console.error('[audio] YouTube search:',e.message);return []}}
 async function getYtStreamUrl(videoId){if(!ytReady)await initYT();if(!ytReady)throw new Error('youtubei.js not ready');if(!/^[A-Za-z0-9_-]{6,20}$/.test(videoId))throw new Error('invalid YouTube videoId');const cacheKey='stream:'+videoId;const cached=ytStreamCache.get(cacheKey);if(cached&&Date.now()-cached.time<2*60*1000)return cached.url;const info=await yt.getBasicInfo(videoId);const format=info.chooseFormat({type:'audio',quality:'best'});if(!format)throw new Error('no audio format');const url=await format.decipher(yt.session.player);if(!url||!/^https?:\/\//i.test(url))throw new Error('invalid stream URL');ytStreamCache.set(cacheKey,{time:Date.now(),url});return url}
 async function findPlayableAudio(query){
   const aq=normalizeSearchText(query);if(!aq)throw new Error('empty audio query');
