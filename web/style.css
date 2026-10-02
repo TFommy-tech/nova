@@ -1,6 +1,3 @@
-/* ============================================================
-   БАЗА
-   ============================================================ */
 :root {
   --bg: #0a0a0a;
   --bg-soft: #111;
@@ -37,7 +34,6 @@ button { border: 0; cursor: pointer; background: transparent; font-family: inher
 @keyframes suggestionIn { to { opacity: 1; transform: translateY(0); } }
 @keyframes startLoad { 0% { transform: translateX(-120%); } 100% { transform: translateX(390%); } }
 @keyframes startupPulse { 50% { transform: scale(1.04); border-color: #666; } }
-@keyframes logoGlow { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
 
 #app { position: relative; z-index: 2; width: 100%; height: 100%; display: grid; grid-template-columns: 64px 1fr; animation: fadeIn .3s var(--ease-out); }
 
@@ -46,53 +42,35 @@ button { border: 0; cursor: pointer; background: transparent; font-family: inher
    ============================================================ */
 .sidebar { display: flex; align-items: center; flex-direction: column; padding: 16px 0 14px; border-right: 1px solid var(--border); background: var(--bg); z-index: 50; }
 
-/* --- ЛОГОТИП: вписан в акцентную палитру --- */
+/* --- ЛОГОТИП: только картинка, без фона и рамки --- */
 .logo {
   position: relative;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(255, 255, 255, .1);
-  border-radius: 12px;
-  padding: 4px;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 30% 20%, rgba(255, 255, 255, .06) 0%, transparent 60%),
-    linear-gradient(135deg,
-      color-mix(in srgb, var(--accent) 20%, transparent) 0%,
-      color-mix(in srgb, var(--accent-2) 12%, transparent) 100%);
-  transition: transform .25s var(--ease-out), border-color .2s var(--ease), box-shadow .3s var(--ease);
+  border: 0;
+  background: transparent;
+  padding: 0;
+  overflow: visible;
+  transition: transform .25s var(--ease-out), filter .25s var(--ease);
   cursor: pointer;
 }
-.logo::before {
-  content: "";
-  position: absolute;
-  inset: -8px;
-  background: radial-gradient(circle, var(--accent-glow) 0%, transparent 65%);
-  opacity: 0;
-  transition: opacity .3s var(--ease);
-  pointer-events: none;
-  z-index: 0;
-}
 .logo:hover {
-  transform: scale(1.06);
-  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+  transform: scale(1.08);
+  filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent) 40%, transparent));
 }
-.logo:hover::before { opacity: 1; animation: logoGlow 2.5s ease-in-out infinite; }
 .logo img {
-  position: relative;
-  z-index: 1;
   width: 100%;
   height: 100%;
   object-fit: contain;
   display: block;
-  border-radius: 8px;
   filter: brightness(1.15) contrast(1.05);
   transition: filter .25s var(--ease);
 }
-.logo:hover img { filter: brightness(1.3) contrast(1.1); }
+.logo:hover img {
+  filter: brightness(1.4) contrast(1.1);
+}
 
 .nav { display: flex; flex-direction: column; gap: 4px; margin-top: 24px; }
 .nav-btn { width: 40px; height: 40px; display: grid; place-items: center; color: var(--text-dim); border-radius: 10px; transition: color .15s var(--ease), background .15s var(--ease); }
@@ -365,7 +343,6 @@ body.has-background #backgroundLayer { opacity: 1; }
 .lyrics-body { padding: 24px 28px 28px; overflow: auto; color: var(--text-muted); font-size: 14px; line-height: 1.8; white-space: pre-wrap; }
 .lyrics-loading { color: var(--text-dim); text-align: center; padding: 48px 20px; }
 
-/* LOGIN */
 .login-modal { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: rgba(0, 0, 0, .72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); opacity: 0; visibility: hidden; transition: opacity .25s var(--ease), visibility .25s var(--ease); padding: 20px; }
 .login-modal.open { opacity: 1; visibility: visible; }
 .login-bg-orbs { display: none; }
@@ -405,7 +382,6 @@ body.has-background #backgroundLayer { opacity: 1; }
 .login-guest { display: block; margin: 18px auto 0; font-size: 12px; color: var(--text-dim); padding: 6px 10px; transition: color .15s var(--ease); }
 .login-guest:hover { color: var(--accent); }
 
-/* SONG INFO */
 .song-info-modal { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; background: rgba(0, 0, 0, .75); backdrop-filter: blur(12px); opacity: 0; visibility: hidden; transition: opacity .25s var(--ease), visibility .25s var(--ease); padding: 20px; }
 .song-info-modal.open { opacity: 1; visibility: visible; }
 .song-info-card { position: relative; width: min(420px, 100%); background: var(--bg-card); border: 1px solid var(--border); border-radius: 18px; padding: 28px; text-align: center; box-shadow: 0 30px 80px rgba(0, 0, 0, .7); transform: translateY(8px); transition: transform .25s var(--ease); }
@@ -430,7 +406,6 @@ body.has-background #backgroundLayer { opacity: 1; }
 .song-info-btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 600; }
 .song-info-btn.primary:hover { filter: brightness(1.1); }
 
-/* EQUALIZER */
 .eq-modal { position: fixed; inset: 0; z-index: 1200; display: grid; place-items: center; background: rgba(0, 0, 0, .75); backdrop-filter: blur(12px); opacity: 0; visibility: hidden; transition: opacity .25s var(--ease), visibility .25s var(--ease); padding: 20px; }
 .eq-modal.open { opacity: 1; visibility: visible; }
 .eq-card { position: relative; width: min(560px, 100%); background: var(--bg-card); border: 1px solid var(--border); border-radius: 18px; padding: 32px; text-align: center; box-shadow: 0 30px 80px rgba(0, 0, 0, .7); transform: translateY(8px); transition: transform .25s var(--ease); }
