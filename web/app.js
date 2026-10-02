@@ -434,7 +434,6 @@
 
     state.query = q;
 
-    // СРАЗУ переключаемся на экран поиска
     if (!options.startup){
       try { showView('search'); } catch (e){ console.error('[search] showView:', e); }
     }
@@ -449,6 +448,15 @@
       el.searchButton.textContent = '…';
     }
     if (el.resultsInfo) el.resultsInfo.textContent = 'Поиск…';
+
+    const safetyTimer = setTimeout(() => {
+      if (el.searchButton && el.searchButton.disabled){
+        console.warn('[search] safety timeout - unlocking button');
+        el.searchButton.disabled = false;
+        el.searchButton.textContent = 'Найти';
+        if (el.resultsInfo) el.resultsInfo.textContent = 'Сервер не отвечает';
+      }
+    }, 10000);
 
     try {
       const url = apiBase() + '/api/search?q=' + encodeURIComponent(q);
@@ -490,6 +498,7 @@
       if (el.resultsInfo) el.resultsInfo.textContent = 'Ошибка';
       setConnection(false, 'API: ошибка');
     } finally {
+      clearTimeout(safetyTimer);
       if (reqId === state.searchRequest && el.searchButton){
         el.searchButton.disabled = false;
         el.searchButton.textContent = 'Найти';
@@ -646,7 +655,7 @@
   }
 
   // ============================================================
-  // SONG INFO MODAL
+  // SONG INFO
   // ============================================================
   let songInfoCurrent = null;
   function openSongInfo(track){
