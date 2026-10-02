@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  nova-app:
+    build: .
+    container_name: nova_backend
+    ports:
+      - "3123:3123" # Проброс порта: внешний 3123 -> внутренний 3123
+    environment:
+      - NODE_ENV=production
+      # Сюда Suga.app будет подставлять ваши секреты
+      - SPOTIFY_CLIENT_ID=${SPOTIFY_CLIENT_ID}
+      - SPOTIFY_CLIENT_SECRET=${SPOTIFY_CLIENT_SECRET}
+      - DISCORD_CLIENT_ID=${DISCORD_CLIENT_ID}
+      - DISCORD_CLIENT_SECRET=${DISCORD_CLIENT_SECRET}
+    restart: unless-stopped
