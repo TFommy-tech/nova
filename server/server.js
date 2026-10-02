@@ -5,6 +5,9 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { execFile } = require('child_process');
+const { promisify } = require('util');
+const execFileAsync = promisify(execFile);
 require('dotenv').config();
 
 const PORT = Number(process.env.PORT || 3123);
@@ -40,16 +43,6 @@ const searchCache = new Map();
 
 const STREAM_TTL = 30 * 60 * 1000;
 const RESOLVE_TTL = 30 * 60 * 1000;
-
-let ytModule = null;
-async function getYT(){
-  if (ytModule) return ytModule;
-  try {
-    ytModule = require('@distube/ytdl-core');
-    console.log('[yt] ytdl-core loaded');
-  } catch (e){ console.error('[yt] load error:', e.message); }
-  return ytModule;
-}
 
 const api = express();
 api.disable('x-powered-by');
@@ -405,7 +398,7 @@ function mergeProviderResults(providers, query){
 // ============================================================
 // ROUTES
 // ============================================================
-api.get('/api/health', (req, res) => res.json({ ok: true, service: 'NOVA', version: '2.5.0' }));
+api.get('/api/health', (req, res) => res.json({ ok: true, service: 'NOVA', version: '2.6.0' }));
 
 api.get('/api/popular', async (req, res) => {
   const cacheKey = 'popular:v5';
@@ -652,21 +645,40 @@ api.get('/api/lyrics', async (req, res) => {
 });
 
 // ============================================================
-// YOUTUBE STREAM
+// YOUTUBE STREAM — через yt-dlp
 // ============================================================
 async function getYtStreamUrl(videoId){
   const cacheKey = 's:' + videoId;
   const c = streamCache.get(cacheKey);
   if (c && Date.now() - c.time < STREAM_TTL) return c.url;
 
-  const ytdl = await getYT();
-  if (!ytdl) throw new Error('ytdl not loaded');
+  if (!/^[A-Za-z0-9_-]{6,20}$/.test(videoId)) throw new Error('invalid videoId');
 
-  const info = await ytdl.getInfo('https://www.youtube.com/watch?v=' + videoId);
-  const format = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' });
-  if (!format) throw new Error('no audio format');
-  streamCache.set(cacheKey, { time: Date.now(), url: format.url });
-  return format.url;
+  const url = 'https://www.youtube.com/watch?v=' + videoId;
+  console.log('[yt-dlp] extracting:', videoId);
+
+  try {
+    const { stdout } = await execFileAsync('yt-dlp', [
+      '-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio/best',
+      '-g',
+      '--no-playlist',
+      '--no-warnings',
+      '--no-check-certificates',
+      url
+    ], { timeout: 30000, maxBuffer: 10 * 1024 * 1024 });
+
+    const streamUrl = String(stdout || '').trim().split('\n')[0];
+    if (!streamUrl || !/^https?:\/\//i.test(streamUrl)) {
+      throw new Error('no valid stream url');
+    }
+
+    streamCache.set(cacheKey, { time: Date.now(), url: streamUrl });
+    console.log('[yt-dlp] ok:', videoId, 'url len:', streamUrl.length);
+    return streamUrl;
+  } catch (e){
+    console.error('[yt-dlp] failed:', videoId, e.message);
+    throw new Error('yt-dlp failed: ' + e.message);
+  }
 }
 
 async function findPlayableAudio(query){
