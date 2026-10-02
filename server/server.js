@@ -51,55 +51,6 @@ async function getYT(){
   return ytModule;
 }
 
-// === НАТИВНЫЙ ПОИСК YOUTUBE БЕЗ БИБЛИОТЕК ===
-async function searchYouTube(q){
-  try {
-    const url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q) + '&sp=EgIQAQ%253D%253D';
-    const r = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9'
-      }
-    });
-    const html = await r.text();
-
-    const match = html.match(/var ytInitialData = (\{.+?\});<\/script>/);
-    if (!match) throw new Error('no ytInitialData');
-    const data = JSON.parse(match[1]);
-
-    const items = [];
-    function walk(obj){
-      if (!obj || typeof obj !== 'object' || items.length >= 8) return;
-      if (obj.videoRenderer){
-        const v = obj.videoRenderer;
-        const vid = v.videoId;
-        const title = v.title?.runs?.[0]?.text || v.title?.simpleText || '';
-        const durationText = v.lengthText?.simpleText || '';
-        let duration = 0;
-        if (durationText){
-          const parts = durationText.split(':').map(Number);
-          if (parts.length === 3) duration = parts[0] * 3600 + parts[1] * 60 + parts[2];
-          else if (parts.length === 2) duration = parts[0] * 60 + parts[1];
-        }
-        if (vid && title){
-          items.push({ videoId: vid, title, duration, url: 'https://www.youtube.com/watch?v=' + vid });
-        }
-      }
-      for (const k in obj){
-        if (Array.isArray(obj[k])) obj[k].forEach(walk);
-        else if (typeof obj[k] === 'object') walk(obj[k]);
-      }
-    }
-    walk(data);
-
-    console.log('[yt] search "' + q + '": ' + items.length + ' videos');
-    return items.slice(0, 5);
-  } catch (e){
-    console.error('[yt search]', e.message);
-    return [];
-  }
-}
-
 const api = express();
 api.disable('x-powered-by');
 api.use(cors());
@@ -123,7 +74,9 @@ function isNoiseTrack(item){
   return false;
 }
 
+// ============================================================
 // LOCAL AUTH
+// ============================================================
 function hashPassword(password, salt){ return crypto.scryptSync(password, salt, 64).toString('hex'); }
 
 api.post('/api/register', (req, res) => {
@@ -162,7 +115,9 @@ api.post('/api/login', (req, res) => {
   res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar || '', provider: 'local' } });
 });
 
+// ============================================================
 // DISCORD AUTH
+// ============================================================
 api.get('/api/auth/discord', (req, res) => {
   const params = new URLSearchParams({ client_id: DISCORD_CLIENT_ID, redirect_uri: DISCORD_REDIRECT_URI, response_type: 'code', scope: 'identify' });
   res.redirect('https://discord.com/api/oauth2/authorize?' + params.toString());
@@ -196,7 +151,9 @@ api.get('/api/auth/discord/callback', async (req, res) => {
   } catch (e){ console.error('[Discord]', e.message); res.status(500).send('Auth error'); }
 });
 
+// ============================================================
 // USER API
+// ============================================================
 api.get('/api/me', authMiddleware, (req, res) => {
   const user = db.users[req.user.id];
   if (!user) return res.status(404).json({ error: 'user not found' });
@@ -237,7 +194,9 @@ api.post('/api/history', authMiddleware, (req, res) => {
   res.json({ ok: true });
 });
 
+// ============================================================
 // HELPERS
+// ============================================================
 function jsonFetch(url, options = {}, timeoutMs = 12000){
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -259,7 +218,9 @@ function firstImage(o){
 }
 function normalizeSearchText(v){ return String(v || '').toLowerCase().replace(/[’'`]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim(); }
 
+// ============================================================
 // ITUNES
+// ============================================================
 async function searchItunes(q, opts = {}){
   try {
     const params = new URLSearchParams({ term: q, media: 'music', entity: 'song', limit: opts.limit || '50' });
@@ -290,7 +251,9 @@ async function searchItunes(q, opts = {}){
   } catch (e){ console.error('[iTunes]', e.message); return { results: [], count: 0 }; }
 }
 
+// ============================================================
 // AUDIUS
+// ============================================================
 async function searchAudius(q){
   try {
     const params = new URLSearchParams({ query: q, limit: '30', sort_method: 'popular' });
@@ -321,7 +284,74 @@ async function searchAudius(q){
   } catch (e){ console.error('[Audius]', e.message); return { results: [], count: 0 }; }
 }
 
+// ============================================================
+// YOUTUBE SEARCH META (fallback для поиска)
+// ============================================================
+async function searchYouTubeMeta(q){
+  try {
+    const url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q) + '&sp=EgIQAQ%253D%253D';
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+    const html = await r.text();
+    const match = html.match(/var ytInitialData = (\{.+?\});<\/script>/);
+    if (!match) return { results: [], count: 0 };
+    const data = JSON.parse(match[1]);
+    const items = [];
+    function walk(obj){
+      if (!obj || typeof obj !== 'object' || items.length >= 20) return;
+      if (obj.videoRenderer){
+        const v = obj.videoRenderer;
+        const vid = v.videoId;
+        const title = v.title?.runs?.[0]?.text || v.title?.simpleText || '';
+        const author = v.ownerText?.runs?.[0]?.text || v.longBylineText?.runs?.[0]?.text || 'YouTube';
+        const thumb = v.thumbnail?.thumbnails?.slice(-1)[0]?.url || '';
+        const durationText = v.lengthText?.simpleText || '';
+        let duration = 0;
+        if (durationText){
+          const parts = durationText.split(':').map(Number);
+          if (parts.length === 3) duration = parts[0] * 3600 + parts[1] * 60 + parts[2];
+          else if (parts.length === 2) duration = parts[0] * 60 + parts[1];
+        }
+        if (vid && title && duration > 60){
+          items.push({
+            id: 'yt_' + vid,
+            title,
+            artist: author,
+            artistId: '',
+            cover: thumb,
+            album: '',
+            albumId: '',
+            preview: '',
+            source: 'FULL',
+            sourceUrl: 'https://www.youtube.com/watch?v=' + vid,
+            downloadable: false,
+            duration,
+            popularity: 10000,
+            provider: 'youtube'
+          });
+        }
+      }
+      for (const k in obj){
+        if (Array.isArray(obj[k])) obj[k].forEach(walk);
+        else if (typeof obj[k] === 'object') walk(obj[k]);
+      }
+    }
+    walk(data);
+    console.log('[search/youtube] found:', items.length);
+    return { results: items, count: items.length };
+  } catch (e){
+    console.error('[search/youtube]', e.message);
+    return { results: [], count: 0 };
+  }
+}
+
+// ============================================================
 // MERGE + SCORE
+// ============================================================
 function scoreProviderTrack(item, query){
   const q = normalizeSearchText(query);
   const title = normalizeSearchText(item.title);
@@ -359,6 +389,7 @@ function mergeProviderResults(providers, query){
   const out = [];
   const seen = new Set();
   for (const p of providers){
+    if (!p) continue;
     for (const item of p.results || []){
       const key = normalizeSearchText(item.artist) + '|' + normalizeSearchText(item.title);
       if (isNoiseTrack(item)) continue;
@@ -371,8 +402,10 @@ function mergeProviderResults(providers, query){
   return out.slice(0, 80).map(({ _score, ...rest }) => rest);
 }
 
+// ============================================================
 // ROUTES
-api.get('/api/health', (req, res) => res.json({ ok: true, service: 'NOVA', version: '2.3.0' }));
+// ============================================================
+api.get('/api/health', (req, res) => res.json({ ok: true, service: 'NOVA', version: '2.4.0' }));
 
 api.get('/api/popular', async (req, res) => {
   const cacheKey = 'popular:v5';
@@ -427,25 +460,52 @@ api.get('/api/search', async (req, res) => {
   }
 
   console.log('[search] query:', q);
-  const wrap = (fn, ms, name) => Promise.race([
-    fn().catch(e => { console.error('[search/' + name + ']', e.message); return { results: [], count: 0 }; }),
-    new Promise((_, r) => setTimeout(() => { console.warn('[search/' + name + '] timeout'); r(new Error('t/o')); }, ms))
-  ]).catch(() => ({ results: [], count: 0 }));
 
-  const [itunes, audius] = await Promise.all([
-    wrap(() => searchItunes(q, { limit: '80' }), 5000, 'itunes'),
-    wrap(() => searchAudius(q), 4500, 'audius')
-  ]);
+  const timeoutPromise = new Promise((resolve) => {
+    setTimeout(() => {
+      console.warn('[search] hard timeout');
+      resolve({ itunes: null, audius: null, yt: null, timedOut: true });
+    }, 7000);
+  });
 
-  console.log('[search] itunes=' + (itunes?.count || 0) + ' audius=' + (audius?.count || 0));
+  const searchPromise = (async () => {
+    const safeFetch = async (fn, name, ms) => {
+      try {
+        return await Promise.race([
+          fn(),
+          new Promise((_, r) => setTimeout(() => r(new Error(name + ' timeout')), ms))
+        ]);
+      } catch (e){
+        console.warn('[search/' + name + ']', e.message);
+        return { results: [], count: 0 };
+      }
+    };
 
-  const results = mergeProviderResults([itunes, audius], q);
+    const [itunes, audius, yt] = await Promise.all([
+      safeFetch(() => searchItunes(q, { limit: '80' }), 'itunes', 3500),
+      safeFetch(() => searchAudius(q), 'audius', 3000),
+      safeFetch(() => searchYouTubeMeta(q), 'youtube', 5000)
+    ]);
+    return { itunes, audius, yt, timedOut: false };
+  })();
+
+  const { itunes, audius, yt, timedOut } = await Promise.race([searchPromise, timeoutPromise]);
+
+  console.log('[search] itunes=' + (itunes?.count || 0) + ' audius=' + (audius?.count || 0) + ' yt=' + (yt?.count || 0) + (timedOut ? ' (TIMEOUT)' : ''));
+
+  const providers = [];
+  if (itunes) providers.push(itunes);
+  if (audius) providers.push(audius);
+  if (yt) providers.push(yt);
+
+  const results = mergeProviderResults(providers, q);
 
   const payload = {
     results,
     counts: {
       itunes: itunes?.count || 0,
-      audius: audius?.count || 0
+      audius: audius?.count || 0,
+      youtube: yt?.count || 0
     }
   };
   searchCache.set(cacheKey, { time: Date.now(), data: payload });
@@ -595,7 +655,9 @@ api.get('/api/lyrics', async (req, res) => {
   } catch (e){ res.status(502).json({ found: false }); }
 });
 
-// YOUTUBE RESOLVER
+// ============================================================
+// YOUTUBE STREAM
+// ============================================================
 async function getYtStreamUrl(videoId){
   const cacheKey = 's:' + videoId;
   const c = streamCache.get(cacheKey);
@@ -621,12 +683,14 @@ async function findPlayableAudio(query){
   });
 
   const ytPromise = (async () => {
-    const ys = await searchYouTube(query);
+    const meta = await searchYouTubeMeta(query);
+    const ys = meta.results || [];
     if (!ys.length) throw new Error('no yt results');
     for (const c of ys){
       try {
-        await getYtStreamUrl(c.videoId);
-        return { provider: 'youtube', streamUrl: '/api/audio/youtube/' + encodeURIComponent(c.videoId), videoId: c.videoId, title: c.title, duration: c.duration };
+        const vid = c.id.replace('yt_', '');
+        await getYtStreamUrl(vid);
+        return { provider: 'youtube', streamUrl: '/api/audio/youtube/' + encodeURIComponent(vid), videoId: vid, title: c.title, duration: c.duration };
       } catch (e){ /* next */ }
     }
     throw new Error('no yt stream');
@@ -639,7 +703,9 @@ async function findPlayableAudio(query){
   }
 }
 
+// ============================================================
 // STATIC
+// ============================================================
 api.use(express.static(WEB_DIR, { extensions: ['html'], maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0 }));
 api.get(/^\/(?!api(?:\/|$)).*/, (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
