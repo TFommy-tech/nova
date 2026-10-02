@@ -454,9 +454,9 @@
         console.warn('[search] safety timeout - unlocking button');
         el.searchButton.disabled = false;
         el.searchButton.textContent = 'Найти';
-        if (el.resultsInfo) el.resultsInfo.textContent = 'Сервер не отвечает';
+        if (el.resultsInfo) el.resultsInfo.textContent = 'Долго — попробуй снова';
       }
-    }, 10000);
+    }, 20000);
 
     try {
       const url = apiBase() + '/api/search?q=' + encodeURIComponent(q);
@@ -471,15 +471,30 @@
       if (!r.ok) throw new Error('HTTP ' + r.status);
 
       const d = await r.json();
-      console.log('[search] results:', (d.results || []).length);
+      console.log('[search] got results from server:', (d.results || []).length);
 
-      if (reqId !== state.searchRequest) return;
+      if (reqId !== state.searchRequest){
+        console.warn('[search] stale request, ignoring');
+        return;
+      }
 
-      state.tracks = Array.isArray(d.results) ? d.results.map(normalizeTrack) : [];
-      state.tracks = sortSearchResults(state.tracks, q);
+      let tracks = [];
+      try {
+        tracks = Array.isArray(d.results) ? d.results.map(normalizeTrack) : [];
+        console.log('[search] normalized:', tracks.length);
+      } catch (e){
+        console.error('[search] normalize error:', e);
+        tracks = [];
+      }
 
-      try { renderTracks(); } catch (e){ console.error('[renderTracks]', e); }
-      try { renderHome(); } catch (e){ console.error('[renderHome]', e); }
+      state.tracks = sortSearchResults(tracks, q);
+      console.log('[search] after sort:', state.tracks.length);
+
+      try { renderTracks(); console.log('[search] renderTracks done'); }
+      catch (e){ console.error('[search] renderTracks FAILED:', e); }
+
+      try { renderHome(); }
+      catch (e){ console.error('[search] renderHome FAILED:', e); }
 
       setConnection(true, 'API: online');
       if (el.resultsInfo) el.resultsInfo.textContent = state.tracks.length + ' результатов';
@@ -607,51 +622,62 @@
   }
 
   function renderTracks(){
-    el.grid.innerHTML = '';
-    if (!state.tracks.length){
-      el.grid.innerHTML = '<div class="empty" style="grid-column:1/-1;"><div>Ничего не найдено</div></div>';
-      el.resultsInfo.textContent = '0 результатов'; return;
-    }
-    el.resultsInfo.textContent = state.tracks.length + ' результатов';
-    state.tracks.forEach((track, index) => {
-      const card = document.createElement('article');
-      card.className = 'card';
-      card.style.animationDelay = (index * 20) + 'ms';
-      const coverBox = document.createElement('div'); coverBox.className = 'cover-box';
-      if (coverFor(track)){
-        const img = document.createElement('img');
-        img.className = 'cover'; img.alt = ''; img.loading = 'lazy';
-        img.src = coverFor(track);
-        img.onerror = function(){ img.style.display = 'none'; const fb = document.createElement('div'); fb.className = 'cover-fallback'; fb.textContent = '♪'; coverBox.appendChild(fb); };
-        coverBox.appendChild(img);
-      } else {
-        const fb = document.createElement('div'); fb.className = 'cover-fallback'; fb.textContent = '♪'; coverBox.appendChild(fb);
+    console.log('[renderTracks] start, tracks:', state.tracks.length);
+    try {
+      el.grid.innerHTML = '';
+      if (!state.tracks.length){
+        el.grid.innerHTML = '<div class="empty" style="grid-column:1/-1;"><div>Ничего не найдено</div></div>';
+        if (el.resultsInfo) el.resultsInfo.textContent = '0 результатов';
+        return;
       }
-      const badge = document.createElement('div');
-      badge.className = 'source-badge ' + sourceClass(track.source);
-      badge.textContent = track.source || 'CATALOG';
-      coverBox.appendChild(badge);
-      const play = document.createElement('div');
-      play.className = 'play-card';
-      play.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
-      coverBox.appendChild(play);
-      const info = document.createElement('button');
-      info.className = 'info-card'; info.title = 'Информация';
-      info.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r="0.5" fill="currentColor"/></svg>';
-      info.addEventListener('click', e => { e.stopPropagation(); openSongInfo(track); });
-      coverBox.appendChild(info);
-      const copy = document.createElement('div'); copy.className = 'card-copy';
-      const ti = document.createElement('div'); ti.className = 'card-title'; ti.textContent = track.title || 'Без названия'; ti.title = track.title || '';
-      ti.addEventListener('click', e => { e.stopPropagation(); openSongInfo(track); });
-      const ar = document.createElement('div'); ar.className = 'card-artist'; ar.textContent = track.artist || 'Неизвестный исполнитель';
-      ar.classList.add('inline-link');
-      ar.addEventListener('click', e => { e.stopPropagation(); showArtist(track.artistId || '', track.artist || ''); });
-      copy.appendChild(ti); copy.appendChild(ar);
-      card.appendChild(coverBox); card.appendChild(copy);
-      card.addEventListener('click', () => playTrack(index));
-      card.addEventListener('contextmenu', e => { e.preventDefault(); toggleFavorite(track); });
-      el.grid.appendChild(card);
-    });
+      if (el.resultsInfo) el.resultsInfo.textContent = state.tracks.length + ' результатов';
+      state.tracks.forEach((track, index) => {
+        try {
+          const card = document.createElement('article');
+          card.className = 'card';
+          card.style.animationDelay = (index * 20) + 'ms';
+          const coverBox = document.createElement('div'); coverBox.className = 'cover-box';
+          if (coverFor(track)){
+            const img = document.createElement('img');
+            img.className = 'cover'; img.alt = ''; img.loading = 'lazy';
+            img.src = coverFor(track);
+            img.onerror = function(){ img.style.display = 'none'; const fb = document.createElement('div'); fb.className = 'cover-fallback'; fb.textContent = '♪'; coverBox.appendChild(fb); };
+            coverBox.appendChild(img);
+          } else {
+            const fb = document.createElement('div'); fb.className = 'cover-fallback'; fb.textContent = '♪'; coverBox.appendChild(fb);
+          }
+          const badge = document.createElement('div');
+          badge.className = 'source-badge ' + sourceClass(track.source);
+          badge.textContent = track.source || 'CATALOG';
+          coverBox.appendChild(badge);
+          const play = document.createElement('div');
+          play.className = 'play-card';
+          play.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+          coverBox.appendChild(play);
+          const info = document.createElement('button');
+          info.className = 'info-card'; info.title = 'Информация';
+          info.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r="0.5" fill="currentColor"/></svg>';
+          info.addEventListener('click', e => { e.stopPropagation(); openSongInfo(track); });
+          coverBox.appendChild(info);
+          const copy = document.createElement('div'); copy.className = 'card-copy';
+          const ti = document.createElement('div'); ti.className = 'card-title'; ti.textContent = track.title || 'Без названия'; ti.title = track.title || '';
+          ti.addEventListener('click', e => { e.stopPropagation(); openSongInfo(track); });
+          const ar = document.createElement('div'); ar.className = 'card-artist'; ar.textContent = track.artist || 'Неизвестный исполнитель';
+          ar.classList.add('inline-link');
+          ar.addEventListener('click', e => { e.stopPropagation(); showArtist(track.artistId || '', track.artist || ''); });
+          copy.appendChild(ti); copy.appendChild(ar);
+          card.appendChild(coverBox); card.appendChild(copy);
+          card.addEventListener('click', () => playTrack(index));
+          card.addEventListener('contextmenu', e => { e.preventDefault(); toggleFavorite(track); });
+          el.grid.appendChild(card);
+        } catch (itemErr){
+          console.error('[renderTracks] card error on', index, itemErr);
+        }
+      });
+      console.log('[renderTracks] rendered', el.grid.children.length, 'cards');
+    } catch (e){
+      console.error('[renderTracks] fatal:', e);
+    }
   }
 
   // ============================================================
