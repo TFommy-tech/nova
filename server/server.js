@@ -29,26 +29,22 @@ if (!db.users) db.users = {};
 if (!db.favorites) db.favorites = {};
 if (!db.history) db.history = {};
 
-const SPOTIFY_CLIENT_ID = process.env.SPOTIFY_CLIENT_ID || '';
-const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || '';
 const AUDIUS_API_KEY = process.env.AUDIUS_API_KEY || '';
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '';
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
 const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || '';
 
-let ytModule = null, yt = null, ytReady = false, ytInitPromise = null;
-const ytStreamCache = new Map();
+const resolveCache = new Map();
 const searchCache = new Map();
-const YT_STREAM_TTL = 4 * 60 * 1000;
+
+const RESOLVE_TTL = 30 * 60 * 1000;
 
 const api = express();
 api.disable('x-powered-by');
 api.use(cors());
 api.use(express.json({ limit: '2mb' }));
 
-function trackKey(t){
-  return [String(t.source || ''), String(t.id || ''), String(t.title || ''), String(t.artist || '')].join('|');
-}
+function trackKey(t){ return [String(t.source || ''), String(t.id || ''), String(t.title || ''), String(t.artist || '')].join('|'); }
 
 function authMiddleware(req, res, next){
   const h = req.headers.authorization || '';
@@ -69,9 +65,7 @@ function isNoiseTrack(item){
 // ============================================================
 // LOCAL AUTH
 // ============================================================
-function hashPassword(password, salt){
-  return crypto.scryptSync(password, salt, 64).toString('hex');
-}
+function hashPassword(password, salt){ return crypto.scryptSync(password, salt, 64).toString('hex'); }
 
 api.post('/api/register', (req, res) => {
   const { username, password } = req.body || {};
@@ -88,10 +82,7 @@ api.post('/api/register', (req, res) => {
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = hashPassword(password, salt);
 
-  db.users[id] = {
-    id, username, avatar: '', discriminator: '0', provider: 'local',
-    passwordHash: hash, passwordSalt: salt, createdAt: Date.now()
-  };
+  db.users[id] = { id, username, avatar: '', discriminator: '0', provider: 'local', passwordHash: hash, passwordSalt: salt, createdAt: Date.now() };
   if (!db.favorites[id]) db.favorites[id] = [];
   if (!db.history[id]) db.history[id] = [];
   saveDb(db);
@@ -116,12 +107,7 @@ api.post('/api/login', (req, res) => {
 // DISCORD AUTH
 // ============================================================
 api.get('/api/auth/discord', (req, res) => {
-  const params = new URLSearchParams({
-    client_id: DISCORD_CLIENT_ID,
-    redirect_uri: DISCORD_REDIRECT_URI,
-    response_type: 'code',
-    scope: 'identify'
-  });
+  const params = new URLSearchParams({ client_id: DISCORD_CLIENT_ID, redirect_uri: DISCORD_REDIRECT_URI, response_type: 'code', scope: 'identify' });
   res.redirect('https://discord.com/api/oauth2/authorize?' + params.toString());
 });
 
@@ -129,31 +115,17 @@ api.get('/api/auth/discord/callback', async (req, res) => {
   const { code } = req.query;
   if (!code) return res.status(400).send('No code');
   try {
-    const tokenParams = new URLSearchParams({
-      client_id: DISCORD_CLIENT_ID,
-      client_secret: DISCORD_CLIENT_SECRET,
-      grant_type: 'authorization_code',
-      code, redirect_uri: DISCORD_REDIRECT_URI
-    });
-    const tokenRes = await fetch('https://discord.com/api/oauth2/token', {
-      method: 'POST', body: tokenParams,
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
+    const tokenParams = new URLSearchParams({ client_id: DISCORD_CLIENT_ID, client_secret: DISCORD_CLIENT_SECRET, grant_type: 'authorization_code', code, redirect_uri: DISCORD_REDIRECT_URI });
+    const tokenRes = await fetch('https://discord.com/api/oauth2/token', { method: 'POST', body: tokenParams, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
     const tokenData = await tokenRes.json();
     if (!tokenData.access_token) return res.status(400).send('Token error');
 
-    const userRes = await fetch('https://discord.com/api/users/@me', {
-      headers: { Authorization: 'Bearer ' + tokenData.access_token }
-    });
+    const userRes = await fetch('https://discord.com/api/users/@me', { headers: { Authorization: 'Bearer ' + tokenData.access_token } });
     const user = await userRes.json();
 
     const userId = user.id;
     if (!db.users[userId]){
-      db.users[userId] = {
-        id: userId, username: user.username, avatar: user.avatar || '',
-        discriminator: user.discriminator || '0', provider: 'discord',
-        createdAt: Date.now()
-      };
+      db.users[userId] = { id: userId, username: user.username, avatar: user.avatar || '', discriminator: user.discriminator || '0', provider: 'discord', createdAt: Date.now() };
     } else {
       db.users[userId].username = user.username;
       db.users[userId].avatar = user.avatar || '';
@@ -178,7 +150,6 @@ api.get('/api/me', authMiddleware, (req, res) => {
 });
 
 api.get('/api/favorites', authMiddleware, (req, res) => res.json(db.favorites[req.user.id] || []));
-
 api.post('/api/favorites', authMiddleware, (req, res) => {
   const track = req.body;
   if (!track || !track.title) return res.status(400).json({ error: 'invalid' });
@@ -191,7 +162,6 @@ api.post('/api/favorites', authMiddleware, (req, res) => {
   }
   res.json({ ok: true });
 });
-
 api.delete('/api/favorites/:key', authMiddleware, (req, res) => {
   const key = decodeURIComponent(req.params.key);
   const list = db.favorites[req.user.id] || [];
@@ -199,9 +169,7 @@ api.delete('/api/favorites/:key', authMiddleware, (req, res) => {
   saveDb(db);
   res.json({ ok: true });
 });
-
 api.get('/api/history', authMiddleware, (req, res) => res.json(db.history[req.user.id] || []));
-
 api.post('/api/history', authMiddleware, (req, res) => {
   const track = req.body;
   if (!track || !track.title) return res.status(400).json({ error: 'invalid' });
@@ -223,93 +191,31 @@ function jsonFetch(url, options = {}, timeoutMs = 12000){
   const headers = { Accept: 'application/json', 'User-Agent': 'NOVA/2.0', ...(options.headers || {}) };
   return fetch(url, { ...options, headers, signal: controller.signal }).finally(() => clearTimeout(timer));
 }
-
 async function readJson(res){
   const text = await res.text();
   if (!res.ok) throw new Error('HTTP ' + res.status);
   if (!text) return {};
   try { return JSON.parse(text); } catch (_) { throw new Error('bad json'); }
 }
-
 function firstImage(o){
   if (!o) return '';
   if (typeof o === 'string') return o;
-  for (const k of ['1000x1000', '480x480', '600x600', '640x640', '320x320', '150x150'])
-    if (o[k]) return o[k];
+  for (const k of ['1000x1000', '480x480', '600x600', '640x640', '320x320', '150x150']) if (o[k]) return o[k];
   for (const k of Object.keys(o)) if (typeof o[k] === 'string' && o[k].startsWith('http')) return o[k];
   return '';
 }
-
-function normalizeSearchText(v){
-  return String(v || '').toLowerCase().replace(/[’'`]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-}
+function normalizeSearchText(v){ return String(v || '').toLowerCase().replace(/[’'`]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim(); }
 
 // ============================================================
-// SPOTIFY
-// ============================================================
-let spotifyTokenCache = { accessToken: '', expiresAt: 0 };
-
-async function getSpotifyToken(){
-  if (!SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET) return '';
-  if (spotifyTokenCache.accessToken && Date.now() < spotifyTokenCache.expiresAt - 30000)
-    return spotifyTokenCache.accessToken;
-  const cred = Buffer.from(SPOTIFY_CLIENT_ID + ':' + SPOTIFY_CLIENT_SECRET).toString('base64');
-  const r = await jsonFetch('https://accounts.spotify.com/api/token', {
-    method: 'POST',
-    headers: { Authorization: 'Basic ' + cred, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'grant_type=client_credentials'
-  }, 10000);
-  const d = await readJson(r);
-  if (!d.access_token) throw new Error('no spotify token');
-  spotifyTokenCache.accessToken = d.access_token;
-  spotifyTokenCache.expiresAt = Date.now() + Number(d.expires_in || 3600) * 1000;
-  return spotifyTokenCache.accessToken;
-}
-
-async function searchSpotify(q){
-  try {
-    const t = await getSpotifyToken();
-    if (!t) return { results: [], count: 0 };
-    const url = 'https://api.spotify.com/v1/search?' + new URLSearchParams({ q, type: 'track', limit: '30', market: 'US' });
-    const r = await jsonFetch(url, { headers: { Authorization: 'Bearer ' + t } }, 8000);
-    const d = await readJson(r);
-    const items = d?.tracks?.items || [];
-    const results = items.map(tr => ({
-      id: tr.id,
-      title: tr.name,
-      artist: tr.artists?.[0]?.name || '',
-      artistId: tr.artists?.[0]?.id || '',
-      cover: tr.album?.images?.[0]?.url || '',
-      album: tr.album?.name || '',
-      albumId: tr.album?.id || '',
-      preview: tr.preview_url || '',
-      source: 'CATALOG',
-      sourceUrl: tr.external_urls?.spotify || '',
-      downloadable: false,
-      duration: Number(tr.duration_ms || 0) / 1000,
-      popularity: Number(tr.popularity || 0),
-      provider: 'spotify'
-    }));
-    return { results, count: results.length };
-  } catch (e){ console.error('[Spotify]', e.message); return { results: [], count: 0 }; }
-}
-
-// ============================================================
-// ITUNES — главный источник популярных
+// ITUNES
 // ============================================================
 async function searchItunes(q, opts = {}){
   try {
-    const params = new URLSearchParams({
-      term: q,
-      media: 'music',
-      entity: 'song',
-      limit: opts.limit || '50'
-    });
+    const params = new URLSearchParams({ term: q, media: 'music', entity: 'song', limit: opts.limit || '50' });
     const r = await jsonFetch('https://itunes.apple.com/search?' + params.toString(), {}, 8000);
     const d = await readJson(r);
     const items = Array.isArray(d?.results) ? d.results : [];
     const results = items.map((tr, idx) => {
-      // Чем выше в результатах iTunes — тем популярнее
       const rankBoost = Math.max(0, 100 - idx);
       return {
         id: 'itunes_' + String(tr.trackId || ''),
@@ -319,12 +225,12 @@ async function searchItunes(q, opts = {}){
         cover: (tr.artworkUrl100 || '').replace('100x100', '600x600'),
         album: tr.collectionName || '',
         albumId: '',
-        preview: tr.previewUrl || '',
+        preview: '',
         source: 'CATALOG',
         sourceUrl: tr.trackViewUrl || '',
         downloadable: false,
         duration: Number(tr.trackTimeMillis || 0) / 1000,
-        popularity: 50000 + rankBoost * 500,  // Реальная популярность по позиции в iTunes
+        popularity: 50000 + rankBoost * 500,
         releaseDate: tr.releaseDate || '',
         provider: 'itunes'
       };
@@ -340,19 +246,17 @@ async function searchAudius(q){
   try {
     const params = new URLSearchParams({ query: q, limit: '30', sort_method: 'popular' });
     if (AUDIUS_API_KEY) params.set('api_key', AUDIUS_API_KEY);
-    const r = await jsonFetch('https://api.audius.co/v1/tracks/search?' + params.toString(),
-      { headers: AUDIUS_API_KEY ? { 'X-API-Key': AUDIUS_API_KEY } : {} }, 8000);
+    const r = await jsonFetch('https://api.audius.co/v1/tracks/search?' + params.toString(), { headers: AUDIUS_API_KEY ? { 'X-API-Key': AUDIUS_API_KEY } : {} }, 8000);
     const d = await readJson(r);
     const items = Array.isArray(d?.data) ? d.data : [];
-    const results = items
-      .filter(t => { const dur = Number(t.duration || 0); return !(dur > 0 && dur < 60) && !t.is_unlisted; })
+    const results = items.filter(t => { const dur = Number(t.duration || 0); return !(dur > 0 && dur < 60) && !t.is_unlisted; })
       .map(t => {
         const id = t.id || '';
         return {
           id, title: t.title || 'Untitled',
           artist: t.user?.name || 'Unknown', artistId: t.user?.id || '',
           cover: firstImage(t.artwork),
-          preview: '/api/audio/audius/' + encodeURIComponent(id),
+          preview: '',
           source: 'FULL',
           sourceUrl: t.permalink ? 'https://audius.co' + t.permalink : '',
           downloadable: Boolean(t.downloadable),
@@ -366,6 +270,71 @@ async function searchAudius(q){
       });
     return { results, count: results.length };
   } catch (e){ console.error('[Audius]', e.message); return { results: [], count: 0 }; }
+}
+
+// ============================================================
+// YOUTUBE SEARCH META
+// ============================================================
+async function searchYouTubeMeta(q){
+  try {
+    const url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q) + '&sp=EgIQAQ%253D%253D';
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+    const html = await r.text();
+    const match = html.match(/var ytInitialData = (\{.+?\});<\/script>/);
+    if (!match) return { results: [], count: 0 };
+    const data = JSON.parse(match[1]);
+    const items = [];
+    function walk(obj){
+      if (!obj || typeof obj !== 'object' || items.length >= 20) return;
+      if (obj.videoRenderer){
+        const v = obj.videoRenderer;
+        const vid = v.videoId;
+        const title = v.title?.runs?.[0]?.text || v.title?.simpleText || '';
+        const author = v.ownerText?.runs?.[0]?.text || v.longBylineText?.runs?.[0]?.text || 'YouTube';
+        const thumb = v.thumbnail?.thumbnails?.slice(-1)[0]?.url || '';
+        const durationText = v.lengthText?.simpleText || '';
+        let duration = 0;
+        if (durationText){
+          const parts = durationText.split(':').map(Number);
+          if (parts.length === 3) duration = parts[0] * 3600 + parts[1] * 60 + parts[2];
+          else if (parts.length === 2) duration = parts[0] * 60 + parts[1];
+        }
+        if (vid && title && duration > 60){
+          items.push({
+            id: 'yt_' + vid,
+            title,
+            artist: author,
+            artistId: '',
+            cover: thumb,
+            album: '',
+            albumId: '',
+            preview: '',
+            source: 'FULL',
+            sourceUrl: 'https://www.youtube.com/watch?v=' + vid,
+            downloadable: false,
+            duration,
+            popularity: 10000,
+            provider: 'youtube'
+          });
+        }
+      }
+      for (const k in obj){
+        if (Array.isArray(obj[k])) obj[k].forEach(walk);
+        else if (typeof obj[k] === 'object') walk(obj[k]);
+      }
+    }
+    walk(data);
+    console.log('[search/youtube] found:', items.length);
+    return { results: items, count: items.length };
+  } catch (e){
+    console.error('[search/youtube]', e.message);
+    return { results: [], count: 0 };
+  }
 }
 
 // ============================================================
@@ -399,11 +368,8 @@ function scoreProviderTrack(item, query){
   const pop = Number(item.popularity || 0);
   if (pop > 0) score += Math.log10(pop + 1) * 5000;
 
-  // iTunes = известные артисты — приоритет выше
   if (item.provider === 'itunes') score += 30000;
-  if (item.provider === 'spotify') score += 20000;
   if (item.source === 'FULL') score += 500;
-
   return score;
 }
 
@@ -411,6 +377,7 @@ function mergeProviderResults(providers, query){
   const out = [];
   const seen = new Set();
   for (const p of providers){
+    if (!p) continue;
     for (const item of p.results || []){
       const key = normalizeSearchText(item.artist) + '|' + normalizeSearchText(item.title);
       if (isNoiseTrack(item)) continue;
@@ -426,32 +393,45 @@ function mergeProviderResults(providers, query){
 // ============================================================
 // ROUTES
 // ============================================================
-api.get('/api/health', (req, res) => res.json({ ok: true, service: 'NOVA', version: '2.1.0' }));
+api.get('/api/health', (req, res) => res.json({ ok: true, service: 'NOVA', version: '3.0.0' }));
 
 api.get('/api/popular', async (req, res) => {
-  // Отдельный запрос для главной — популярные хиты
-  const cacheKey = 'popular';
+  const cacheKey = 'popular:v5';
   const cached = searchCache.get(cacheKey);
-  if (cached && Date.now() - cached.time < 300000) return res.json(cached.data);
+  if (cached && Date.now() - cached.time < 600000) return res.json(cached.data);
 
-  const wrap = (fn, ms) => Promise.race([fn(), new Promise((_, r) => setTimeout(() => r(new Error('t/o')), ms))]);
-  const settled = await Promise.allSettled([
-    wrap(() => searchItunes('top hits 2024', { limit: '30' }), 4000),
-    wrap(() => searchItunes('popular music', { limit: '30' }), 4000)
-  ]);
+  const feeds = [
+    'https://itunes.apple.com/us/rss/topsongs/limit=50/json',
+    'https://itunes.apple.com/gb/rss/topsongs/limit=50/json',
+    'https://itunes.apple.com/de/rss/topsongs/limit=50/json'
+  ];
+  const results = [], seen = new Set();
 
-  const all = [];
-  const seen = new Set();
-  for (const s of settled){
-    if (s.status !== 'fulfilled') continue;
-    for (const t of s.value.results || []){
-      const key = normalizeSearchText(t.artist) + '|' + normalizeSearchText(t.title);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      all.push(t);
-    }
-  }
-  const payload = { results: all.slice(0, 40) };
+  await Promise.allSettled(feeds.map(async url => {
+    try {
+      const r = await jsonFetch(url, {}, 6000);
+      const d = await readJson(r);
+      const entries = d?.feed?.entry || [];
+      for (const e of entries){
+        const title = e['im:name']?.label || '';
+        const artist = e['im:artist']?.label || '';
+        const key = normalizeSearchText(artist) + '|' + normalizeSearchText(title);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const cover = e['im:image']?.[2]?.label || e['im:image']?.[1]?.label || '';
+        const id = e.id?.attributes?.['im:id'] || ('itunes_' + Math.random());
+        results.push({
+          id: 'itunes_' + id, title, artist, artistId: '',
+          cover: cover.replace('170x170', '600x600').replace('100x100', '600x600'),
+          album: e['im:collection']?.['im:name']?.label || '',
+          albumId: '', preview: '', source: 'CATALOG', sourceUrl: e.id?.label || '',
+          downloadable: false, duration: 0, popularity: 100000, provider: 'itunes'
+        });
+      }
+    } catch (e){ console.warn('[popular]', e.message); }
+  }));
+
+  const payload = { results: results.slice(0, 60) };
   searchCache.set(cacheKey, { time: Date.now(), data: payload });
   res.json(payload);
 });
@@ -459,57 +439,187 @@ api.get('/api/popular', async (req, res) => {
 api.get('/api/search', async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (!q) return res.json({ results: [], counts: {} });
+
   const cacheKey = 'search:' + normalizeSearchText(q);
   const cached = searchCache.get(cacheKey);
-  if (cached && Date.now() - cached.time < 120000) return res.json(cached.data);
+  if (cached && Date.now() - cached.time < 120000){
+    console.log('[search] cache hit:', q);
+    return res.json(cached.data);
+  }
 
-  const wrap = (fn, ms) => Promise.race([fn(), new Promise((_, r) => setTimeout(() => r(new Error('t/o')), ms))]);
-  const settled = await Promise.allSettled([
-    wrap(() => searchItunes(q), 4500),
-    wrap(() => searchAudius(q), 4500),
-    wrap(() => searchSpotify(q), 4500)
+  console.log('[search] query:', q);
+
+  const safeFetch = async (fn, name, ms) => {
+    try {
+      return await Promise.race([
+        fn(),
+        new Promise((_, r) => setTimeout(() => r(new Error(name + ' timeout')), ms))
+      ]);
+    } catch (e){
+      console.warn('[search/' + name + ']', e.message);
+      return { results: [], count: 0 };
+    }
+  };
+
+  const [itunes, audius, yt] = await Promise.all([
+    safeFetch(() => searchItunes(q, { limit: '80' }), 'itunes', 3500),
+    safeFetch(() => searchAudius(q), 'audius', 3000),
+    safeFetch(() => searchYouTubeMeta(q), 'youtube', 5000)
   ]);
 
-  const results = mergeProviderResults(
-    settled.map(x => x.status === 'fulfilled' ? x.value : { results: [], count: 0 }),
-    q
-  );
+  console.log('[search] itunes=' + (itunes?.count || 0) + ' audius=' + (audius?.count || 0) + ' yt=' + (yt?.count || 0));
+
+  const providers = [];
+  if (itunes) providers.push(itunes);
+  if (audius) providers.push(audius);
+  if (yt) providers.push(yt);
+
+  let results = [];
+  try {
+    results = mergeProviderResults(providers, q);
+  } catch (e){
+    console.error('[search] merge error:', e.message);
+    results = [];
+  }
 
   const payload = {
     results,
     counts: {
-      itunes: settled[0].value?.count || 0,
-      audius: settled[1].value?.count || 0,
-      spotify: settled[2].value?.count || 0
+      itunes: itunes?.count || 0,
+      audius: audius?.count || 0,
+      youtube: yt?.count || 0
     }
   };
+
   searchCache.set(cacheKey, { time: Date.now(), data: payload });
+  console.log('[search] sending results:', results.length);
   res.json(payload);
 });
 
 api.get('/api/audio/resolve', async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (!q) return res.status(400).json({ ok: false, error: 'empty' });
-  try { const r = await findPlayableAudio(q); res.json({ ok: true, ...r }); }
-  catch (e){ res.status(502).json({ ok: false, error: e.message }); }
+
+  const ck = normalizeSearchText(q);
+  const cached = resolveCache.get(ck);
+  if (cached && Date.now() - cached.time < RESOLVE_TTL){
+    return res.json({ ok: true, ...cached.data, cached: true });
+  }
+
+  try {
+    const r = await findPlayableAudio(q);
+    resolveCache.set(ck, { time: Date.now(), data: r });
+    res.json({ ok: true, ...r });
+  } catch (e){
+    console.error('[resolve]', e.message);
+    res.status(502).json({ ok: false, error: e.message });
+  }
 });
+
+api.post('/api/audio/prefetch', async (req, res) => {
+  const tracks = Array.isArray(req.body?.tracks) ? req.body.tracks.slice(0, 6) : [];
+  res.json({ ok: true, count: tracks.length });
+
+  (async () => {
+    for (const t of tracks){
+      try {
+        const q = [t.title, t.artist].filter(Boolean).join(' ');
+        if (!q) continue;
+        const ck = normalizeSearchText(q);
+        if (resolveCache.has(ck) && Date.now() - resolveCache.get(ck).time < RESOLVE_TTL) continue;
+        const r = await findPlayableAudio(q);
+        resolveCache.set(ck, { time: Date.now(), data: r });
+      } catch (e){ /* ignore */ }
+    }
+    console.log('[prefetch] done, cache size =', resolveCache.size);
+  })();
+});
+
+// ============================================================
+// AUDIO PROXY
+// ============================================================
+const INVIDIOUS_INSTANCES = [
+  'https://invidious.f5.si',
+  'https://inv.nadeko.net',
+  'https://yewtu.be',
+  'https://invidious.nerdvpn.de',
+  'https://iv.melmac.space'
+];
+
+const PIPED_INSTANCES = [
+  'https://pipedapi.kavin.rocks',
+  'https://pipedapi.adminforge.de',
+  'https://api.piped.yt'
+];
 
 api.get('/api/audio/youtube/:videoId', async (req, res) => {
   const vid = String(req.params.videoId || '');
-  try {
-    const direct = await getYtStreamUrl(vid);
-    const headers = { 'User-Agent': 'Mozilla/5.0', Accept: '*/*' };
-    if (req.headers.range) headers.Range = req.headers.range;
-    const upstream = await fetch(direct, { headers, redirect: 'follow' });
-    if (!upstream.ok && upstream.status !== 206) return res.status(502).end();
-    for (const h of ['content-type', 'content-length', 'content-range', 'accept-ranges']){
-      const v = upstream.headers.get(h);
-      if (v) res.setHeader({ 'content-type': 'Content-Type', 'content-length': 'Content-Length', 'content-range': 'Content-Range', 'accept-ranges': 'Accept-Ranges' }[h], v);
+  if (!/^[A-Za-z0-9_-]{6,20}$/.test(vid)) return res.status(400).end();
+
+  const range = req.headers.range || '';
+  console.log('[proxy] youtube:', vid);
+
+  for (const base of INVIDIOUS_INSTANCES){
+    try {
+      const url = base + '/latest_version?id=' + vid + '&itag=140&local=true';
+      const headers = { 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*' };
+      if (range) headers.Range = range;
+
+      const upstream = await fetch(url, { headers, redirect: 'follow', timeout: 15000 });
+      if (!upstream.ok && upstream.status !== 206){
+        console.warn('[proxy] invidious ' + base + ' status:', upstream.status);
+        continue;
+      }
+
+      console.log('[proxy] ok via', base);
+      res.setHeader('Content-Type', 'audio/mp4');
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Cache-Control', 'no-store');
+      const cl = upstream.headers.get('content-length');
+      const cr = upstream.headers.get('content-range');
+      if (cl) res.setHeader('Content-Length', cl);
+      if (cr) res.setHeader('Content-Range', cr);
+      res.status(upstream.status === 206 ? 206 : 200);
+      upstream.body.pipe(res);
+      return;
+    } catch (e){
+      console.warn('[proxy] invidious ' + base + ' failed:', e.message);
     }
-    res.status(upstream.status);
-    if (upstream.body?.pipe) upstream.body.pipe(res);
-    else res.end(Buffer.from(await upstream.arrayBuffer()));
-  } catch (e){ if (!res.headersSent) res.status(502).end(); else res.end(); }
+  }
+
+  for (const base of PIPED_INSTANCES){
+    try {
+      const r = await fetch(base + '/streams/' + vid, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
+      if (!r.ok) continue;
+      const d = await r.json();
+      const streams = Array.isArray(d?.audioStreams) ? d.audioStreams : [];
+      const best = streams
+        .filter(s => s.url && s.mimeType && s.mimeType.includes('audio'))
+        .sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+      if (!best?.url) continue;
+
+      const proxyUrl = best.proxyUrl || best.url;
+      const headers = { 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*' };
+      if (range) headers.Range = range;
+      const upstream = await fetch(proxyUrl, { headers, redirect: 'follow', timeout: 15000 });
+      if (!upstream.ok && upstream.status !== 206) continue;
+
+      console.log('[proxy] ok via piped', base);
+      res.setHeader('Content-Type', best.mimeType || 'audio/mp4');
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Cache-Control', 'no-store');
+      const cl = upstream.headers.get('content-length');
+      if (cl) res.setHeader('Content-Length', cl);
+      res.status(upstream.status === 206 ? 206 : 200);
+      upstream.body.pipe(res);
+      return;
+    } catch (e){
+      console.warn('[proxy] piped ' + base + ' failed:', e.message);
+    }
+  }
+
+  console.error('[proxy] all sources failed for', vid);
+  res.status(502).end();
 });
 
 api.get('/api/audio/audius/:id', async (req, res) => {
@@ -593,70 +703,43 @@ api.get('/api/lyrics', async (req, res) => {
 });
 
 // ============================================================
-// YOUTUBE
+// FIND PLAYABLE
 // ============================================================
-async function initYT(){
-  if (ytInitPromise) return ytInitPromise;
-  ytInitPromise = (async () => {
-    try {
-      ytModule = await import('youtubei.js');
-      const { Innertube } = ytModule;
-      yt = await Innertube.create({ lang: 'en', location: 'US', retrieve_player: true, generate_session_locally: true });
-      ytReady = true;
-      console.log('[audio] youtubei ready');
-    } catch (e){ console.error('[yt]', e.message); }
-  })();
-  return ytInitPromise;
-}
-function ytText(v){ return typeof v === 'string' ? v : String(v?.text || ''); }
-function scoreYt(v, q){
-  const t = ytText(v.title).toLowerCase(), c = ytText(v.author).toLowerCase(), qq = normalizeSearchText(q);
-  let s = 0;
-  for (const w of qq.split(/\s+/).filter(Boolean)){ if (t.includes(w)) s += 18; if (c.includes(w)) s += 12; }
-  if (/(topic|vevo|official)/i.test(c)) s += 50;
-  if (/\b(cover|remix|live|reaction|instrumental|karaoke|8d|sped up|slowed|nightcore)\b/i.test(t)) s -= 100;
-  const dur = Number(v.duration?.seconds || 0);
-  if (dur >= 120 && dur <= 420) s += 25;
-  else if (dur > 0 && (dur < 45 || dur > 1200)) s -= 80;
-  return s;
-}
-async function searchYouTube(q){
-  if (!ytReady) await initYT();
-  if (!ytReady) return [];
-  try {
-    const search = await yt.search(q, { type: 'video' });
-    return (search.videos || []).filter(v => v?.video_id).slice(0, 15).map(v => ({ v, score: scoreYt(v, q) })).sort((a, b) => b.score - a.score).slice(0, 7).map(x => ({ videoId: x.v.video_id, title: ytText(x.v.title), duration: Number(x.v.duration?.seconds || 0) }));
-  } catch (_) { return []; }
-}
-async function getYtStreamUrl(id){
-  if (!ytReady) await initYT();
-  if (!ytReady) throw new Error('yt not ready');
-  const ck = 's:' + id;
-  const c = ytStreamCache.get(ck);
-  if (c && Date.now() - c.time < 120000) return c.url;
-  const info = await yt.getBasicInfo(id);
-  const fmt = info.chooseFormat({ type: 'audio', quality: 'best' });
-  if (!fmt) throw new Error('no fmt');
-  const url = await fmt.decipher(yt.session.player);
-  ytStreamCache.set(ck, { time: Date.now(), url });
-  return url;
-}
 async function findPlayableAudio(query){
   const aq = normalizeSearchText(query);
-  const [ar, yr] = await Promise.allSettled([
-    Promise.race([searchAudius(aq), new Promise((_, r) => setTimeout(() => r(new Error('t/o')), 3500))]),
-    searchYouTube(aq)
-  ]);
-  if (ar.status === 'fulfilled'){
-    const best = (ar.value.results || []).filter(x => x.source === 'FULL').sort((a, b) => scoreProviderTrack(b, aq) - scoreProviderTrack(a, aq))[0];
-    if (best?.id) return { provider: 'audius', streamUrl: '/api/audio/audius/' + encodeURIComponent(best.id), title: best.title, artist: best.artist };
-  }
-  const ys = yr.status === 'fulfilled' ? yr.value : [];
+
+  try {
+    const r = await searchAudius(aq);
+    const best = (r.results || [])
+      .filter(x => x.source === 'FULL')
+      .sort((a, b) => scoreProviderTrack(b, aq) - scoreProviderTrack(a, aq))[0];
+    if (best?.id){
+      return {
+        provider: 'audius',
+        streamUrl: '/api/audio/audius/' + encodeURIComponent(best.id),
+        title: best.title,
+        artist: best.artist
+      };
+    }
+  } catch (e){ /* next */ }
+
+  const meta = await searchYouTubeMeta(query);
+  const ys = meta.results || [];
+  if (!ys.length) throw new Error('no playable source');
+
   for (const c of ys){
-    try { await getYtStreamUrl(c.videoId); return { provider: 'youtube', streamUrl: '/api/audio/youtube/' + encodeURIComponent(c.videoId), videoId: c.videoId, title: c.title, duration: c.duration }; }
-    catch (_) {}
+    const vid = c.id.replace('yt_', '');
+    if (!/^[A-Za-z0-9_-]{6,20}$/.test(vid)) continue;
+    return {
+      provider: 'youtube',
+      streamUrl: '/api/audio/youtube/' + encodeURIComponent(vid),
+      videoId: vid,
+      title: c.title,
+      duration: c.duration
+    };
   }
-  throw new Error('no playable');
+
+  throw new Error('no playable source');
 }
 
 // ============================================================
