@@ -24,7 +24,7 @@
 
   const state = {
     tracks: [], popularTracks: [], currentIndex: -1, currentTrack: null,
-    sourceFilter: 'ALL', query: 'pop', repeat: false, shuffle: false,
+    sourceFilter: 'ALL', query: '', repeat: false, shuffle: false,
     favorites: savedFavorites, history: savedHistory,
     volume: Number(store.get('nova_volume', '100')) || 100,
     view: 'home', playState: 'idle', searchRequest: 0,
@@ -34,7 +34,6 @@
 
   function $(id){ return document.getElementById(id); }
 
-  // Создаём placeholder для отсутствующих элементов, чтобы не падать
   function safeEl(id){
     let node = $(id);
     if (!node){
@@ -67,7 +66,6 @@
    'equalizerBtn','similarBtn'
   ].forEach(id => { el[id] = safeEl(id); });
 
-  // Универсальная безопасная привязка событий
   function on(node, event, handler){
     if (node && typeof node.addEventListener === 'function'){
       node.addEventListener(event, handler);
@@ -1065,7 +1063,7 @@
   }
 
   // ============================================================
-  // EVENTS — с безопасной привязкой
+  // EVENTS
   // ============================================================
   on(el.searchButton, 'click', () => search(el.searchInput.value));
   on(el.searchInput, 'keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); search(el.searchInput.value); } });
@@ -1199,7 +1197,7 @@
     setTimeout(() => { if (!state.user) openLoginModal(); }, 800);
   })();
 
-  // STARTUP
+  // STARTUP (без авто-запуска 'pop')
   async function startup(){
     try {
       el.startupStatus.textContent = 'Восстанавливаем данные…';
@@ -1207,7 +1205,7 @@
       el.startupStatus.textContent = 'Проверяем NOVA…';
       await checkApi(true);
       el.startupStatus.textContent = 'Загружаем популярное…';
-      await Promise.allSettled([loadPopular(), search('pop', { startup: true })]);
+      await Promise.allSettled([loadPopular()]);
       renderHome();
     } catch (e){ console.error('[startup]', e); }
     finally { setTimeout(() => el.startupScreen.classList.add('hidden'), 250); }
