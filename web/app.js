@@ -527,17 +527,19 @@
   }
 
   // ============================================================
-  // PREFETCH
+  // PREFETCH (обновлено — отправляет title и artist отдельно)
   // ============================================================
   function prefetchTracks(tracks){
     tracks.forEach(t => {
-      const q = [t.title, t.artist].filter(Boolean).join(' ');
-      if (!q) return;
-      const ck = normalizeSearch(q);
+      const title = String(t.title || '').trim();
+      const artist = String(t.artist || '').trim();
+      if (!title && !artist) return;
+      const ck = normalizeSearch(title + ' ' + artist);
       const cached = localResolveCache.get(ck);
       if (cached && Date.now() - cached.time < LOCAL_RESOLVE_TTL) return;
 
-      fetch(apiBase() + '/api/audio/resolve?q=' + encodeURIComponent(q), { headers: { Accept: 'application/json' } })
+      const params = new URLSearchParams({ title, artist });
+      fetch(apiBase() + '/api/audio/resolve?' + params.toString(), { headers: { Accept: 'application/json' } })
         .then(r => r.json())
         .then(d => {
           if (d.ok && d.streamUrl){
@@ -752,10 +754,11 @@
     updateMiniPlayer(); updatePlayer(); updateInfoDrawer(); updatePlayButtons();
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
 
-    const q = [track.title, track.artist].filter(Boolean).join(' ');
-    if (!q){ state.playState = 'error'; updatePlayButtons(); return; }
+    const title = String(track.title || '').trim();
+    const artist = String(track.artist || '').trim();
+    if (!title && !artist){ state.playState = 'error'; updatePlayButtons(); return; }
 
-    const ck = normalizeSearch(q);
+    const ck = normalizeSearch(title + ' ' + artist);
 
     let streamUrl = '';
     const local = localResolveCache.get(ck);
@@ -765,11 +768,14 @@
 
     if (!streamUrl){
       try {
-        const r = await fetch(apiBase() + '/api/audio/resolve?q=' + encodeURIComponent(q), { headers: { Accept: 'application/json' } });
+        const params = new URLSearchParams({ title, artist });
+        const r = await fetch(apiBase() + '/api/audio/resolve?' + params.toString(), { headers: { Accept: 'application/json' } });
         const d = await r.json();
         if (r.ok && d.ok && d.streamUrl){
           streamUrl = d.streamUrl;
           localResolveCache.set(ck, { time: Date.now(), streamUrl: d.streamUrl, provider: d.provider });
+        } else {
+          console.warn('[resolve] no match:', d && d.error);
         }
       } catch (e){ console.warn('[resolve]', e.message); }
     }
