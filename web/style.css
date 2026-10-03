@@ -240,6 +240,31 @@ button { border: 0; cursor: pointer; background: transparent; color: inherit; fo
 .queue-content { color: #777; font-size: 11px; }
 .queue-content strong { color: #aaa; }
 
+/* ============================================================
+   QUEUE (расширенная версия)
+   ============================================================ */
+.queue-box-wide { width: 100%; max-width: 100%; grid-column: 1 / -1; }
+.queue-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; gap: 10px; }
+.queue-head .queue-title { margin: 0; }
+.queue-clear { height: 26px; padding: 0 10px; border: 1px solid #222; border-radius: 7px; background: #0d0d0d; color: #888; font-size: 10px; font-weight: 600; letter-spacing: .02em; transition: all var(--dur) var(--ease-spring); }
+.queue-clear:hover { color: #fff; border-color: #3a3a3a; background: #161616; transform: translateY(-1px); }
+.queue-list { max-height: 280px; overflow-y: auto; margin: 0 -6px; padding: 2px 6px; }
+.queue-row { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; cursor: pointer; transition: background var(--dur-fast) var(--ease), transform var(--dur) var(--ease-spring); }
+.queue-row:hover { background: rgba(255,255,255,.05); transform: translateX(3px); }
+.queue-row.active { background: rgba(255,255,255,.07); }
+.queue-row.active .queue-title-text { color: var(--accent); }
+.queue-cover { width: 32px; height: 32px; flex: 0 0 32px; border-radius: 5px; object-fit: cover; background: #111; border: 1px solid #1a1a1a; }
+.queue-main { flex: 1; min-width: 0; }
+.queue-title-text { font-size: 11.5px; font-weight: 600; color: #eaeaea; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.queue-artist-text { font-size: 10px; color: #6a6a6a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.queue-remove { flex: 0 0 auto; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; color: #666; font-size: 17px; line-height: 1; transition: all var(--dur) var(--ease-spring); }
+.queue-remove:hover { color: #ff5a5a; background: rgba(255,90,90,.1); transform: scale(1.15) rotate(90deg); }
+.queue-empty { padding: 14px 8px; font-size: 11px; color: #555; text-align: center; }
+
+/* MUTE по клику на иконку громкости */
+.mini-vol-icon { cursor: pointer; transition: stroke var(--dur-fast) var(--ease), transform var(--dur) var(--ease-spring); }
+.mini-vol-icon:hover { transform: scale(1.1); }
+
 .mini-player { position: fixed; left: 64px; right: 0; bottom: 0; z-index: 40; height: 88px; display: grid; grid-template-columns: minmax(200px, 1fr) auto minmax(300px, 1fr); gap: 20px; align-items: center; padding: 12px 20px 8px; background: rgba(7,7,7,.96); backdrop-filter: blur(24px); border-top: 1px solid #1a1a1a; transform: translateY(100%); transition: transform .5s var(--ease-spring); will-change: transform; }
 .mini-player.visible { transform: translateY(0); animation: slideUpMini .55s var(--ease-out); }
 .mini-progress { position: absolute; top: -3px; left: 0; right: 0; width: 100%; height: 8px; -webkit-appearance: none; appearance: none; background: transparent; outline: none; cursor: pointer; z-index: 5; padding: 0; margin: 0; border-radius: 0; }
@@ -461,7 +486,8 @@ html[data-theme="light"] .song-info-title, html[data-theme="light"] .info-title,
 html[data-theme="light"] .card-title, html[data-theme="light"] .home-mini-title,
 html[data-theme="light"] .list-main strong, html[data-theme="light"] .mini-title,
 html[data-theme="light"] .song-info-row span, html[data-theme="light"] .setting-label,
-html[data-theme="light"] .login-title, html[data-theme="light"] .eq-title { color: #18181b; }
+html[data-theme="light"] .login-title, html[data-theme="light"] .eq-title,
+html[data-theme="light"] .queue-title-text { color: #18181b; }
 html[data-theme="light"] .home-sub, html[data-theme="light"] .section-subtitle,
 html[data-theme="light"] .now-artist, html[data-theme="light"] .card-artist,
 html[data-theme="light"] .home-mini-sub, html[data-theme="light"] .list-main span,
@@ -469,7 +495,7 @@ html[data-theme="light"] .mini-artist, html[data-theme="light"] .song-info-artis
 html[data-theme="light"] .info-artist, html[data-theme="light"] .setting-hint,
 html[data-theme="light"] .settings-user, html[data-theme="light"] .queue-content,
 html[data-theme="light"] .player-overline, html[data-theme="light"] .home-kicker,
-html[data-theme="light"] .home-section-head span { color: #71717a; }
+html[data-theme="light"] .home-section-head span, html[data-theme="light"] .queue-artist-text { color: #71717a; }
 html[data-theme="light"] .home-section-head h2 { color: #18181b; }
 html[data-theme="light"] .cover-box { border-color: #e4e4e7; background: #fff; }
 html[data-theme="light"] .card:hover .cover-box { border-color: #bbb; box-shadow: 0 18px 40px rgba(0,0,0,.12); }
@@ -512,6 +538,12 @@ html[data-theme="light"] .inline-control:hover { color: #000; background: #f4f4f
 html[data-theme="light"] .volume-range { background: #e4e4e7; }
 html[data-theme="light"] .volume-range::-webkit-slider-thumb { background: #18181b; }
 html[data-theme="light"] .queue-box, html[data-theme="light"] .similar-box { background: #fafafa; border-color: #e4e4e7; }
+html[data-theme="light"] .queue-clear { background: #fff; color: #666; border-color: #e4e4e7; }
+html[data-theme="light"] .queue-clear:hover { color: #000; border-color: #bbb; background: #f0f0f0; }
+html[data-theme="light"] .queue-row:hover { background: rgba(0,0,0,.04); }
+html[data-theme="light"] .queue-row.active { background: rgba(0,0,0,.06); }
+html[data-theme="light"] .queue-cover { border-color: #e4e4e7; }
+html[data-theme="light"] .queue-remove:hover { color: #dc2626; background: rgba(220,38,38,.08); }
 html[data-theme="light"] .mini-btn { color: #666; }
 html[data-theme="light"] .mini-btn:hover { color: #000; background: #ebebeb; }
 html[data-theme="light"] .mini-btn.primary { background: #18181b; color: #fff; }
