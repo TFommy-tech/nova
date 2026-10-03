@@ -94,8 +94,13 @@
   let backgroundDbPromise = null;
   let searchAbort = null;
   let authMode = 'login';
-  let audioCtx = null, sourceNode = null, eqFilters = null;
-  let fadeGain = null, volumeGain = null;
+
+  // === AUDIO GRAPH ===
+  let audioCtx = null;
+  let sourceNode = null;
+  let fadeGain = null;
+  let volumeGain = null;
+  let eqFilters = null;
   let audioGraphReady = false;
 
   function applyTheme(){
@@ -110,6 +115,9 @@
     btn.classList.toggle('off', !on);
   }
 
+  // ============================================================
+  // YOUTUBE
+  // ============================================================
   function ytSendCommand(func, args){
     if (!ytIframe || !ytIframe.contentWindow) return;
     try { ytIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: func, args: args || [] }), '*'); } catch (_){}
@@ -184,6 +192,9 @@
     });
   }
 
+  // ============================================================
+  // BACKGROUND
+  // ============================================================
   function openLocalAudioPicker(){ el.localAudioInput.click(); }
   function openBackgroundPicker(){ el.backgroundInput.click(); }
   function backgroundDb(){
@@ -216,11 +227,14 @@
   }
   function resetBackground(){ state.background.src = ''; saveBackgroundData('').catch(() => {}); applyBackground(''); notify('Фон сброшен'); }
 
+  // ============================================================
+  // EQUALIZER (FIXED)
+  // ============================================================
   const EQ_BANDS = [
-    { freq: 60, type: 'lowshelf', label: '60' },
-    { freq: 230, type: 'peaking', label: '230' },
-    { freq: 910, type: 'peaking', label: '910' },
-    { freq: 3600, type: 'peaking', label: '3.6k' },
+    { freq: 60,    type: 'lowshelf',  label: '60' },
+    { freq: 230,   type: 'peaking',   label: '230' },
+    { freq: 910,   type: 'peaking',   label: '910' },
+    { freq: 3600,  type: 'peaking',   label: '3.6k' },
     { freq: 14000, type: 'highshelf', label: '14k' }
   ];
   const EQ_PRESETS = {
@@ -231,41 +245,68 @@
 
   function initAudioGraph(){
     if (audioGraphReady){
-      if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+      if (audioCtx && audioCtx.state === 'suspended'){
+        audioCtx.resume().then(() => applyEq()).catch(() => {});
+      } else {
+        applyEq();
+      }
       return;
     }
     try {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      console.log('[eq] audioCtx created, state =', audioCtx.state);
+
       sourceNode = audioCtx.createMediaElementSource(el.audio);
+
       fadeGain = audioCtx.createGain();
       fadeGain.gain.value = 1;
+
       volumeGain = audioCtx.createGain();
       volumeGain.gain.value = state.volume / 100;
+
       eqFilters = EQ_BANDS.map(b => {
         const f = audioCtx.createBiquadFilter();
-        f.type = b.type; f.frequency.value = b.freq;
+        f.type = b.type;
+        f.frequency.value = b.freq;
         if (b.type === 'peaking') f.Q.value = 1.0;
-        f.gain.value = 0; return f;
+        f.gain.value = 0;
+        return f;
       });
+
       sourceNode.connect(fadeGain);
       fadeGain.connect(volumeGain);
       let prev = volumeGain;
       eqFilters.forEach(f => { prev.connect(f); prev = f; });
       prev.connect(audioCtx.destination);
+
       audioGraphReady = true;
+      console.log('[eq] graph built. bands:', state.eq.bands, 'on:', state.eq.on);
       applyEq();
-      if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+
+      if (audioCtx.state === 'suspended'){
+        audioCtx.resume().then(() => {
+          console.log('[eq] resumed');
+          applyEq();
+        }).catch(e => console.warn('[eq] resume failed:', e.message));
+      }
     } catch (e){
       console.warn('[eq] init failed:', e.message);
-      audioCtx = null; audioGraphReady = false; fadeGain = null; volumeGain = null;
+      audioCtx = null; audioGraphReady = false; fadeGain = null; volumeGain = null; eqFilters = null;
     }
   }
 
   function applyEq(){
-    if (!eqFilters || !audioGraphReady || !audioCtx) return;
+    if (!eqFilters || !audioGraphReady || !audioCtx){
+      console.log('[eq] applyEq skip: ready=' + audioGraphReady);
+      return;
+    }
     const on = state.eq.on;
     state.eq.bands.forEach((g, i) => {
-      if (eqFilters[i]) eqFilters[i].gain.setTargetAtTime(on ? Number(g) : 0, audioCtx.currentTime, 0.01);
+      if (!eqFilters[i]) return;
+      const target = on ? Number(g) : 0;
+      eqFilters[i].gain.cancelScheduledValues(audioCtx.currentTime);
+      eqFilters[i].gain.setValueAtTime(target, audioCtx.currentTime);
+      console.log('[eq] band', i, '(' + EQ_BANDS[i].label + ') =', target);
     });
   }
 
@@ -292,6 +333,7 @@
     state.eq.bands[i] = Number(v);
     state.eq.on = state.eq.bands.some(x => Number(x) !== 0);
     store.set('nova_eq', JSON.stringify(state.eq));
+    if (!audioGraphReady) initAudioGraph();
     applyEq();
   }
   function applyEqPreset(n){
@@ -299,7 +341,9 @@
     state.eq.bands = p.slice();
     state.eq.on = p.some(x => Number(x) !== 0);
     store.set('nova_eq', JSON.stringify(state.eq));
-    applyEq(); renderEqualizerBands();
+    if (!audioGraphReady) initAudioGraph();
+    applyEq();
+    renderEqualizerBands();
   }
   function renderEqualizerBands(){
     if (!el.equalizerBands) return;
@@ -307,7 +351,9 @@
     EQ_BANDS.forEach((b, i) => {
       const val = state.eq.bands[i] || 0;
       const w = document.createElement('div'); w.className = 'eq-band';
-      w.innerHTML = '<div class="eq-band-value">' + (val > 0 ? '+' : '') + val + '</div><input type="range" class="eq-slider" min="-12" max="12" value="' + val + '" step="1" data-band="' + i + '"><div class="eq-band-label">' + b.label + '</div>';
+      w.innerHTML = '<div class="eq-band-value">' + (val > 0 ? '+' : '') + val + '</div>' +
+                    '<input type="range" class="eq-slider" min="-12" max="12" value="' + val + '" step="1" data-band="' + i + '">' +
+                    '<div class="eq-band-label">' + b.label + '</div>';
       el.equalizerBands.appendChild(w);
       const s = w.querySelector('input');
       s.style.setProperty('--progress', ((val + 12) / 24 * 100) + '%');
@@ -329,9 +375,13 @@
     });
   }
   function openEqualizer(){
+    // Всегда при открытии — гарантируем что граф существует и активен
     initAudioGraph();
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
-    renderEqualizerBands(); renderEqualizerPresets();
+    if (audioCtx && audioCtx.state === 'suspended'){
+      audioCtx.resume().then(() => applyEq()).catch(() => {});
+    }
+    renderEqualizerBands();
+    renderEqualizerPresets();
     el.equalizerModal.classList.add('open');
     el.equalizerModal.setAttribute('aria-hidden', 'false');
   }
@@ -340,6 +390,9 @@
     el.equalizerModal.setAttribute('aria-hidden', 'true');
   }
 
+  // ============================================================
+  // USER
+  // ============================================================
   function avatarUrl(u){
     if (!u) return '';
     if (!u.avatar){ const idx = u.id && /^\d+$/.test(u.id) ? Number(BigInt(u.id) >> 22n) % 6 : 0; return 'https://cdn.discordapp.com/embed/avatars/' + idx + '.png'; }
@@ -418,6 +471,9 @@
     finally { el.authSubmit.disabled = false; if (el.authSubmitText) el.authSubmitText.textContent = authMode === 'login' ? 'Войти' : 'Создать аккаунт'; }
   }
 
+  // ============================================================
+  // HELPERS
+  // ============================================================
   function escapeHtml(v){ return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
   function formatTime(s){ if (!Number.isFinite(s) || s < 0) return '0:00'; const sec = Math.floor(s), m = Math.floor(sec / 60), r = String(sec % 60).padStart(2, '0'); return m + ':' + r; }
   function formatNumber(n){
@@ -616,7 +672,16 @@
     return d;
   }
   function makeHomeArtistCard(track){ const d = makeHomeTrackCard(track); d.onclick = () => showArtist(track.artistId || '', track.artist || ''); d.querySelector('.home-mini-cover').style.borderRadius = '50%'; return d; }
-  function makeHomeAlbumCard(track){ const d = makeHomeTrackCard(track); d.onclick = () => { if (track.albumId) showAlbum(track.albumId); }; return d; }
+  function makeHomeAlbumCard(track){
+    const d = document.createElement('div'); d.className = 'home-mini-card';
+    const img = document.createElement('img'); img.className = 'home-mini-cover'; img.alt = '';
+    img.src = track.cover || 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300"><rect width="300" height="300" fill="#0b0b0b"/><text x="150" y="165" fill="#444" font-size="72" text-anchor="middle">♪</text></svg>');
+    const t = document.createElement('div'); t.className = 'home-mini-title'; t.textContent = track.title || 'Без названия';
+    const s = document.createElement('div'); s.className = 'home-mini-sub'; s.textContent = track.artist || '—';
+    d.addEventListener('click', () => { if (track.albumId) showAlbum(track.albumId); });
+    d.append(img, t, s);
+    return d;
+  }
 
   function renderTracks(){
     let grid = document.getElementById('trackGrid');
@@ -745,8 +810,11 @@
     state.playState = 'loading';
     resetProgressUI();
     updateMiniPlayer(); updatePlayer(); updateInfoDrawer(); updatePlayButtons();
+
+    // === ВАЖНО: init графа при каждом треке, чтобы эквалайзер работал ===
     initAudioGraph();
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().then(() => applyEq()).catch(() => {});
+
     const title = String(track.title || '').trim();
     const artist = String(track.artist || '').trim();
     if (!title && !artist){ state.playState = 'error'; updatePlayButtons(); return; }
@@ -772,6 +840,7 @@
       updatePlayButtons();
       addHistory(track); renderHome(); updateInfoDrawer(); updatePlayer();
       setTimeout(updateProgress, 100); setTimeout(updateProgress, 400); setTimeout(updateProgress, 1000);
+      setTimeout(applyEq, 200);
     } catch (e){
       if (myId !== playRequestId) return;
       if (e.message === 'Aborted') return;
@@ -782,7 +851,7 @@
 
   function playCurrentOrFirst(){
     initAudioGraph();
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().then(() => applyEq()).catch(() => {});
     if (ytIframe && ytCurrentVideo){
       try {
         if (state.playState === 'playing'){ ytSendCommand('pauseVideo'); state.playState = 'paused'; }
