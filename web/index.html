@@ -163,7 +163,12 @@
     <section id="playerView" class="view hidden">
       <div class="player-view">
         <div class="player-layout">
-          <div class="big-cover-wrap"><img id="bigCover" class="big-cover" alt=""></div>
+         <div class="big-cover-wrap">
+  <img id="bigCover" class="big-cover" alt="">
+  <div id="youtubePlayerWrap" class="youtube-player-wrap">
+    <div id="youtubePlayer"></div>
+  </div>
+</div>
           <div class="player-side">
             <div class="player-overline">NOVA PLAYER</div>
             <h1 id="nowTitle" class="now-title">Ничего не играет</h1>
@@ -249,9 +254,6 @@
   <input id="backgroundInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
   <input id="localAudioInput" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.webm" hidden>
   <audio id="audio" preload="metadata"></audio>
-  <div id="youtubePlayerWrap" style="position:fixed;left:-9999px;top:-9999px;width:1px;height:1px;overflow:hidden;pointer-events:none">
-    <div id="youtubePlayer"></div>
-  </div>
   <script src="https://www.youtube.com/iframe_api"></script>
 <script src="app.js"></script>
 </body>
