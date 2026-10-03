@@ -1,3 +1,6 @@
+// ============================================================
+// server/server.js — бэкенд NOVA
+// ============================================================
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
@@ -43,7 +46,7 @@ const artistCache = new Map();
 const RESOLVE_TTL = 30 * 60 * 1000;
 const SEARCH_TTL = 2 * 60 * 1000;
 const LYRICS_TTL = 24 * 60 * 60 * 1000;
-const ARTIST_TTL = 15 * 60 * 1000;
+const ARTIST_TTL = 20 * 60 * 1000;
 
 setInterval(() => {
   const now = Date.now();
@@ -52,24 +55,19 @@ setInterval(() => {
   for (const [k, v] of resolveCache) if (now - v.time > RESOLVE_TTL) { resolveCache.delete(k); cleaned++; }
   for (const [k, v] of lyricsCache) if (now - v.time > LYRICS_TTL) { lyricsCache.delete(k); cleaned++; }
   for (const [k, v] of artistCache) if (now - v.time > ARTIST_TTL) { artistCache.delete(k); cleaned++; }
-  if (cleaned) console.log('[cache] cleaned ' + cleaned + ' stale entries');
+  if (cleaned) console.log('[cache] cleaned ' + cleaned);
 }, 5 * 60 * 1000);
 
 const rateLimitMap = new Map();
 const RATE_WINDOW = 60 * 1000;
-const RATE_MAX = 180;
+const RATE_MAX = 200;
 function rateLimit(req, res, next){
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown';
   const now = Date.now();
   let entry = rateLimitMap.get(ip);
-  if (!entry || now > entry.reset){
-    entry = { count: 0, reset: now + RATE_WINDOW };
-    rateLimitMap.set(ip, entry);
-  }
+  if (!entry || now > entry.reset){ entry = { count: 0, reset: now + RATE_WINDOW }; rateLimitMap.set(ip, entry); }
   entry.count++;
-  if (entry.count > RATE_MAX){
-    return res.status(429).json({ error: 'too many requests' });
-  }
+  if (entry.count > RATE_MAX) return res.status(429).json({ error: 'too many requests' });
   next();
 }
 
@@ -77,33 +75,23 @@ const api = express();
 api.disable('x-powered-by');
 api.use(cors());
 api.use(express.json({ limit: '2mb' }));
-
 api.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
   const start = Date.now();
   res.on('finish', () => {
     const ms = Date.now() - start;
-    if (res.statusCode >= 400 || ms > 1500){
-      console.log('[req]', req.method, req.path, res.statusCode, ms + 'ms');
-    }
+    if (res.statusCode >= 400 || ms > 1500) console.log('[req]', req.method, req.path, res.statusCode, ms + 'ms');
   });
   next();
 });
 
-// ============================================================
-// УТИЛИТЫ
-// ============================================================
-function trackKey(t){
-  return [String(t.source || ''), String(t.id || ''), String(t.title || ''), String(t.artist || '')].join('|');
-}
-
+function trackKey(t){ return [String(t.source || ''), String(t.id || ''), String(t.title || ''), String(t.artist || '')].join('|'); }
 function authMiddleware(req, res, next){
   const h = req.headers.authorization || '';
   if (!h.startsWith('Bearer ')) return res.status(401).json({ error: 'no token' });
   try { req.user = jwt.verify(h.slice(7), JWT_SECRET); next(); }
   catch (_) { res.status(401).json({ error: 'invalid token' }); }
 }
-
 function isNoiseTrack(item){
   if (!item) return true;
   const title = String(item.title || '').toLowerCase();
@@ -112,13 +100,9 @@ function isNoiseTrack(item){
   if (!title || title === 'untitled') return true;
   return false;
 }
-
 function shuffle(arr){
   const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--){
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
+  for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
 
@@ -137,7 +121,6 @@ function isNoiseDeezerTrack(t){
   if (!title.trim()) return true;
   return false;
 }
-
 function isOwnedAlbum(album, artistId, artistName){
   if (!album) return false;
   if (album.artist && album.artist.id && String(album.artist.id) === String(artistId)) return true;
@@ -148,14 +131,12 @@ function isOwnedAlbum(album, artistId, artistName){
   }
   return false;
 }
-
 const BAD_ALBUM_WORDS = ['maple story','maplestory','ost','original soundtrack','game soundtrack','soundtrack','tribute','karaoke','various artists','compilation'];
 function isBadAlbumTitle(title){
   const t = String(title || '').toLowerCase();
   for (const w of BAD_ALBUM_WORDS) if (t.includes(w)) return true;
   return false;
 }
-
 const BAD_YT_WORDS = [
   'разбор','реакция','reaction','review','обзор','интервью','interview','подкаст','podcast',
   'премьера клипа','премьера','premiere','тизер','teaser','трейлер','trailer',
@@ -174,11 +155,10 @@ function isBadYoutubeTitle(title){
   for (const w of BAD_YT_WORDS){ if (head.includes(w)) return true; }
   return false;
 }
-
 function hashPassword(password, salt){ return crypto.scryptSync(password, salt, 64).toString('hex'); }
 
 // ============================================================
-// АУТЕНТИФИКАЦИЯ
+// AUTH
 // ============================================================
 api.post('/api/register', rateLimit, (req, res) => {
   const { username, password } = req.body || {};
@@ -187,12 +167,10 @@ api.post('/api/register', rateLimit, (req, res) => {
   if (String(password).length < 4) return res.status(400).json({ error: 'Пароль от 4 символов' });
   if (!/^[a-zA-Zа-яА-Я0-9_\-]+$/u.test(username)) return res.status(400).json({ error: 'Логин без пробелов' });
   const lower = String(username).toLowerCase();
-  const existing = Object.values(db.users).find(u => (u.username || '').toLowerCase() === lower);
-  if (existing) return res.status(409).json({ error: 'Логин занят' });
+  if (Object.values(db.users).some(u => (u.username || '').toLowerCase() === lower)) return res.status(409).json({ error: 'Логин занят' });
   const id = 'local_' + crypto.randomBytes(8).toString('hex');
   const salt = crypto.randomBytes(16).toString('hex');
-  const hash = hashPassword(password, salt);
-  db.users[id] = { id, username, avatar: '', discriminator: '0', provider: 'local', passwordHash: hash, passwordSalt: salt, createdAt: Date.now() };
+  db.users[id] = { id, username, avatar: '', discriminator: '0', provider: 'local', passwordHash: hashPassword(password, salt), passwordSalt: salt, createdAt: Date.now() };
   if (!db.favorites[id]) db.favorites[id] = [];
   if (!db.history[id]) db.history[id] = [];
   if (!db.plays[id]) db.plays[id] = {};
@@ -207,8 +185,7 @@ api.post('/api/login', rateLimit, (req, res) => {
   const lower = String(username).toLowerCase();
   const user = Object.values(db.users).find(u => (u.username || '').toLowerCase() === lower);
   if (!user || user.provider !== 'local' || !user.passwordHash) return res.status(401).json({ error: 'Неверный логин или пароль' });
-  const hash = hashPassword(password, user.passwordSalt);
-  if (hash !== user.passwordHash) return res.status(401).json({ error: 'Неверный логин или пароль' });
+  if (hashPassword(password, user.passwordSalt) !== user.passwordHash) return res.status(401).json({ error: 'Неверный логин или пароль' });
   const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
   res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar || '', provider: 'local' } });
 });
@@ -229,12 +206,8 @@ api.get('/api/auth/discord/callback', async (req, res) => {
     const userRes = await fetch('https://discord.com/api/users/@me', { headers: { Authorization: 'Bearer ' + tokenData.access_token } });
     const user = await userRes.json();
     const userId = user.id;
-    if (!db.users[userId]){
-      db.users[userId] = { id: userId, username: user.username, avatar: user.avatar || '', discriminator: user.discriminator || '0', provider: 'discord', createdAt: Date.now() };
-    } else {
-      db.users[userId].username = user.username;
-      db.users[userId].avatar = user.avatar || '';
-    }
+    if (!db.users[userId]) db.users[userId] = { id: userId, username: user.username, avatar: user.avatar || '', discriminator: user.discriminator || '0', provider: 'discord', createdAt: Date.now() };
+    else { db.users[userId].username = user.username; db.users[userId].avatar = user.avatar || ''; }
     if (!db.favorites[userId]) db.favorites[userId] = [];
     if (!db.history[userId]) db.history[userId] = [];
     if (!db.plays[userId]) db.plays[userId] = {};
@@ -328,24 +301,6 @@ function normalizeSearchText(v){
 }
 
 // ============================================================
-// ОЧИСТКА НАЗВАНИЙ ДЛЯ ПОИСКА (ключевой момент для resolve)
-// ============================================================
-function cleanTitleForSearch(title){
-  if (!title) return '';
-  let t = String(title);
-  // Убираем всё в скобках: (Official Lyric Video), [Official Audio], (feat. X) и т.д.
-  t = t.replace(/\([^)]*\)/g, ' ');
-  t = t.replace(/\[[^\]]*\]/g, ' ');
-  // Убираем хэштеги
-  t = t.replace(/#\S+/g, ' ');
-  // Убираем ключевые маркеры
-  t = t.replace(/\b(official|lyric|lyrics|video|audio|visualizer|hd|hq|4k|prod\.?|explicit|clean|mv|m\/v)\b/gi, ' ');
-  // Схлопываем пробелы
-  t = t.replace(/\s+/g, ' ').trim();
-  return t;
-}
-
-// ============================================================
 // ПОИСКИ
 // ============================================================
 async function searchItunes(q, opts = {}){
@@ -355,26 +310,23 @@ async function searchItunes(q, opts = {}){
     const r = await jsonFetch('https://itunes.apple.com/search?' + params.toString(), {}, 8000);
     const d = await readJson(r);
     const items = Array.isArray(d?.results) ? d.results : [];
-    const results = items.map((tr, idx) => {
-      const rankBoost = Math.max(0, 100 - idx);
-      return {
-        id: 'itunes_' + String(tr.trackId || ''),
-        title: tr.trackName || 'Untitled',
-        artist: tr.artistName || '',
-        artistId: '',
-        cover: (tr.artworkUrl100 || '').replace('100x100', '600x600'),
-        album: tr.collectionName || '',
-        albumId: '',
-        preview: '',
-        source: 'CATALOG',
-        sourceUrl: tr.trackViewUrl || '',
-        downloadable: false,
-        duration: Number(tr.trackTimeMillis || 0) / 1000,
-        popularity: 50000 + rankBoost * 500,
-        releaseDate: tr.releaseDate || '',
-        provider: 'itunes'
-      };
-    });
+    const results = items.map((tr, idx) => ({
+      id: 'itunes_' + String(tr.trackId || ''),
+      title: tr.trackName || 'Untitled',
+      artist: tr.artistName || '',
+      artistId: '',
+      cover: (tr.artworkUrl100 || '').replace('100x100', '600x600'),
+      album: tr.collectionName || '',
+      albumId: '',
+      preview: '',
+      source: 'CATALOG',
+      sourceUrl: tr.trackViewUrl || '',
+      downloadable: false,
+      duration: Number(tr.trackTimeMillis || 0) / 1000,
+      popularity: 50000 + Math.max(0, 100 - idx) * 500,
+      releaseDate: tr.releaseDate || '',
+      provider: 'itunes'
+    }));
     return { results, count: results.length };
   } catch (e){ return { results: [], count: 0 }; }
 }
@@ -407,7 +359,6 @@ async function searchAudius(q){
   } catch (e){ return { results: [], count: 0 }; }
 }
 
-// YouTube HTML-скрейпинг (может блокироваться с облачных IP)
 async function searchYouTubeMeta(q){
   try {
     const url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q) + '&sp=EgIQAQ%253D%253D';
@@ -449,20 +400,11 @@ async function searchYouTubeMeta(q){
   } catch (e){ return { results: [], count: 0 }; }
 }
 
-// YouTube через Piped API — работает с облачных IP, используется как фолбэк
 async function searchYouTubeViaPiped(q){
-  const bases = [
-    'https://pipedapi.kavin.rocks',
-    'https://pipedapi.adminforge.de',
-    'https://api.piped.yt',
-    'https://pipedapi.reallyaweso.me'
-  ];
+  const bases = ['https://pipedapi.kavin.rocks', 'https://pipedapi.adminforge.de', 'https://api.piped.yt', 'https://pipedapi.reallyaweso.me'];
   for (const base of bases){
     try {
-      const r = await fetch(base + '/search?q=' + encodeURIComponent(q) + '&filter=videos', {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-        timeout: 8000
-      });
+      const r = await fetch(base + '/search?q=' + encodeURIComponent(q) + '&filter=videos', { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
       if (!r.ok) continue;
       const d = await r.json();
       const items = Array.isArray(d?.items) ? d.items : [];
@@ -471,19 +413,14 @@ async function searchYouTubeViaPiped(q){
         .map(x => {
           const vid = String(x.url).split('watch?v=')[1]?.split('&')[0] || '';
           return {
-            id: 'yt_' + vid,
-            title: x.title || '',
-            artist: x.uploaderName || 'YouTube',
-            channel: x.uploaderName || 'YouTube',
-            artistId: '',
-            cover: x.thumbnail || '',
-            album: '', albumId: '', preview: '',
+            id: 'yt_' + vid, title: x.title || '',
+            artist: x.uploaderName || 'YouTube', channel: x.uploaderName || 'YouTube',
+            artistId: '', cover: x.thumbnail || '', album: '', albumId: '', preview: '',
             source: 'FULL',
             sourceUrl: 'https://www.youtube.com/watch?v=' + vid,
             downloadable: false,
             duration: Number(x.duration || 0),
-            popularity: 10000,
-            provider: 'youtube'
+            popularity: 10000, provider: 'youtube'
           };
         })
         .filter(x => x.id !== 'yt_' && x.title);
@@ -493,8 +430,6 @@ async function searchYouTubeViaPiped(q){
   return { results: [], count: 0 };
 }
 
-// Комбинированный поиск YouTube: сначала Piped (стабильнее с облака),
-// затем HTML-скрейпинг как запасной вариант
 async function searchYouTube(q){
   const viaPiped = await searchYouTubeViaPiped(q);
   if (viaPiped.results.length) return viaPiped;
@@ -558,7 +493,7 @@ api.get('/api/health', async (req, res) => {
   ]);
   const allOk = Object.values(checks).every(c => c.ok);
   res.status(allOk ? 200 : 207).json({
-    ok: allOk, service: 'NOVA', version: '3.3.0',
+    ok: allOk, service: 'NOVA', version: '3.4.0',
     uptime: Math.round(process.uptime()),
     users: Object.keys(db.users).length,
     caches: { search: searchCache.size, resolve: resolveCache.size, lyrics: lyricsCache.size, artist: artistCache.size },
@@ -570,7 +505,7 @@ api.get('/api/health', async (req, res) => {
 // ПОПУЛЯРНОЕ
 // ============================================================
 api.get('/api/popular', async (req, res) => {
-  const cacheKey = 'popular:v6';
+  const cacheKey = 'popular:v7';
   const cached = searchCache.get(cacheKey);
   if (cached && Date.now() - cached.time < 10 * 60 * 1000) return res.json(cached.data);
 
@@ -634,10 +569,7 @@ api.get('/api/search', rateLimit, async (req, res) => {
   if (yt) providers.push(yt);
   let results = [];
   try { results = mergeProviderResults(providers, q); } catch (e){ results = []; }
-  const payload = {
-    results,
-    counts: { itunes: itunes?.count || 0, audius: audius?.count || 0, youtube: yt?.count || 0 }
-  };
+  const payload = { results, counts: { itunes: itunes?.count || 0, audius: audius?.count || 0, youtube: yt?.count || 0 } };
   searchCache.set(cacheKey, { time: Date.now(), data: payload });
   res.json(payload);
 });
@@ -669,12 +601,9 @@ api.get('/api/recommendations', authMiddleware, async (req, res) => {
   }
 
   const topArtists = [...artistCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([a]) => a);
-
   if (!topArtists.length){
-    const cached = searchCache.get('popular:v6');
-    if (cached && cached.data?.results?.length){
-      return res.json({ results: shuffle(cached.data.results).slice(0, 30), based_on: [] });
-    }
+    const cached = searchCache.get('popular:v7');
+    if (cached && cached.data?.results?.length) return res.json({ results: shuffle(cached.data.results).slice(0, 30), based_on: [] });
     return res.json({ results: [], based_on: [] });
   }
 
@@ -689,18 +618,13 @@ api.get('/api/recommendations', authMiddleware, async (req, res) => {
       const strict = items.filter(x => normalizeSearchText(x.artistName) === artist);
       for (const x of strict){
         const t = {
-          id: 'itunes_' + String(x.trackId || ''),
-          title: x.trackName || 'Untitled',
-          artist: x.artistName || '',
-          artistId: '',
+          id: 'itunes_' + String(x.trackId || ''), title: x.trackName || 'Untitled',
+          artist: x.artistName || '', artistId: '',
           cover: (x.artworkUrl100 || '').replace('100x100', '600x600'),
-          album: x.collectionName || '',
-          albumId: '', preview: '', source: 'CATALOG',
-          sourceUrl: x.trackViewUrl || '',
-          downloadable: false,
+          album: x.collectionName || '', albumId: '', preview: '',
+          source: 'CATALOG', sourceUrl: x.trackViewUrl || '', downloadable: false,
           duration: Number(x.trackTimeMillis || 0) / 1000,
-          popularity: 50000,
-          provider: 'itunes'
+          popularity: 50000, provider: 'itunes'
         };
         const key = normalizeSearchText(t.artist) + '|' + normalizeSearchText(t.title);
         if (seenTitles.has(key)) continue;
@@ -714,7 +638,7 @@ api.get('/api/recommendations', authMiddleware, async (req, res) => {
 });
 
 // ============================================================
-// АУДИО — резолв (главная правка)
+// АУДИО — резолв
 // ============================================================
 api.get('/api/audio/resolve', rateLimit, async (req, res) => {
   const title = String(req.query.title || '').trim();
@@ -765,11 +689,7 @@ const INVIDIOUS_INSTANCES = [
   'https://invidious.projectsegfau.lt', 'https://inv.tux.pizza',
   'https://invidious.reallyaweso.me'
 ];
-const PIPED_STREAM_INSTANCES = [
-  'https://pipedapi.kavin.rocks',
-  'https://pipedapi.adminforge.de',
-  'https://api.piped.yt'
-];
+const PIPED_STREAM_INSTANCES = ['https://pipedapi.kavin.rocks', 'https://pipedapi.adminforge.de', 'https://api.piped.yt'];
 
 api.get('/api/audio/youtube/:videoId', async (req, res) => {
   const vid = String(req.params.videoId || '');
@@ -779,10 +699,7 @@ api.get('/api/audio/youtube/:videoId', async (req, res) => {
   for (const base of INVIDIOUS_INSTANCES){
     try {
       const url = base + '/latest_version?id=' + vid + '&itag=140&local=true';
-      const headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept': '*/*', 'Accept-Language': 'en-US,en;q=0.9'
-      };
+      const headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36', 'Accept': '*/*', 'Accept-Language': 'en-US,en;q=0.9' };
       if (range) headers.Range = range;
       const upstream = await fetch(url, { headers, redirect: 'follow', timeout: 15000 });
       if (!upstream.ok && upstream.status !== 206){ try { upstream.body?.destroy(); } catch (_){} continue; }
@@ -847,10 +764,7 @@ api.get('/api/audio/audius/:id', async (req, res) => {
     if (!upstream.ok || !upstream.body) return res.status(502).send('err');
     for (const h of ['content-type','content-length','accept-ranges','content-range']){
       const v = upstream.headers.get(h);
-      if (v) res.setHeader({
-        'content-type': 'Content-Type', 'content-length': 'Content-Length',
-        'accept-ranges': 'Accept-Ranges', 'content-range': 'Content-Range'
-      }[h], v);
+      if (v) res.setHeader({ 'content-type': 'Content-Type', 'content-length': 'Content-Length', 'accept-ranges': 'Accept-Ranges', 'content-range': 'Content-Range' }[h], v);
     }
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.status(upstream.status);
@@ -866,11 +780,7 @@ api.get('/api/download/audius/:id', async (req, res) => {
     const tr = await jsonFetch('https://api.audius.co/v1/tracks/' + encodeURIComponent(id) + '?' + params.toString(), { headers: AUDIUS_API_KEY ? { 'X-API-Key': AUDIUS_API_KEY } : {} }, 10000);
     const td = await readJson(tr);
     if (!td.data?.downloadable) return res.status(403).send('not downloadable');
-    const stream = await jsonFetch(
-      'https://api.audius.co/v1/tracks/' + encodeURIComponent(id) + '/stream' + (AUDIUS_API_KEY ? '?api_key=' + AUDIUS_API_KEY : ''),
-      { headers: AUDIUS_API_KEY ? { 'X-API-Key': AUDIUS_API_KEY } : {} },
-      30000
-    );
+    const stream = await jsonFetch('https://api.audius.co/v1/tracks/' + encodeURIComponent(id) + '/stream' + (AUDIUS_API_KEY ? '?api_key=' + AUDIUS_API_KEY : ''), { headers: AUDIUS_API_KEY ? { 'X-API-Key': AUDIUS_API_KEY } : {} }, 30000);
     if (!stream.ok || !stream.body) return res.status(502).send('err');
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Content-Disposition', 'attachment; filename="' + String(td.data.title || 'track').replace(/[<>:"/\\|?*]+/g, '_') + '.mp3"');
@@ -879,7 +789,7 @@ api.get('/api/download/audius/:id', async (req, res) => {
 });
 
 // ============================================================
-// АРТИСТ — поиск и профиль
+// АРТИСТ — ЖЁСТКИЙ, БЕЗ МУСОРА
 // ============================================================
 api.get('/api/artist-search', rateLimit, async (req, res) => {
   const q = String(req.query.q || '').trim();
@@ -905,7 +815,7 @@ api.get('/api/artist-search', rateLimit, async (req, res) => {
 
 api.get('/api/artist/:id', rateLimit, async (req, res) => {
   const id = encodeURIComponent(req.params.id);
-  const cacheKey = 'artist:' + id;
+  const cacheKey = 'artist:v4:' + id;
   const cached = artistCache.get(cacheKey);
   if (cached && Date.now() - cached.time < ARTIST_TTL){
     return res.json(cached.data);
@@ -917,96 +827,93 @@ api.get('/api/artist/:id', rateLimit, async (req, res) => {
     if (!artist || !artist.id) return res.status(404).json({ error: 'not found' });
     const artistName = artist.name || '';
     const normArtist = normalizeSearchText(artistName);
+    const artistIdStr = String(artist.id);
 
     let top_tracks = [];
     let tracksSource = 'none';
+    const seenTrackIds = new Set();
 
+    const pushStrict = (arr, src) => {
+      if (!Array.isArray(arr)) return;
+      for (const tr of arr){
+        if (!tr || !tr.id) continue;
+        if (seenTrackIds.has(String(tr.id))) continue;
+        // ЖЁСТКАЯ ПРОВЕРКА: если у трека есть artist.id — он должен совпадать
+        if (tr.artist && tr.artist.id && String(tr.artist.id) !== artistIdStr) continue;
+        if (isNoiseDeezerTrack(tr)) continue;
+        seenTrackIds.add(String(tr.id));
+        top_tracks.push(tr);
+      }
+      if (top_tracks.length) tracksSource = src;
+    };
+
+    // Стратегия 1: /artist/{id}/top
     if (!top_tracks.length){
       try {
         const t = await jsonFetch('https://api.deezer.com/artist/' + id + '/top?limit=100', {}, 7000);
         const top = await readJson(t);
         const rawTracks = Array.isArray(top.data) ? top.data : [];
-        const filtered = rawTracks.filter(tr => {
-          if (isNoiseDeezerTrack(tr)) return false;
-          if (tr.artist && tr.artist.id && String(tr.artist.id) !== String(id)) return false;
-          return true;
-        });
-        if (filtered.length){
-          filtered.sort((a, b) => (b.rank || 0) - (a.rank || 0));
-          top_tracks = filtered;
-          tracksSource = 'deezer-top';
-        }
-        console.log('[artist]', id, 'strategy1 deezer top:', rawTracks.length, '→', filtered.length);
-      } catch (e){ console.log('[artist]', id, 'strategy1 failed:', e.message); }
+        const before = top_tracks.length;
+        pushStrict(rawTracks, 'deezer-top');
+        console.log('[artist]', id, '(' + normArtist + ') strat1 top: raw=' + rawTracks.length + ' kept=' + (top_tracks.length - before));
+      } catch (e){ console.log('[artist]', id, 'strat1 fail:', e.message); }
     }
 
+    // Стратегия 2: /search/track?q=artist:"Name"
     if (!top_tracks.length && artistName){
       try {
         const params = new URLSearchParams({ q: 'artist:"' + artistName + '"', limit: '100' });
         const r = await jsonFetch('https://api.deezer.com/search/track?' + params.toString(), {}, 9000);
         const d = await readJson(r);
         const items = Array.isArray(d?.data) ? d.data : [];
-        const strict = items.filter(x => {
-          if (!x.artist || String(x.artist.id) !== String(id)) return false;
-          if (isNoiseDeezerTrack(x)) return false;
-          return true;
-        });
-        if (strict.length){
-          strict.sort((a, b) => (b.rank || 0) - (a.rank || 0));
-          top_tracks = strict;
-          tracksSource = 'deezer-search';
-        }
-        console.log('[artist]', id, 'strategy2 deezer search: raw=' + items.length, '→ strict=' + strict.length);
-      } catch (e){ console.log('[artist]', id, 'strategy2 failed:', e.message); }
+        const before = top_tracks.length;
+        pushStrict(items, 'deezer-search');
+        console.log('[artist]', id, '(' + normArtist + ') strat2 search: raw=' + items.length + ' kept=' + (top_tracks.length - before));
+      } catch (e){ console.log('[artist]', id, 'strat2 fail:', e.message); }
     }
 
+    // Стратегия 3: собрать треки из альбомов (самая стабильная с облака)
     if (!top_tracks.length){
       try {
-        const al = await jsonFetch('https://api.deezer.com/artist/' + id + '/albums?limit=50', {}, 8000);
+        const al = await jsonFetch('https://api.deezer.com/artist/' + id + '/albums?limit=100', {}, 8000);
         const albums = await readJson(al);
         const allAlbums = Array.isArray(albums.data) ? albums.data : [];
-        const ownedAlbums = allAlbums.filter(x => isOwnedAlbum(x, id, artistName) && !isBadAlbumTitle(x.title));
-        const topAlbums = ownedAlbums.slice(0, 5);
-        const seen = new Set();
-        const collected = [];
+        const ownedAlbums = allAlbums.filter(x => isOwnedAlbum(x, artistIdStr, artistName) && !isBadAlbumTitle(x.title));
+        console.log('[artist]', id, '(' + normArtist + ') strat3 albums:', allAlbums.length, '→ owned:', ownedAlbums.length);
+        const topAlbums = ownedAlbums.slice(0, 10);
+        const before = top_tracks.length;
         await Promise.allSettled(topAlbums.map(async alb => {
           try {
-            const rr = await jsonFetch('https://api.deezer.com/album/' + encodeURIComponent(alb.id) + '/tracks?limit=50', {}, 7000);
+            const rr = await jsonFetch('https://api.deezer.com/album/' + encodeURIComponent(alb.id) + '/tracks?limit=100', {}, 7000);
             const dd = await readJson(rr);
             const trs = Array.isArray(dd?.data) ? dd.data : [];
-            for (const tr of trs){
-              if (!tr.artist || String(tr.artist.id) !== String(id)) continue;
-              if (isNoiseDeezerTrack(tr)) continue;
-              const key = String(tr.id);
-              if (seen.has(key)) continue;
-              seen.add(key);
-              collected.push(tr);
-            }
+            pushStrict(trs, 'deezer-albums');
           } catch (e){}
         }));
-        if (collected.length){
-          collected.sort((a, b) => (b.rank || 0) - (a.rank || 0));
-          top_tracks = collected;
-          tracksSource = 'deezer-albums';
-        }
-        console.log('[artist]', id, 'strategy3 albums-track:', collected.length);
-      } catch (e){ console.log('[artist]', id, 'strategy3 failed:', e.message); }
+        console.log('[artist]', id, '(' + normArtist + ') strat3 kept=' + (top_tracks.length - before));
+      } catch (e){ console.log('[artist]', id, 'strat3 fail:', e.message); }
     }
 
-    top_tracks = top_tracks.slice(0, 60);
-    console.log('[artist]', id, '(' + normArtist + ') tracks total:', top_tracks.length, 'source:', tracksSource);
+    // Финальная сортировка и обрезка
+    top_tracks = top_tracks
+      .sort((a, b) => (b.rank || b.position || 0) - (a.rank || a.position || 0))
+      .slice(0, 60);
 
+    console.log('[artist]', id, '(' + normArtist + ') FINAL tracks:', top_tracks.length, 'source:', tracksSource);
+
+    // Альбомы
     let owned = [];
     try {
       const al = await jsonFetch('https://api.deezer.com/artist/' + id + '/albums?limit=200', {}, 7000);
       const albums = await readJson(al);
       const all = Array.isArray(albums.data) ? albums.data : [];
-      owned = all.filter(x => isOwnedAlbum(x, id, artistName) && !isBadAlbumTitle(x.title));
-      console.log('[artist]', id, 'albums raw:', all.length, '→ owned:', owned.length);
-    } catch (e){ console.log('[artist]', id, 'albums failed:', e.message); }
+      owned = all.filter(x => isOwnedAlbum(x, artistIdStr, artistName) && !isBadAlbumTitle(x.title));
+    } catch (e){ console.log('[artist]', id, 'albums fetch fail:', e.message); }
 
     const payload = {
-      artist, top_tracks,
+      artist,
+      top_tracks,
+      tracks_source: tracksSource,
       albums: owned.filter(x => x.record_type !== 'single'),
       singles: owned.filter(x => x.record_type === 'single')
     };
@@ -1017,6 +924,9 @@ api.get('/api/artist/:id', rateLimit, async (req, res) => {
   }
 });
 
+// ============================================================
+// АЛЬБОМ
+// ============================================================
 api.get('/api/album/:id', async (req, res) => {
   try {
     const rawId = String(req.params.id);
@@ -1048,7 +958,6 @@ api.get('/api/album/:id', async (req, res) => {
         provider: 'itunes'
       });
     }
-
     const r = await jsonFetch('https://api.deezer.com/album/' + encodeURIComponent(rawId), {}, 7000);
     const d = await readJson(r);
     if (!d?.id) return res.status(404).json({ error: 'not found' });
@@ -1057,7 +966,7 @@ api.get('/api/album/:id', async (req, res) => {
 });
 
 // ============================================================
-// ТЕКСТЫ
+// LYRICS
 // ============================================================
 api.get('/api/lyrics', async (req, res) => {
   const track = String(req.query.track_name || '').trim();
@@ -1065,17 +974,11 @@ api.get('/api/lyrics', async (req, res) => {
   const album = String(req.query.album_name || '').trim();
   const dur = Number(req.query.duration || 0);
   if (!track && !artist) return res.status(400).json({ found: false });
-
   const cacheKey = 'lyr:' + normalizeSearchText(track) + '|' + normalizeSearchText(artist) + '|' + Math.round(dur);
   const cached = lyricsCache.get(cacheKey);
   if (cached && Date.now() - cached.time < LYRICS_TTL) return res.json(cached.data);
-
   const cleanTrack = track.replace(/\([^)]*\)/g, '').replace(/\[[^\]]*\]/g, '').replace(/\b(official|audio|video|lyric|lyrics|visualizer|hd|hq|explicit)\b/gi, '').replace(/\s+/g, ' ').trim();
-
-  const send = (payload) => {
-    lyricsCache.set(cacheKey, { time: Date.now(), data: payload });
-    res.json(payload);
-  };
+  const send = (payload) => { lyricsCache.set(cacheKey, { time: Date.now(), data: payload }); res.json(payload); };
 
   try {
     const params = new URLSearchParams({ track_name: cleanTrack });
@@ -1097,9 +1000,7 @@ api.get('/api/lyrics', async (req, res) => {
       if (Array.isArray(arr) && arr.length){
         const normArt = normalizeSearchText(artist);
         let best = arr[0];
-        if (normArt){
-          for (const item of arr){ if (normalizeSearchText(item.artistName || '') === normArt){ best = item; break; } }
-        }
+        if (normArt){ for (const item of arr){ if (normalizeSearchText(item.artistName || '') === normArt){ best = item; break; } } }
         if (best.plainLyrics || best.syncedLyrics) return send({ found: true, plainLyrics: best.plainLyrics || '', syncedLyrics: best.syncedLyrics || '', source: 'LRCLIB' });
       }
     }
@@ -1120,8 +1021,19 @@ api.get('/api/lyrics', async (req, res) => {
 });
 
 // ============================================================
-// МАТЧИНГ ДЛЯ РЕЗОЛВА
+// МАТЧИНГ
 // ============================================================
+function cleanTitleForSearch(title){
+  if (!title) return '';
+  let t = String(title);
+  t = t.replace(/\([^)]*\)/g, ' ');
+  t = t.replace(/\[[^\]]*\]/g, ' ');
+  t = t.replace(/#\S+/g, ' ');
+  t = t.replace(/\b(official|lyric|lyrics|video|audio|visualizer|hd|hq|4k|prod\.?|explicit|clean|mv|m\/v)\b/gi, ' ');
+  t = t.replace(/\s+/g, ' ').trim();
+  return t;
+}
+
 function titleSimilarity(wantTitle, gotTitle){
   const w = normalizeSearchText(wantTitle), g = normalizeSearchText(gotTitle);
   if (!w) return 1; if (!g) return 0;
@@ -1138,7 +1050,6 @@ function titleSimilarity(wantTitle, gotTitle){
   for (const ww of wWords){ if (gWords.includes(ww)) hits += 1; else if (gClean.includes(ww)) hits += 0.7; }
   return hits / wWords.length;
 }
-
 function artistSimilarity(wantArtist, gotArtist){
   const w = normalizeSearchText(wantArtist), g = normalizeSearchText(gotArtist);
   if (!w) return 1; if (!g) return 0;
@@ -1150,26 +1061,10 @@ function artistSimilarity(wantArtist, gotArtist){
   for (const ww of wWords){ if (g.includes(ww)) best = Math.max(best, 0.7); }
   return best;
 }
-
-function isChannelOfficialForArtist(channel, artist){
-  if (!channel || !artist) return false;
-  const c = String(channel).toLowerCase().trim(), a = String(artist).toLowerCase().trim();
-  if (!c || !a) return false;
-  if (c === a) return true;
-  if (c === a + ' - topic') return true;
-  if (c.endsWith(' - topic')){ const prefix = c.slice(0, -8).trim(); if (prefix === a) return true; }
-  if (c.startsWith(a + ' ') || c.startsWith(a + '-') || c.startsWith(a + '–') || c.startsWith(a + '—')) return true;
-  if (c.startsWith(a)){ const tail = c.slice(a.length).trim(); if (/^(vevo|official|records|music|musics|rec)$/i.test(tail)) return true; }
-  return false;
-}
-
-// Мягкая версия для resolve: если канал не «официальный», требуем хотя бы
-// совпадения артиста в названии (без жёстких требований к official/lyric)
 function checkMatch(candidate, wantTitle, wantArtist, wantDuration, { strict = true } = {}){
   const aSim = artistSimilarity(wantArtist, candidate.artist);
   const tSim = titleSimilarity(wantTitle, candidate.title);
   if (tSim < 0.55) return 0;
-
   if (candidate.provider === 'youtube'){
     if (isBadYoutubeTitle(candidate.title)) return 0;
     const dur = Number(candidate.duration || 0);
@@ -1180,8 +1075,6 @@ function checkMatch(candidate, wantTitle, wantArtist, wantDuration, { strict = t
         if (ratio < 0.5 || ratio > 1.8) return 0;
       } else if (dur < 30) return 0;
     }
-    // Мягкий режим: не требуем официального канала, но требуем,
-    // чтобы имя артиста встречалось в названии или канале
     if (!strict){
       const t = String(candidate.title || '').toLowerCase();
       const c = String(candidate.channel || '').toLowerCase();
@@ -1189,52 +1082,32 @@ function checkMatch(candidate, wantTitle, wantArtist, wantDuration, { strict = t
       if (a && !t.includes(a) && !c.includes(a) && aSim < 0.5) return 0;
       return 0.5 + tSim * 0.5;
     }
-    // Строгий режим — как раньше, но без совсем жёсткого artist threshold
     if (aSim < 0.45) return 0;
     if (tSim < 0.6) return 0;
-    const channel = String(candidate.channel || '');
-    if (!isChannelOfficialForArtist(channel, wantArtist)){
-      const t = String(candidate.title || '').toLowerCase();
-      const a = String(wantArtist || '').toLowerCase();
-      if (!t.includes(a)) return 0;
-      if (!/\b(official|vevo|lyric|audio|visualizer)\b/i.test(t)) return 0;
-      if (titleSimilarity(wantTitle, candidate.title) < 0.8) return 0;
-    }
   }
-
   return aSim * 0.4 + tSim * 0.6;
 }
 
-// Главная логика поиска аудио
 async function findPlayableAudio({ title, artist, duration, full }){
   const cleanTitle = cleanTitleForSearch(title);
   const cleanArtist = cleanTitleForSearch(artist);
-
   const wantTitle = cleanTitle || String(title || '').trim();
   const wantArtist = cleanArtist || String(artist || '').trim();
   const wantDuration = Number(duration || 0);
   const fullQuery = String(full || '').trim();
 
-  // Строим несколько запросов от самого точного к самому общему
   const queries = [];
-  // 1. "Title Artist" — если артиста нет в title
   if (wantTitle && wantArtist){
     const tl = wantTitle.toLowerCase(), al = wantArtist.toLowerCase();
     if (tl.includes(al)) queries.push(wantTitle);
     else queries.push(wantTitle + ' ' + wantArtist);
   }
-  // 2. Только title
   if (wantTitle) queries.push(wantTitle);
-  // 3. Title + artist и наоборот
   if (wantTitle && wantArtist) queries.push(wantArtist + ' ' + wantTitle);
-  // 4. Полный запрос
   if (fullQuery) queries.push(fullQuery);
-
-  // Уникализуем и фильтруем пустые
   const uniqueQueries = [...new Set(queries.map(q => q.trim()).filter(Boolean))];
   console.log('[resolve] queries:', uniqueQueries);
 
-  // ============ 1. Audius ============
   for (const q of uniqueQueries){
     try {
       const r = await searchAudius(q);
@@ -1246,18 +1119,11 @@ async function findPlayableAudio({ title, artist, duration, full }){
         .sort((a, b) => b.s - a.s);
       if (scored.length){
         const best = scored[0].c;
-        console.log('[resolve] hit Audius:', best.title, '|', best.artist);
-        return {
-          provider: 'audius',
-          streamUrl: '/api/audio/audius/' + encodeURIComponent(best.id),
-          title: best.title, artist: best.artist
-        };
+        return { provider: 'audius', streamUrl: '/api/audio/audius/' + encodeURIComponent(best.id), title: best.title, artist: best.artist };
       }
     } catch (e){}
   }
 
-  // ============ 2. YouTube ============
-  // Сначала строгий матчинг, потом мягкий
   for (const strict of [true, false]){
     for (const q of uniqueQueries){
       try {
@@ -1272,12 +1138,8 @@ async function findPlayableAudio({ title, artist, duration, full }){
           const best = scored[0].c;
           const vid = String(best.id).replace('yt_', '');
           if (!/^[A-Za-z0-9_-]{6,20}$/.test(vid)) continue;
-          console.log('[resolve] hit YouTube', strict ? '(strict)' : '(soft)', ':', best.title, '| ch:', best.channel, '| dur:', best.duration);
-          return {
-            provider: 'youtube',
-            streamUrl: '/api/audio/youtube/' + encodeURIComponent(vid),
-            videoId: vid, title: best.title, duration: best.duration
-          };
+          console.log('[resolve] hit YT', strict ? '(strict)' : '(soft)', ':', best.title, '| ch:', best.channel);
+          return { provider: 'youtube', streamUrl: '/api/audio/youtube/' + encodeURIComponent(vid), videoId: vid, title: best.title, duration: best.duration };
         }
       } catch (e){}
     }
@@ -1287,26 +1149,19 @@ async function findPlayableAudio({ title, artist, duration, full }){
 }
 
 // ============================================================
-// СТАТИКА
+// STATIC + START
 // ============================================================
-api.use(express.static(WEB_DIR, {
-  extensions: ['html'],
-  maxAge: IS_PROD ? '1h' : 0
-}));
-api.get(/^\/(?!api(?:\/|\/)).*/, (req, res, next) => {
+api.use(express.static(WEB_DIR, { extensions: ['html'], maxAge: IS_PROD ? '1h' : 0 }));
+api.get(/^\/(?!api(?:\/|$)).*/, (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
   res.sendFile(path.join(WEB_DIR, 'index.html'));
 });
-
 api.use((err, req, res, next) => {
   console.error('[error]', req.method, req.path, err.message);
   if (res.headersSent) return next(err);
   res.status(500).json({ ok: false, error: err.message || 'internal' });
 });
 
-// ============================================================
-// START
-// ============================================================
 function startServer(options = {}){
   const port = Number(options.port || PORT);
   const host = options.host || HOST;
@@ -1317,7 +1172,7 @@ function startServer(options = {}){
       console.log('[NOVA] DB at ' + DB_PATH);
       console.log('[NOVA] users: ' + Object.keys(db.users).length);
       if (IS_PROD && !process.env.DATA_DIR){
-        console.warn('[NOVA] WARNING: DATA_DIR not set — DB will reset on each restart.');
+        console.warn('[NOVA] WARNING: DATA_DIR not set — DB reset on restart!');
       }
       console.log('============================================================');
       resolve(server);
@@ -1329,5 +1184,4 @@ function startServer(options = {}){
 if (require.main === module){
   startServer().catch(e => { console.error('[fatal]', e); process.exit(1); });
 }
-
 module.exports = { api, startServer };
