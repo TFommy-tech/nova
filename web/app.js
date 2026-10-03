@@ -56,6 +56,8 @@
   let ytCurrentVideo = '';
   let ytVideoDuration = 0;
   let ytVideoCurrentTime = 0;
+  let ytPendingResolve = null;
+  let ytPendingReject = null;
 
   let playRequestId = 0;
   let playAbort = null;
@@ -97,11 +99,12 @@
   let backgroundDbPromise = null;
   let searchAbort = null;
   let authMode = 'login';
-  let audioCtx = null, sourceNode = null, eqFilters = null, gainNode = null;
+  let audioCtx = null, sourceNode = null, eqFilters = null;
+  let fadeGain = null, volumeGain = null;
   let audioGraphReady = false;
 
   // ============================================================
-  // THEME
+  // THEME & SETTINGS
   // ============================================================
   function applyTheme(){
     document.documentElement.setAttribute('data-theme', settings.theme);
@@ -150,9 +153,6 @@
       updateProgress();
     }
   });
-
-  let ytPendingResolve = null;
-  let ytPendingReject = null;
 
   function playYouTube(videoId, myId){
     return new Promise((resolve, reject) => {
@@ -248,7 +248,7 @@
   function resetBackground(){ state.background.src = ''; saveBackgroundData('').catch(() => {}); applyBackground(''); notify('Фон сброшен'); }
 
   // ============================================================
-  // EQUALIZER — ФИКС
+  // EQUALIZER
   // ============================================================
   const EQ_BANDS = [
     { freq: 60,    type: 'lowshelf',  label: '60' },
@@ -276,8 +276,13 @@
     try {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       sourceNode = audioCtx.createMediaElementSource(el.audio);
-      gainNode = audioCtx.createGain();
-      gainNode.gain.value = state.volume / 100;
+
+      fadeGain = audioCtx.createGain();
+      fadeGain.gain.value = 1;
+
+      volumeGain = audioCtx.createGain();
+      volumeGain.gain.value = state.volume / 100;
+
       eqFilters = EQ_BANDS.map(b => {
         const f = audioCtx.createBiquadFilter();
         f.type = b.type;
@@ -286,11 +291,13 @@
         f.gain.value = 0;
         return f;
       });
-      let prev = sourceNode;
-      prev.connect(gainNode);
-      prev = gainNode;
+
+      sourceNode.connect(fadeGain);
+      fadeGain.connect(volumeGain);
+      let prev = volumeGain;
       eqFilters.forEach(f => { prev.connect(f); prev = f; });
       prev.connect(audioCtx.destination);
+
       audioGraphReady = true;
       applyEq();
       console.log('[eq] audio graph created, state:', audioCtx.state);
@@ -299,7 +306,7 @@
       }
     } catch (e){
       console.warn('[eq] init failed:', e.message);
-      audioCtx = null; audioGraphReady = false; gainNode = null;
+      audioCtx = null; audioGraphReady = false; fadeGain = null; volumeGain = null;
     }
   }
 
@@ -312,6 +319,26 @@
       }
     });
     console.log('[eq] applied:', on ? state.eq.bands : 'off');
+  }
+
+  function rampFadeTo(target, ms){
+    if (!audioGraphReady || !fadeGain || !audioCtx) return;
+    const now = audioCtx.currentTime;
+    const cur = fadeGain.gain.value;
+    fadeGain.gain.cancelScheduledValues(now);
+    fadeGain.gain.setValueAtTime(cur, now);
+    fadeGain.gain.linearRampToValueAtTime(target, now + ms / 1000);
+  }
+  function fadeOutAndWait(ms){
+    if (!audioGraphReady || !fadeGain || !audioCtx) return Promise.resolve();
+    rampFadeTo(0, ms);
+    return new Promise(res => setTimeout(res, ms + 30));
+  }
+  function fadeIn(ms){
+    if (!audioGraphReady || !fadeGain || !audioCtx) return;
+    fadeGain.gain.cancelScheduledValues(audioCtx.currentTime);
+    fadeGain.gain.setValueAtTime(0, audioCtx.currentTime);
+    fadeGain.gain.linearRampToValueAtTime(1, audioCtx.currentTime + ms / 1000);
   }
 
   function setEqBand(i, v){
@@ -736,10 +763,24 @@
   }
 
   async function playUrl(url, myId){
-    el.audio.pause(); el.audio.removeAttribute('src'); el.audio.load();
+    // Плавно гасим предыдущий трек
+    if (audioGraphReady && state.currentTrack && state.playState === 'playing'){
+      await fadeOutAndWait(350);
+    }
+
+    el.audio.pause();
+    el.audio.removeAttribute('src');
+    el.audio.load();
     el.audio.src = url;
     if (!audioGraphReady) el.audio.volume = state.volume / 100;
     el.audio.load();
+
+    // Стартуем с нулевой громкости
+    if (audioGraphReady && fadeGain && audioCtx){
+      fadeGain.gain.cancelScheduledValues(audioCtx.currentTime);
+      fadeGain.gain.value = 0;
+    }
+
     await new Promise((resolve, reject) => {
       let done = false;
       const cleanup = () => { el.audio.removeEventListener('playing', ok); el.audio.removeEventListener('error', bad); clearInterval(cancelTick); };
@@ -757,6 +798,11 @@
       }, 100);
       el.audio.play().catch(bad);
     });
+
+    // Плавное появление
+    if (audioGraphReady && fadeGain){
+      fadeIn(300);
+    }
   }
 
   async function playStream(url, myId){
@@ -780,6 +826,11 @@
     if (playAbort){ try { playAbort.abort(); } catch (_){} }
     const controller = new AbortController();
     playAbort = controller;
+
+    // Плавно гасим предыдущий трек перед переключением
+    if (audioGraphReady && state.currentTrack && state.playState === 'playing'){
+      await fadeOutAndWait(350);
+    }
 
     try { el.audio.pause(); } catch (_){}
 
@@ -853,7 +904,11 @@
     }
     if (state.currentTrack){
       if (state.playState === 'loading') return;
-      if (el.audio.paused){ el.audio.play().then(() => { state.playState = 'playing'; updatePlayButtons(); }).catch(() => playTrack(state.currentIndex, { force: true })); }
+      if (el.audio.paused){
+        // если был fade-out — возвращаем громкость
+        if (audioGraphReady) rampFadeTo(1, 150);
+        el.audio.play().then(() => { state.playState = 'playing'; updatePlayButtons(); }).catch(() => playTrack(state.currentIndex, { force: true }));
+      }
       else { el.audio.pause(); state.playState = 'paused'; updatePlayButtons(); }
       return;
     }
@@ -929,8 +984,8 @@
 
   function setVolume(v){
     state.volume = Math.max(0, Math.min(100, Number(v) || 0));
-    if (audioGraphReady && gainNode && audioCtx){
-      gainNode.gain.setTargetAtTime(state.volume / 100, audioCtx.currentTime, 0.01);
+    if (audioGraphReady && volumeGain && audioCtx){
+      volumeGain.gain.setTargetAtTime(state.volume / 100, audioCtx.currentTime, 0.01);
     } else {
       el.audio.volume = state.volume / 100;
     }
@@ -1230,7 +1285,9 @@
   function closeLyrics(){ el.lyricsModal.classList.remove('open'); el.lyricsModal.setAttribute('aria-hidden', 'true'); }
   function findSimilar(){ if (!state.currentTrack){ notify('Сначала включи трек'); return; } const a = String(state.currentTrack.artist || '').trim(); if (!a) return; el.searchInput.value = a; showView('search'); search(a); }
 
-  // === EVENTS ===
+  // ============================================================
+  // EVENTS
+  // ============================================================
   on(el.searchButton, 'click', () => search(el.searchInput.value));
   on(el.searchInput, 'keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); search(el.searchInput.value); } });
   document.querySelectorAll('.nav-btn').forEach(btn => { btn.addEventListener('click', () => { const v = btn.dataset.view; if (v === 'search'){ showSearchView(); el.searchInput.focus(); return; } showView(v); }); });
@@ -1294,16 +1351,14 @@
   on(el.clearHistory, 'click', () => { state.history = []; persist(); renderLibrary(); notify('История очищена'); });
   on(el.clearFavorites, 'click', () => { state.favorites = []; persist(); renderFavorites(); notify('Избранное очищено'); });
 
-  // Theme/settings toggles
   on(el.themeToggle, 'click', () => { settings.theme = settings.theme === 'dark' ? 'light' : 'dark'; applyTheme(); });
   on(el.notificationsToggle, 'click', () => { settings.notifications = !settings.notifications; store.set('nova_notifications', settings.notifications ? '1' : '0'); applyToggle(el.notificationsToggle, settings.notifications); });
   on(el.hotkeysToggle, 'click', () => { settings.hotkeys = !settings.hotkeys; store.set('nova_hotkeys', settings.hotkeys ? '1' : '0'); applyToggle(el.hotkeysToggle, settings.hotkeys); });
   on(el.autoplayToggle, 'click', () => { settings.autoplay = !settings.autoplay; store.set('nova_autoplay', settings.autoplay ? '1' : '0'); applyToggle(el.autoplayToggle, settings.autoplay); });
 
-  // Player back
   on(el.playerBack, 'click', () => showView(previousView || 'home'));
 
-  // Audio events
+  // === AUDIO EVENTS ===
   on(el.audio, 'loadedmetadata', updateProgress);
   on(el.audio, 'durationchange', updateProgress);
   on(el.audio, 'timeupdate', updateProgress);
@@ -1311,7 +1366,29 @@
   on(el.audio, 'pause', () => { if (state.playState !== 'loading' && state.playState !== 'error') state.playState = 'paused'; updatePlayButtons(); });
   on(el.audio, 'playing', () => { state.playState = 'playing'; updatePlayButtons(); updateProgress(); });
   on(el.audio, 'waiting', () => { if (state.currentTrack){ state.playState = 'buffering'; updatePlayButtons(); } });
-  on(el.audio, 'ended', () => { state.playState = 'idle'; if (state.repeat){ el.audio.currentTime = 0; el.audio.play().catch(() => {}); return; } next(); });
+
+  let preEndFadeTriggered = false;
+  on(el.audio, 'timeupdate', () => {
+    const d = el.audio.duration;
+    const c = el.audio.currentTime;
+    if (!Number.isFinite(d) || d < 5) return;
+    if (!preEndFadeTriggered && d - c < 1.2 && d - c > 0.2 && !state.repeat){
+      preEndFadeTriggered = true;
+      rampFadeTo(0, 1000);
+    }
+  });
+  on(el.audio, 'play', () => { preEndFadeTriggered = false; });
+  on(el.audio, 'ended', () => {
+    state.playState = 'idle';
+    preEndFadeTriggered = false;
+    if (state.repeat){
+      el.audio.currentTime = 0;
+      rampFadeTo(1, 200);
+      el.audio.play().catch(() => {});
+      return;
+    }
+    next();
+  });
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape'){
@@ -1337,7 +1414,7 @@
     if (state.currentTrack && state.playState === 'playing') updateProgress();
   }, 500);
 
-  // Initial
+  // === INITIAL ===
   applyTheme();
   applyToggle(el.notificationsToggle, settings.notifications);
   applyToggle(el.hotkeysToggle, settings.hotkeys);
