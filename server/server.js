@@ -64,7 +64,6 @@ function isNoiseTrack(item){
 // ============================================================
 // ФИЛЬТР МУСОРНЫХ ТРЕКОВ Deezer — ОСЛАБЛЕН
 // ============================================================
-// Только самые очевидные "не-оригиналы"
 const NOISE_PATTERNS = [
   /\bspeed\s*up\b/i,
   /\bsped\s*up\b/i,
@@ -84,18 +83,8 @@ function isNoiseDeezerTrack(t, artistId){
   const title = String(t.title_short || t.title || '');
   const version = String(t.title_version || '');
   const combined = title + ' ' + version;
-
-  // Мусорные слова — только очевидные
-  for (const p of NOISE_PATTERNS){
-    if (p.test(combined)) return true;
-  }
-
-  // Пустое название
+  for (const p of NOISE_PATTERNS){ if (p.test(combined)) return true; }
   if (!title.trim()) return true;
-
-  // Проверку artist.id убираем — она слишком часто ложно срабатывает
-  // (у Deezer в треках из /top artist может быть без id или с другим id для feat.)
-
   return false;
 }
 
@@ -104,19 +93,14 @@ function isNoiseDeezerTrack(t, artistId){
 // ============================================================
 function isOwnedAlbum(album, artistId, artistName){
   if (!album) return false;
-
-  // Альбом должен принадлежать этому артисту (по id)
   if (album.artist && album.artist.id){
     if (String(album.artist.id) === String(artistId)) return true;
   }
-
-  // Или по имени (если id нет)
   if (album.artist && album.artist.name && artistName){
     const a = String(album.artist.name).toLowerCase().trim();
     const w = String(artistName).toLowerCase().trim();
     if (a === w) return true;
   }
-
   return false;
 }
 
@@ -284,7 +268,8 @@ async function searchItunes(q, opts = {}){
         id: 'itunes_' + String(tr.trackId || ''), title: tr.trackName || 'Untitled',
         artist: tr.artistName || '', artistId: '',
         cover: (tr.artworkUrl100 || '').replace('100x100', '600x600'),
-        album: tr.collectionName || '', albumId: '', preview: '',
+        album: tr.collectionName || '', albumId: '',
+        preview: '',
         source: 'CATALOG', sourceUrl: tr.trackViewUrl || '', downloadable: false,
         duration: Number(tr.trackTimeMillis || 0) / 1000,
         popularity: 50000 + rankBoost * 500, releaseDate: tr.releaseDate || '', provider: 'itunes'
@@ -292,6 +277,18 @@ async function searchItunes(q, opts = {}){
     });
     return { results, count: results.length };
   } catch (e){ return { results: [], count: 0 }; }
+}
+
+// iTunes albums (для фолбэка на странице артиста)
+async function searchItunesAlbums(artistName){
+  try {
+    const params = new URLSearchParams({ term: artistName, media: 'music', entity: 'album', limit: '100' });
+    const r = await jsonFetch('https://itunes.apple.com/search?' + params.toString(), {}, 8000);
+    const d = await readJson(r);
+    const items = Array.isArray(d?.results) ? d.results : [];
+    const norm = normalizeSearchText(artistName);
+    return items.filter(x => normalizeSearchText(x.artistName) === norm);
+  } catch (e){ return []; }
 }
 
 async function searchAudius(q){
@@ -608,44 +605,128 @@ api.get('/api/artist-search', async (req, res) => {
 });
 
 // ============================================================
-// ARTIST — ослабленный фильтр
+// ARTIST — с фолбэком на iTunes (Deezer /top и /albums блокирует
+// запросы с облачных IP). Воспроизведение всё равно идёт через
+// YouTube (Invidious/Piped) — полноценные треки, а не 30-сек превью.
 // ============================================================
 api.get('/api/artist/:id', async (req, res) => {
   const id = encodeURIComponent(req.params.id);
   try {
-    const [a, t, al] = await Promise.all([
-      jsonFetch('https://api.deezer.com/artist/' + id, {}, 7000),
-      jsonFetch('https://api.deezer.com/artist/' + id + '/top?limit=100', {}, 7000),
-      jsonFetch('https://api.deezer.com/artist/' + id + '/albums?limit=200', {}, 7000)
-    ]);
+    // 1. Профиль артиста всегда из Deezer — этот эндпоинт работает с облачных IP
+    const a = await jsonFetch('https://api.deezer.com/artist/' + id, {}, 7000);
     const artist = await readJson(a);
-    const top = await readJson(t);
-    const albums = await readJson(al);
-
-    const rawTracks = Array.isArray(top.data) ? top.data : [];
-    const filtered = rawTracks.filter(tr => !isNoiseDeezerTrack(tr, id));
-    console.log('[artist]', id, '(' + (artist.name || '?') + ') raw tracks:', rawTracks.length, '→ filtered:', filtered.length);
-    filtered.sort((a, b) => (b.rank || 0) - (a.rank || 0));
-
-    const all = Array.isArray(albums.data) ? albums.data : [];
+    if (!artist || !artist.id) return res.status(404).json({ error: 'not found' });
     const artistName = artist.name || '';
 
-    // Фильтр альбомов: владелец = артист по id ИЛИ по имени
-    const owned = all.filter(x => isOwnedAlbum(x, id, artistName) && !isBadAlbumTitle(x.title));
-    console.log('[artist]', id, 'raw albums:', all.length, '→ owned:', owned.length);
+    // 2. Топ-треки: сначала Deezer, при пустоте — iTunes
+    let top_tracks = [];
+    try {
+      const t = await jsonFetch('https://api.deezer.com/artist/' + id + '/top?limit=100', {}, 7000);
+      const top = await readJson(t);
+      const rawTracks = Array.isArray(top.data) ? top.data : [];
+      top_tracks = rawTracks.filter(tr => !isNoiseDeezerTrack(tr, id));
+      console.log('[artist]', id, 'deezer raw tracks:', rawTracks.length, '→ filtered:', top_tracks.length);
+      top_tracks.sort((a, b) => (b.rank || 0) - (a.rank || 0));
+    } catch (e){ console.log('[artist]', id, 'deezer top failed:', e.message); }
+
+    if (!top_tracks.length && artistName){
+      try {
+        const it = await searchItunes(artistName, { limit: '50' });
+        top_tracks = (it.results || []).map(x => ({
+          id: x.id,
+          title: x.title,
+          title_short: x.title,
+          duration: x.duration,
+          rank: x.popularity || 0,
+          preview: '', // НЕ используем 30-сек превью — воспроизведение через YouTube
+          artist: { id: artist.id, name: artistName },
+          album: { title: x.album || '', cover_medium: x.cover || '' },
+          provider: 'itunes'
+        }));
+        console.log('[artist]', id, 'itunes fallback tracks:', top_tracks.length);
+      } catch (e){ console.log('[artist]', id, 'itunes tracks failed:', e.message); }
+    }
+
+    // 3. Альбомы: сначала Deezer, при "owned: 0" — iTunes
+    let owned = [];
+    try {
+      const al = await jsonFetch('https://api.deezer.com/artist/' + id + '/albums?limit=200', {}, 7000);
+      const albums = await readJson(al);
+      const all = Array.isArray(albums.data) ? albums.data : [];
+      owned = all.filter(x => isOwnedAlbum(x, id, artistName) && !isBadAlbumTitle(x.title));
+      console.log('[artist]', id, 'deezer raw albums:', all.length, '→ owned:', owned.length);
+    } catch (e){ console.log('[artist]', id, 'deezer albums failed:', e.message); }
+
+    if (!owned.length && artistName){
+      try {
+        const items = await searchItunesAlbums(artistName);
+        owned = items
+          .filter(x => !isBadAlbumTitle(x.collectionName))
+          .map(x => ({
+            id: 'itunes_album_' + x.collectionId,
+            title: x.collectionName,
+            cover_medium: (x.artworkUrl100 || '').replace('100x100', '500x500'),
+            cover_big: (x.artworkUrl100 || '').replace('100x100', '1000x1000'),
+            cover_xl: (x.artworkUrl100 || '').replace('100x100', '1000x1000'),
+            record_type: Number(x.trackCount || 0) <= 3 ? 'single' : 'album',
+            nb_tracks: Number(x.trackCount || 0),
+            release_date: x.releaseDate || '',
+            artist: { id: artist.id, name: artistName },
+            provider: 'itunes'
+          }));
+        console.log('[artist]', id, 'itunes fallback albums:', owned.length);
+      } catch (e){ console.log('[artist]', id, 'itunes albums failed:', e.message); }
+    }
 
     res.json({
       artist,
-      top_tracks: filtered,
+      top_tracks,
       albums: owned.filter(x => x.record_type !== 'single'),
       singles: owned.filter(x => x.record_type === 'single')
     });
-  } catch (e){ res.status(502).json({ error: e.message }); }
+  } catch (e){
+    res.status(502).json({ error: e.message });
+  }
 });
 
 api.get('/api/album/:id', async (req, res) => {
   try {
-    const r = await jsonFetch('https://api.deezer.com/album/' + encodeURIComponent(req.params.id), {}, 7000);
+    const rawId = String(req.params.id);
+
+    // Фолбэк: если это iTunes-альбом, тянем треки из iTunes lookup
+    if (rawId.startsWith('itunes_album_')){
+      const collectionId = rawId.replace('itunes_album_', '');
+      const r = await jsonFetch('https://itunes.apple.com/lookup?id=' + encodeURIComponent(collectionId) + '&entity=song&limit=200', {}, 9000);
+      const d = await readJson(r);
+      const items = Array.isArray(d?.results) ? d.results : [];
+      const albumMeta = items.find(x => x.wrapperType === 'collection') || {};
+      const tracks = items.filter(x => x.wrapperType === 'track').map(tr => ({
+        id: 'itunes_' + String(tr.trackId || ''),
+        title: tr.trackName || 'Untitled',
+        title_short: tr.trackName || 'Untitled',
+        duration: Number(tr.trackTimeMillis || 0) / 1000,
+        rank: 0,
+        preview: '', // не используем превью
+        artist: { id: '', name: tr.artistName || '' },
+        album: { id: rawId, title: tr.collectionName || '', cover_medium: (tr.artworkUrl100 || '').replace('100x100', '500x500') },
+        provider: 'itunes'
+      }));
+      return res.json({
+        id: rawId,
+        title: albumMeta.collectionName || '',
+        cover_medium: (albumMeta.artworkUrl100 || '').replace('100x100', '500x500'),
+        cover_big: (albumMeta.artworkUrl100 || '').replace('100x100', '1000x1000'),
+        cover_xl: (albumMeta.artworkUrl100 || '').replace('100x100', '1000x1000'),
+        artist: { id: '', name: albumMeta.artistName || '' },
+        release_date: albumMeta.releaseDate || '',
+        nb_tracks: tracks.length,
+        tracks: { data: tracks },
+        provider: 'itunes'
+      });
+    }
+
+    // Обычный Deezer-альбом
+    const r = await jsonFetch('https://api.deezer.com/album/' + encodeURIComponent(rawId), {}, 7000);
     const d = await readJson(r);
     if (!d?.id) return res.status(404).json({ error: 'not found' });
     res.json(d);
@@ -770,6 +851,7 @@ async function findPlayableAudio({ title, artist, duration, full }){
   if (!wantTitle && !wantArtist && !fullQuery) throw new Error('empty query');
   const searchQuery = [wantTitle, wantArtist].filter(Boolean).join(' ').trim() || fullQuery;
 
+  // 1. Audius — полноценные треки
   try {
     const r = await searchAudius(searchQuery);
     const list = (r.results || []).filter(x => x.source === 'FULL' && x.id);
@@ -779,6 +861,7 @@ async function findPlayableAudio({ title, artist, duration, full }){
     }
   } catch (e){}
 
+  // 2. YouTube — полноценный стрим через Invidious/Piped
   try {
     const meta = await searchYouTubeMeta(searchQuery);
     const list = (meta.results || []);
