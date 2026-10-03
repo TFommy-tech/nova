@@ -496,9 +496,6 @@ api.get('/api/search', async (req, res) => {
   res.json(payload);
 });
 
-// ============================================================
-// /api/audio/resolve — принимает title + artist (строгое совпадение)
-// ============================================================
 api.get('/api/audio/resolve', async (req, res) => {
   const title = String(req.query.title || '').trim();
   const artist = String(req.query.artist || '').trim();
@@ -523,9 +520,6 @@ api.get('/api/audio/resolve', async (req, res) => {
   }
 });
 
-// ============================================================
-// /api/audio/prefetch — обновлён под новый findPlayableAudio
-// ============================================================
 api.post('/api/audio/prefetch', async (req, res) => {
   const tracks = Array.isArray(req.body?.tracks) ? req.body.tracks.slice(0, 6) : [];
   res.json({ ok: true, count: tracks.length });
@@ -548,7 +542,7 @@ api.post('/api/audio/prefetch', async (req, res) => {
 });
 
 // ============================================================
-// AUDIO PROXY (с проверкой Content-Type)
+// AUDIO PROXY
 // ============================================================
 const INVIDIOUS_INSTANCES = [
   'https://invidious.f5.si',
@@ -720,6 +714,39 @@ api.get('/api/download/audius/:id', async (req, res) => {
   } catch (e){ if (!res.headersSent) res.status(502).send('err'); }
 });
 
+// ============================================================
+// ARTIST SEARCH BY NAME (для треков без Deezer-ID)
+// ============================================================
+api.get('/api/artist-search', async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (!q) return res.status(400).json({ error: 'empty' });
+  try {
+    const url = 'https://api.deezer.com/search/artist?q=' + encodeURIComponent(q) + '&limit=10';
+    const r = await jsonFetch(url, {}, 7000);
+    const d = await readJson(r);
+    const items = Array.isArray(d?.data) ? d.data : [];
+    if (!items.length) return res.status(404).json({ error: 'not found' });
+
+    const norm = normalizeSearchText(q);
+    let best = items[0];
+    for (const a of items){
+      const an = normalizeSearchText(a.name);
+      if (an === norm){ best = a; break; }
+      if (norm.includes(an) && an.length > 2){ best = a; break; }
+    }
+    console.log('[artist-search]', q, '→', best.name, '(' + best.id + ')');
+    res.json({
+      id: String(best.id),
+      name: best.name,
+      picture: best.picture_xl || best.picture_big || best.picture_medium || '',
+      nb_fan: best.nb_fan || 0
+    });
+  } catch (e){
+    console.error('[artist-search]', e.message);
+    res.status(502).json({ error: e.message });
+  }
+});
+
 api.get('/api/artist/:id', async (req, res) => {
   const id = encodeURIComponent(req.params.id);
   try {
@@ -765,7 +792,7 @@ api.get('/api/lyrics', async (req, res) => {
 });
 
 // ============================================================
-// FIND PLAYABLE — строгое совпадение
+// FIND PLAYABLE
 // ============================================================
 function titleSimilarity(wantTitle, gotTitle){
   const w = normalizeSearchText(wantTitle);
@@ -798,10 +825,8 @@ function artistSimilarity(wantArtist, gotArtist){
   const g = normalizeSearchText(gotArtist);
   if (!w) return 1;
   if (!g) return 0;
-
   if (w === g) return 1;
   if (g.includes(w) || w.includes(g)) return 0.9;
-
   const wWords = w.split(/\s+/).filter(x => x.length > 2);
   if (!wWords.length) return 0;
   let best = 0;
@@ -814,10 +839,8 @@ function artistSimilarity(wantArtist, gotArtist){
 function checkMatch(candidate, wantTitle, wantArtist){
   const aSim = artistSimilarity(wantArtist, candidate.artist);
   if (aSim < 0.5) return 0;
-
   const tSim = titleSimilarity(wantTitle, candidate.title);
   if (tSim < 0.6) return 0;
-
   return aSim * 0.4 + tSim * 0.6;
 }
 
@@ -829,7 +852,6 @@ async function findPlayableAudio({ title, artist, full }){
 
   const searchQuery = [wantTitle, wantArtist].filter(Boolean).join(' ').trim() || fullQuery;
 
-  // === 1. Audius со строгой проверкой ===
   try {
     const r = await searchAudius(searchQuery);
     const list = (r.results || []).filter(x => x.source === 'FULL' && x.id);
@@ -853,7 +875,6 @@ async function findPlayableAudio({ title, artist, full }){
     }
   } catch (e){ console.warn('[resolve/audius]', e.message); }
 
-  // === 2. YouTube fallback со строгой проверкой ===
   try {
     const meta = await searchYouTubeMeta(searchQuery);
     const list = (meta.results || []);
