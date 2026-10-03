@@ -16,30 +16,16 @@
 
 <div id="loginModal" class="login-modal" aria-hidden="true">
   <div class="login-card">
-    <button id="loginClose" class="login-close" aria-label="Закрыть">
-      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-    </button>
+    <button id="loginClose" class="login-close" aria-label="Закрыть"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
     <div class="login-logo-wrap"><img src="logo.png" class="login-logo-img" alt="NOVA"></div>
     <h2 class="login-title">Добро пожаловать</h2>
     <p class="login-sub">Войди или создай аккаунт, чтобы сохранять музыку между устройствами</p>
-    <button id="loginDiscordBtn" class="login-discord" type="button">
-      <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3c-.2.4-.4.9-.6 1.3a18.4 18.4 0 0 0-5.6 0C9 3.9 8.8 3.4 8.6 3A19.7 19.7 0 0 0 3.7 4.4C.5 9.2-.3 13.8.1 18.4a19.9 19.9 0 0 0 6 3c.5-.6.9-1.3 1.2-2-.7-.3-1.3-.6-1.9-1l.5-.3a14.2 14.2 0 0 0 12.2 0l.5.3c-.6.4-1.2.7-1.9 1 .3.7.7 1.4 1.2 2a19.8 19.8 0 0 0 6-3c.5-5.4-.8-10-3.6-14zM8.5 15.5c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm7 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg>
-      <span>Продолжить с Discord</span>
-    </button>
+    <button id="loginDiscordBtn" class="login-discord" type="button"><svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M20.3 4.4A19.8 19.8 0 0 0 15.4 3c-.2.4-.4.9-.6 1.3a18.4 18.4 0 0 0-5.6 0C9 3.9 8.8 3.4 8.6 3A19.7 19.7 0 0 0 3.7 4.4C.5 9.2-.3 13.8.1 18.4a19.9 19.9 0 0 0 6 3c.5-.6.9-1.3 1.2-2-.7-.3-1.3-.6-1.9-1l.5-.3a14.2 14.2 0 0 0 12.2 0l.5.3c-.6.4-1.2.7-1.9 1 .3.7.7 1.4 1.2 2a19.8 19.8 0 0 0 6-3c.5-5.4-.8-10-3.6-14zM8.5 15.5c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4zm7 0c-1.2 0-2.2-1.1-2.2-2.4s1-2.4 2.2-2.4 2.2 1.1 2.2 2.4-1 2.4-2.2 2.4z"/></svg><span>Продолжить с Discord</span></button>
     <div class="login-divider"><span>или</span></div>
-    <div class="login-tabs" id="loginTabs">
-      <button id="tabLogin" class="login-tab active" type="button">Вход</button>
-      <button id="tabRegister" class="login-tab" type="button">Регистрация</button>
-    </div>
+    <div class="login-tabs" id="loginTabs"><button id="tabLogin" class="login-tab active" type="button">Вход</button><button id="tabRegister" class="login-tab" type="button">Регистрация</button></div>
     <form id="localAuthForm" class="login-form" autocomplete="off">
-      <div class="login-field">
-        <svg class="login-field-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.2-4 4-6 8-6s6.8 2 8 6"/></svg>
-        <input id="authUsername" class="login-input" type="text" placeholder="Логин" autocomplete="off" spellcheck="false">
-      </div>
-      <div class="login-field">
-        <svg class="login-field-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-        <input id="authPassword" class="login-input" type="password" placeholder="Пароль" autocomplete="off">
-      </div>
+      <div class="login-field"><svg class="login-field-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.2-4 4-6 8-6s6.8 2 8 6"/></svg><input id="authUsername" class="login-input" type="text" placeholder="Логин" autocomplete="off" spellcheck="false"></div>
+      <div class="login-field"><svg class="login-field-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><input id="authPassword" class="login-input" type="password" placeholder="Пароль" autocomplete="off"></div>
       <div id="authError" class="login-error hidden"></div>
       <button id="authSubmit" type="submit" class="login-submit"><span id="authSubmitText">Войти</span></button>
     </form>
@@ -60,17 +46,9 @@
     </nav>
     <div class="sidebar-spacer"></div>
     <div class="user-slot" id="userSlot">
-      <button class="avatar-btn" id="avatarBtn" title="Профиль">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c.9-3.7 3.1-5.5 7-5.5s6.1 1.8 7 5.5"/></svg>
-      </button>
+      <button class="avatar-btn" id="avatarBtn" title="Профиль"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c.9-3.7 3.1-5.5 7-5.5s6.1 1.8 7 5.5"/></svg></button>
       <div class="user-menu" id="userMenu">
-        <div class="user-menu-head">
-          <img id="userAvatar" class="user-menu-avatar" alt="">
-          <div class="user-menu-info">
-            <div id="userName" class="user-menu-name">Гость</div>
-            <div id="userTag" class="user-menu-tag">не авторизован</div>
-          </div>
-        </div>
+        <div class="user-menu-head"><img id="userAvatar" class="user-menu-avatar" alt=""><div class="user-menu-info"><div id="userName" class="user-menu-name">Гость</div><div id="userTag" class="user-menu-tag">не авторизован</div></div></div>
         <button id="userLoginBtn" class="user-menu-action user-menu-login">Войти</button>
         <button id="userLogoutBtn" class="user-menu-action user-menu-logout" style="display:none">Выйти</button>
       </div>
@@ -90,14 +68,7 @@
 
     <section id="homeView" class="view">
       <div class="home-view">
-        <div class="home-hero">
-          <canvas id="waveCanvas" class="home-waves"></canvas>
-          <div class="home-hero-content">
-            <div class="home-kicker">NOVA MUSIC</div>
-            <h1 id="homeGreeting" class="home-title">Добро пожаловать в NOVA</h1>
-            <div class="home-sub">Музыка, которую хочется включать</div>
-          </div>
-        </div>
+        <div class="home-hero"><canvas id="waveCanvas" class="home-waves"></canvas><div class="home-hero-content"><div class="home-kicker">NOVA MUSIC</div><h1 id="homeGreeting" class="home-title">Добро пожаловать в NOVA</h1><div class="home-sub">Музыка, которую хочется включать</div></div></div>
         <div class="home-section"><div class="home-section-head"><h2>Продолжить слушать</h2><span>Недавнее</span></div><div id="homeContinue" class="home-row"></div></div>
         <div class="home-section"><div class="home-section-head"><h2>Популярное сейчас</h2><span>Топ хиты</span></div><div id="homePopular" class="home-row"></div></div>
         <div class="home-section" id="artistsSection" style="display:none"><div class="home-section-head"><h2>Исполнители</h2><span>По поиску</span></div><div id="homeArtists" class="home-row artist-row"></div></div>
@@ -105,103 +76,54 @@
       </div>
     </section>
 
-    <section id="searchView" class="view hidden">
-      <div class="search-view">
-        <div class="meta-row"><span id="resultsInfo" class="results-info" style="margin-left:0">Ожидание</span></div>
-        <div id="trackGrid" class="track-grid"></div>
-      </div>
-    </section>
+    <section id="searchView" class="view hidden"><div class="search-view"><div class="meta-row"><span id="resultsInfo" class="results-info" style="margin-left:0">Ожидание</span></div><div id="trackGrid" class="track-grid"></div></div></section>
 
     <section id="artistView" class="view hidden">
       <div class="artist-page">
-        <button id="artistBack" class="nav-back" title="Назад">
-          <svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
-        </button>
-
+        <button id="artistBack" class="nav-back" title="Назад"><svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg></button>
         <div class="artist-banner" id="artistBanner">
-          <div class="artist-banner-bg" id="artistBannerBg"></div>
-          <div class="artist-banner-shade"></div>
+          <div class="artist-banner-bg" id="artistBannerBg"></div><div class="artist-banner-shade"></div>
           <div class="artist-banner-content">
             <img id="artistHeroImage" class="artist-photo-large" alt="">
-            <div class="artist-banner-info">
-              <div class="player-overline">ARTIST</div>
-              <h1 id="artistHeroName" class="artist-name-large">Исполнитель</h1>
-              <div id="artistHeroMeta" class="artist-meta-large"></div>
-            </div>
+            <div class="artist-banner-info"><div class="player-overline">ARTIST</div><h1 id="artistHeroName" class="artist-name-large">Исполнитель</h1><div id="artistHeroMeta" class="artist-meta-large"></div></div>
           </div>
         </div>
-
         <div class="artist-body">
-          <div class="home-section">
-            <div class="home-section-head">
-              <h2>Популярные треки</h2>
-              <button id="artistShowAllBtn" class="section-action hidden">Показать все</button>
-            </div>
-            <div id="artistTracks" class="list"></div>
-          </div>
-          <div class="home-section">
-            <div class="home-section-head"><h2>Альбомы</h2></div>
-            <div id="artistAlbums" class="home-row"></div>
-          </div>
-          <div class="home-section">
-            <div class="home-section-head"><h2>Синглы и EP</h2></div>
-            <div id="artistSingles" class="home-row"></div>
-          </div>
+          <div class="home-section"><div class="home-section-head"><h2>Популярные треки</h2><button id="artistShowAllBtn" class="section-action hidden">Показать все</button></div><div id="artistTracks" class="list"></div></div>
+          <div class="home-section"><div class="home-section-head"><h2>Альбомы</h2></div><div id="artistAlbums" class="home-row"></div></div>
+          <div class="home-section"><div class="home-section-head"><h2>Синглы и EP</h2></div><div id="artistSingles" class="home-row"></div></div>
         </div>
       </div>
     </section>
 
     <section id="albumView" class="view hidden">
       <div class="library-view">
-        <button id="albumBack" class="nav-back" title="Назад">
-          <svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
-        </button>
+        <button id="albumBack" class="nav-back" title="Назад"><svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg></button>
         <div style="margin-top:60px;display:flex;gap:18px;align-items:center">
           <img id="albumHeroImage" class="list-cover" style="width:180px;height:180px;border-radius:12px" alt="">
-          <div>
-            <div class="player-overline">ALBUM</div>
-            <h1 id="albumHeroName" class="section-title" style="margin:0">Альбом</h1>
-            <div id="albumHeroArtist" class="now-artist">—</div>
-            <div id="albumHeroMeta" class="settings-user" style="margin-top:7px">—</div>
-            <button id="albumPlay" class="settings-action primary" style="margin-top:14px">Воспроизвести</button>
-          </div>
+          <div><div class="player-overline">ALBUM</div><h1 id="albumHeroName" class="section-title" style="margin:0">Альбом</h1><div id="albumHeroArtist" class="now-artist">—</div><div id="albumHeroMeta" class="settings-user" style="margin-top:7px">—</div><button id="albumPlay" class="settings-action primary" style="margin-top:14px">Воспроизвести</button></div>
         </div>
         <div class="home-section"><div class="home-section-head"><h2>Треклист</h2></div><div id="albumTracks" class="list"></div></div>
       </div>
     </section>
 
     <section id="libraryView" class="view hidden"><div class="library-view"><h1 class="section-title">Моя музыка</h1><div class="section-subtitle">История прослушиваний и сохранённые треки.</div><div id="libraryList" class="list"></div></div></section>
-
     <section id="favoritesView" class="view hidden"><div class="library-view"><h1 class="section-title">Избранное</h1><div class="section-subtitle">Треки, которые ты сохранил.</div><div id="favoritesList" class="list"></div></div></section>
 
     <section id="settingsView" class="view hidden">
       <div class="settings-view">
         <div class="settings-shell">
-          <div class="settings-head">
-            <div><h1 class="section-title">Настройки</h1><div class="section-subtitle">Плеер, источники и локальные данные NOVA.</div></div>
-            <div id="settingsUser" class="settings-user">Локальный профиль</div>
-          </div>
-
-          <div class="settings-section">
-            <div class="settings-section-title">Тема</div>
-            <div class="settings-grid">
-              <div class="setting"><div class="setting-copy"><div class="setting-label">Тема приложения</div><div class="setting-hint">Тёмная или светлая.</div></div><div class="setting-value"><button id="themeToggle" class="settings-action">Тёмная</button></div></div>
-            </div>
-          </div>
-
+          <div class="settings-head"><div><h1 class="section-title">Настройки</h1><div class="section-subtitle">Плеер, источники и локальные данные NOVA.</div></div><div id="settingsUser" class="settings-user">Локальный профиль</div></div>
+          <div class="settings-section"><div class="settings-section-title">Тема</div><div class="settings-grid"><div class="setting"><div class="setting-copy"><div class="setting-label">Тема приложения</div><div class="setting-hint">Тёмная или светлая.</div></div><div class="setting-value"><button id="themeToggle" class="settings-action">Тёмная</button></div></div></div></div>
           <div class="settings-section">
             <div class="settings-section-title">Внешний вид</div>
-            <div style="margin-top:14px">
-              <div class="setting-label" style="margin-bottom:8px">Цвет акцента</div>
-              <div class="accent-presets" id="accentPresets"></div>
-            </div>
+            <div style="margin-top:14px"><div class="setting-label" style="margin-bottom:8px">Цвет акцента</div><div class="accent-presets" id="accentPresets"></div></div>
             <div class="settings-grid" style="margin-top:16px">
               <div class="setting"><div class="setting-copy"><div class="setting-label">Фон приложения</div><div class="setting-hint">Своя картинка или GIF.</div></div><div class="setting-value"><button id="backgroundBtn" class="settings-action">Выбрать</button></div></div>
               <div class="setting"><div class="setting-copy"><div class="setting-label">Сбросить фон</div><div class="setting-hint">Вернуть чёрный фон NOVA.</div></div><div class="setting-value"><button id="backgroundResetBtn" class="settings-action">Сбросить</button></div></div>
             </div>
             <div class="bg-presets" id="bgPresets"></div>
           </div>
-
           <div class="settings-section">
             <div class="settings-section-title">Воспроизведение</div>
             <div class="settings-grid">
@@ -210,7 +132,6 @@
               <div class="setting"><div class="setting-copy"><div class="setting-label">Автовоспроизведение</div><div class="setting-hint">Сразу начинать воспроизведение.</div></div><div class="setting-value"><button id="autoplayToggle" class="settings-action primary">Вкл</button></div></div>
             </div>
           </div>
-
           <div class="settings-section">
             <div class="settings-section-title">Интерфейс</div>
             <div class="settings-grid">
@@ -218,13 +139,9 @@
               <div class="setting"><div class="setting-copy"><div class="setting-label">Горячие клавиши</div><div class="setting-hint">Space, стрелки, M.</div></div><div class="setting-value"><button id="hotkeysToggle" class="settings-action primary">Вкл</button></div></div>
             </div>
           </div>
-
           <div class="settings-section">
             <div class="settings-section-title">Данные</div>
-            <div class="settings-actions">
-              <button id="clearHistory" class="settings-action">Очистить историю</button>
-              <button id="clearFavorites" class="settings-action">Очистить избранное</button>
-            </div>
+            <div class="settings-actions"><button id="clearHistory" class="settings-action">Очистить историю</button><button id="clearFavorites" class="settings-action">Очистить избранное</button></div>
           </div>
         </div>
       </div>
@@ -232,13 +149,9 @@
 
     <section id="playerView" class="view hidden">
       <div class="player-view">
-        <button id="playerBack" class="nav-back" title="Назад">
-          <svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
-        </button>
+        <button id="playerBack" class="nav-back" title="Назад"><svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg></button>
         <div class="player-layout">
-          <div class="big-cover-wrap">
-            <img id="bigCover" class="big-cover" alt="">
-          </div>
+          <div class="big-cover-wrap"><img id="bigCover" class="big-cover" alt=""></div>
           <div class="player-side">
             <div class="player-overline">NOVA PLAYER</div>
             <h1 id="nowTitle" class="now-title">Ничего не играет</h1>
@@ -250,9 +163,9 @@
             <div class="controls">
               <button id="downloadBtn" class="icon-control" title="Скачать"><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="m7.5 11.5 4.5 4.5 4.5-4.5"/><path d="M5 20h14"/></svg></button>
               <button id="repeatBtn" class="icon-control" title="Повтор"><svg viewBox="0 0 24 24"><path d="M17 6h3v6"/><path d="M20 12a8 8 0 0 0-14-4L4 10"/><path d="M7 18H4v-6"/><path d="M4 12a8 8 0 0 0 14 4l2-2"/></svg></button>
-              <button id="prevBtn" class="icon-control" title="Назад"><svg viewBox="0 0 24 24"><path d="m11 5-7 7 7 7"/><path d="M20 5v14"/></svg></button>
+              <button id="prevBtn" class="icon-control" title="Предыдущий трек"><svg viewBox="0 0 24 24"><path d="m11 5-7 7 7 7"/><path d="M20 5v14"/></svg></button>
               <button id="largePlayBtn" class="icon-control primary" title="Play"><svg id="largePlayIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
-              <button id="nextBtn" class="icon-control" title="Вперёд"><svg viewBox="0 0 24 24"><path d="m13 5 7 7-7 7"/><path d="M4 5v14"/></svg></button>
+              <button id="nextBtn" class="icon-control" title="Следующий трек"><svg viewBox="0 0 24 24"><path d="m13 5 7 7-7 7"/><path d="M4 5v14"/></svg></button>
               <button id="shuffleBtn" class="icon-control" title="Перемешать"><svg viewBox="0 0 24 24"><path d="M16 4h4v4"/><path d="M4 7h3c4 0 6 10 10 10h3"/><path d="M16 20h4v-4"/><path d="M4 17h3c1.7 0 2.8-1 4-3"/></svg></button>
               <button id="lyricsBtn" class="icon-control text-button" title="Текст"><svg viewBox="0 0 24 24"><path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg><span>Текст</span></button>
             </div>
@@ -275,33 +188,21 @@
     <input id="miniProgress" class="mini-progress" type="range" min="0" max="1000" value="0" aria-label="Прогресс">
     <div class="mini-track" id="miniTrackClick" title="Открыть полный плеер">
       <img id="miniCover" class="mini-cover" alt="">
-      <div class="mini-copy">
-        <div id="miniTitle" class="mini-title">Ничего не играет</div>
-        <div id="miniArtist" class="mini-artist">—</div>
-      </div>
+      <div class="mini-copy"><div id="miniTitle" class="mini-title">Ничего не играет</div><div id="miniArtist" class="mini-artist">—</div></div>
     </div>
     <div class="mini-controls">
       <button id="miniShuffle" class="mini-btn" title="Перемешать"><svg viewBox="0 0 24 24"><path d="M16 4h4v4"/><path d="M4 7h3c4 0 6 10 10 10h3"/><path d="M16 20h4v-4"/><path d="M4 17h3c1.7 0 2.8-1 4-3"/></svg></button>
-      <button id="miniPrev" class="mini-btn" title="Назад 5 сек (Shift = предыдущий)"><svg viewBox="0 0 24 24"><path d="M11 5 4 12l7 7"/><path d="M20 5v14"/></svg></button>
+      <button id="miniPrev" class="mini-btn" title="Предыдущий трек"><svg viewBox="0 0 24 24"><path d="M11 5 4 12l7 7"/><path d="M20 5v14"/></svg></button>
       <button id="miniPlay" class="mini-btn primary" title="Play/Pause"><svg id="miniPlayIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
-      <button id="miniNext" class="mini-btn" title="Вперёд 5 сек (Shift = следующий)"><svg viewBox="0 0 24 24"><path d="m13 5 7 7-7 7"/><path d="M4 5v14"/></svg></button>
+      <button id="miniNext" class="mini-btn" title="Следующий трек"><svg viewBox="0 0 24 24"><path d="m13 5 7 7-7 7"/><path d="M4 5v14"/></svg></button>
       <button id="miniRepeat" class="mini-btn" title="Повтор"><svg viewBox="0 0 24 24"><path d="M17 6h3v6"/><path d="M20 12a8 8 0 0 0-14-4L4 10"/><path d="M7 18H4v-6"/><path d="M4 12a8 8 0 0 0 14 4l2-2"/></svg></button>
     </div>
     <div class="mini-right">
       <span id="miniTime" class="mini-time">0:00 / 0:00</span>
-      <button id="miniFavorite" class="mini-btn" title="В избранное">
-        <svg viewBox="0 0 24 24"><path d="M20.8 8.8c0 5.2-8.8 10.7-8.8 10.7S3.2 14 3.2 8.8A4.7 4.7 0 0 1 12 6.3a4.7 4.7 0 0 1 8.8 2.5z"/></svg>
-      </button>
-      <button id="miniLyrics" class="mini-btn" title="Текст песни">
-        <svg viewBox="0 0 24 24"><path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
-      </button>
-      <button id="miniExpand" class="mini-btn" title="Развернуть плеер">
-        <svg viewBox="0 0 24 24"><path d="M4 14v6h6"/><path d="M20 10V4h-6"/><path d="m4 20 6-6"/><path d="m20 4-6 6"/></svg>
-      </button>
-      <div class="mini-volume" title="Громкость">
-        <svg class="mini-vol-icon" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18 6a8 8 0 0 1 0 12"/></svg>
-        <input id="volumeMini" class="mini-volume-range" type="range" min="0" max="100" value="100" aria-label="Громкость">
-      </div>
+      <button id="miniFavorite" class="mini-btn" title="В избранное"><svg viewBox="0 0 24 24"><path d="M20.8 8.8c0 5.2-8.8 10.7-8.8 10.7S3.2 14 3.2 8.8A4.7 4.7 0 0 1 12 6.3a4.7 4.7 0 0 1 8.8 2.5z"/></svg></button>
+      <button id="miniLyrics" class="mini-btn" title="Текст песни"><svg viewBox="0 0 24 24"><path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg></button>
+      <button id="miniExpand" class="mini-btn" title="Развернуть плеер"><svg viewBox="0 0 24 24"><path d="M4 14v6h6"/><path d="M20 10V4h-6"/><path d="m4 20 6-6"/><path d="m20 4-6 6"/></svg></button>
+      <div class="mini-volume" title="Громкость"><svg class="mini-vol-icon" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18 6a8 8 0 0 1 0 12"/></svg><input id="volumeMini" class="mini-volume-range" type="range" min="0" max="100" value="100" aria-label="Громкость"></div>
     </div>
   </div>
 
@@ -309,43 +210,16 @@
 
   <div id="lyricsModal" class="lyrics-modal" aria-hidden="true"><div class="lyrics-panel"><div class="lyrics-top"><div class="lyrics-title"><strong id="lyricsTrackTitle">Текст</strong><span id="lyricsTrackArtist">—</span></div><button id="lyricsClose" class="lyrics-close">×</button></div><div id="lyricsBody" class="lyrics-body"><div class="lyrics-loading">Загрузка текста…</div></div></div></div>
 
-  <div id="songInfoModal" class="song-info-modal" aria-hidden="true">
-    <div class="song-info-card">
-      <button id="songInfoClose" class="song-info-close">×</button>
-      <img id="songInfoCover" class="song-info-cover" alt="">
-      <div id="songInfoSource" class="song-source">CATALOG</div>
-      <h2 id="songInfoTitle" class="song-info-title">—</h2>
-      <div id="songInfoArtist" class="song-info-artist">—</div>
-      <div class="song-info-rows">
-        <div class="song-info-row"><span>Альбом</span><div id="songInfoAlbum" class="song-info-value">—</div></div>
-        <div class="song-info-row"><span>Длительность</span><div id="songInfoMeta" class="song-info-value">—</div></div>
-      </div>
-      <div class="song-info-actions">
-        <button id="songInfoPlay" class="song-info-btn primary">▶ Воспроизвести</button>
-        <button id="songInfoFavorite" class="song-info-btn">♡ В избранное</button>
-        <button id="songInfoDownload" class="song-info-btn">↓ Скачать</button>
-      </div>
-    </div>
-  </div>
+  <div id="songInfoModal" class="song-info-modal" aria-hidden="true"><div class="song-info-card"><button id="songInfoClose" class="song-info-close">×</button><img id="songInfoCover" class="song-info-cover" alt=""><div id="songInfoSource" class="song-source">CATALOG</div><h2 id="songInfoTitle" class="song-info-title">—</h2><div id="songInfoArtist" class="song-info-artist">—</div><div class="song-info-rows"><div class="song-info-row"><span>Альбом</span><div id="songInfoAlbum" class="song-info-value">—</div></div><div class="song-info-row"><span>Длительность</span><div id="songInfoMeta" class="song-info-value">—</div></div></div><div class="song-info-actions"><button id="songInfoPlay" class="song-info-btn primary">▶ Воспроизвести</button><button id="songInfoFavorite" class="song-info-btn">♡ В избранное</button><button id="songInfoDownload" class="song-info-btn">↓ Скачать</button></div></div></div>
 
-  <div id="equalizerModal" class="eq-modal" aria-hidden="true">
-    <div class="eq-card">
-      <button id="equalizerClose" class="song-info-close">×</button>
-      <h2 class="eq-title">Эквалайзер</h2>
-      <p class="eq-sub">5-полосный · Web Audio API</p>
-      <div class="eq-presets" id="equalizerPresets"></div>
-      <div class="eq-bands" id="equalizerBands"></div>
-    </div>
-  </div>
+  <div id="equalizerModal" class="eq-modal" aria-hidden="true"><div class="eq-card"><button id="equalizerClose" class="song-info-close">×</button><h2 class="eq-title">Эквалайзер</h2><p class="eq-sub">5-полосный · Web Audio API</p><div class="eq-presets" id="equalizerPresets"></div><div class="eq-bands" id="equalizerBands"></div></div></div>
 
   <div id="toast" class="toast"></div>
   <input id="backgroundInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
   <input id="localAudioInput" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.webm" hidden>
   <audio id="audio" preload="metadata"></audio>
 
-  <div id="youtubePlayerWrap" class="youtube-player-wrap">
-    <div id="youtubePlayer"></div>
-  </div>
+  <div id="youtubePlayerWrap" class="youtube-player-wrap"><div id="youtubePlayer"></div></div>
 
   <script src="https://www.youtube.com/iframe_api"></script>
 <script src="app.js"></script>
