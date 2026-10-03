@@ -1,3 +1,12 @@
+// ============================================================
+// web/app.js — клиент NOVA
+// ============================================================
+// Ключевые моменты:
+//  1) Пауза YouTube: агрессивный watchdog каждые 200 мс, защита от
+//     самопроизвольного возобновления.
+//  2) Курсор: рисованный в стиле «точка + плавное кольцо».
+//  3) Очередь, рекомендации, отчёт о прослушивании.
+// ============================================================
 (function(){
   'use strict';
 
@@ -55,11 +64,13 @@
   let ytCurrentVideo = '';
   let ytVideoDuration = 0;
   let ytVideoCurrentTime = 0;
-  let ytPendingResolve = null;
-  let ytPendingReject = null;
   let playRequestId = 0;
   let playAbort = null;
   let mutedBefore = 100;
+
+  // === Защита от самозапуска YouTube ===
+  let userPausedIntent = false;
+  let ytPauseWatchdog = null;
 
   function $(id){ return document.getElementById(id); }
   function safeEl(id){
@@ -99,13 +110,92 @@
   let searchAbort = null;
   let authMode = 'login';
 
+  // ============================================================
+  // КУРСОР — КРАСИВАЯ ТОЧКА + ПЛАВНОЕ КОЛЬЦО
+  // ============================================================
+  (function initCustomCursor(){
+    // Только на устройствах с мышью
+    if (window.matchMedia && !window.matchMedia('(pointer: fine)').matches) return;
+
+    // Создаём элементы
+    const dot = document.createElement('div');
+    dot.className = 'nova-cursor-dot';
+    const ring = document.createElement('div');
+    ring.className = 'nova-cursor-ring';
+    const trail = document.createElement('div');
+    trail.className = 'nova-cursor-trail';
+    document.body.appendChild(trail);
+    document.body.appendChild(ring);
+    document.body.appendChild(dot);
+
+    let mouseX = window.innerWidth / 2, mouseY = window.innerHeight / 2;
+    let ringX = mouseX, ringY = mouseY;
+    let trailX = mouseX, trailY = mouseY;
+    let visible = false;
+
+    function show(){
+      if (visible) return;
+      visible = true;
+      dot.classList.add('visible'); ring.classList.add('visible'); trail.classList.add('visible');
+    }
+    function hide(){
+      visible = false;
+      dot.classList.remove('visible'); ring.classList.remove('visible'); trail.classList.remove('visible');
+    }
+
+    window.addEventListener('mousemove', (e) => {
+      mouseX = e.clientX; mouseY = e.clientY;
+      dot.style.transform = 'translate3d(' + (mouseX - 3) + 'px, ' + (mouseY - 3) + 'px, 0)';
+      show();
+    });
+    window.addEventListener('mouseleave', hide);
+    window.addEventListener('mouseenter', show);
+    window.addEventListener('blur', hide);
+    document.addEventListener('mouseleave', hide);
+
+    // Плавное догоняющее движение
+    function tick(){
+      ringX += (mouseX - ringX) * 0.18;
+      ringY += (mouseY - ringY) * 0.18;
+      trailX += (mouseX - trailX) * 0.08;
+      trailY += (mouseY - trailY) * 0.08;
+      ring.style.transform = 'translate3d(' + (ringX - 18) + 'px, ' + (ringY - 18) + 'px, 0)';
+      trail.style.transform = 'translate3d(' + (trailX - 26) + 'px, ' + (trailY - 26) + 'px, 0)';
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // Ховер на интерактивных элементах
+    function isInteractive(target){
+      if (!target || !target.closest) return false;
+      return !!target.closest('button, a, input, textarea, select, .card, .home-mini-card, .list-row, .nav-btn, .queue-row, .suggestion, .eq-preset, .accent-preset, .bg-preset, .song-info-btn, .settings-action, .login-tab');
+    }
+    function isTextInput(target){
+      if (!target || !target.closest) return false;
+      return !!target.closest('input, textarea, [contenteditable="true"]');
+    }
+
+    document.addEventListener('mouseover', (e) => {
+      const t = e.target;
+      if (isTextInput(t)){
+        ring.classList.add('typing'); ring.classList.remove('hover'); dot.classList.remove('hover');
+      } else if (isInteractive(t)){
+        ring.classList.add('hover'); ring.classList.remove('typing'); dot.classList.add('hover');
+      } else {
+        ring.classList.remove('hover', 'typing'); dot.classList.remove('hover');
+      }
+    });
+
+    // Клик — анимация сжатия
+    document.addEventListener('mousedown', () => { dot.classList.add('click'); ring.classList.add('click'); });
+    document.addEventListener('mouseup', () => { dot.classList.remove('click'); ring.classList.remove('click'); });
+
+    // Скрываем системный курсор
+    document.documentElement.classList.add('nova-custom-cursor');
+  })();
+
   // === AUDIO GRAPH ===
-  let audioCtx = null;
-  let sourceNode = null;
-  let fadeGain = null;
-  let volumeGain = null;
-  let eqFilters = null;
-  let audioGraphReady = false;
+  let audioCtx = null, sourceNode = null, fadeGain = null, volumeGain = null, eqFilters = null, audioGraphReady = false;
 
   function applyTheme(){
     document.documentElement.setAttribute('data-theme', settings.theme);
@@ -120,11 +210,40 @@
   }
 
   // ============================================================
-  // YOUTUBE
+  // YOUTUBE — с защитой от самозапуска
   // ============================================================
   function ytSendCommand(func, args){
-    if (!ytIframe || !ytIframe.contentWindow) return;
-    try { ytIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: func, args: args || [] }), '*'); } catch (_){}
+    if (!ytIframe || !ytIframe.contentWindow) return false;
+    try {
+      ytIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: func, args: args || [] }), '*');
+      return true;
+    } catch (_){ return false; }
+  }
+  function ytForcePause(){
+    // Многоуровневая пауза
+    userPausedIntent = true;
+    for (let i = 0; i < 8; i++){
+      setTimeout(() => { if (userPausedIntent) ytSendCommand('pauseVideo'); }, i * 60);
+    }
+    ytStartPauseWatchdog();
+  }
+  function ytPlay(){
+    userPausedIntent = false;
+    ytStopPauseWatchdog();
+    ytSendCommand('playVideo');
+  }
+  function ytStartPauseWatchdog(){
+    if (ytPauseWatchdog) return;
+    ytPauseWatchdog = setInterval(() => {
+      if (!ytIframe || !ytCurrentVideo){ ytStopPauseWatchdog(); return; }
+      if (!userPausedIntent){ ytStopPauseWatchdog(); return; }
+      // Глушим
+      ytSendCommand('pauseVideo');
+      if (state.playState === 'playing'){ state.playState = 'paused'; updatePlayButtons(); }
+    }, 200);
+  }
+  function ytStopPauseWatchdog(){
+    if (ytPauseWatchdog){ clearInterval(ytPauseWatchdog); ytPauseWatchdog = null; }
   }
 
   window.addEventListener('message', (e) => {
@@ -134,21 +253,40 @@
     if (!data || !data.event) return;
     if (data.event === 'onStateChange'){
       const s = data.info;
-      if (s === 1){ state.playState = 'playing'; updatePlayButtons(); }
-      else if (s === 2){ state.playState = 'paused'; updatePlayButtons(); }
-      else if (s === 0){
+      if (s === 1){
+        // Если пользователь намеренно поставил паузу — немедленно глушим
+        if (userPausedIntent){
+          ytSendCommand('pauseVideo');
+          state.playState = 'paused';
+          updatePlayButtons();
+          return;
+        }
+        state.playState = 'playing'; updatePlayButtons();
+      } else if (s === 2){
+        state.playState = 'paused'; updatePlayButtons();
+      } else if (s === 0){
         state.playState = 'idle';
-        if (state.repeat){ ytSendCommand('seekTo', [0, true]); ytSendCommand('playVideo'); }
+        if (state.repeat){ ytSendCommand('seekTo', [0, true]); ytPlay(); }
         else { next(); }
-      }
-      else if (s === -1){
-        if (ytPendingReject){ const r = ytPendingReject; ytPendingReject = null; ytPendingResolve = null; r(new Error('запрещено к встраиванию')); }
       }
     }
     if (data.event === 'infoDelivery' && data.info){
       if (typeof data.info.currentTime === 'number') ytVideoCurrentTime = data.info.currentTime;
       if (typeof data.info.duration === 'number' && data.info.duration > 0) ytVideoDuration = data.info.duration;
       updateProgress();
+    }
+  });
+
+  // Защита при возврате на вкладку
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    if (userPausedIntent && ytIframe && ytCurrentVideo){
+      for (let i = 0; i < 10; i++) setTimeout(() => { if (userPausedIntent) ytSendCommand('pauseVideo'); }, i * 150);
+    }
+  });
+  window.addEventListener('focus', () => {
+    if (userPausedIntent && ytIframe && ytCurrentVideo){
+      for (let i = 0; i < 10; i++) setTimeout(() => { if (userPausedIntent) ytSendCommand('pauseVideo'); }, i * 150);
     }
   });
 
@@ -161,13 +299,20 @@
       ytCurrentVideo = videoId;
       ytVideoDuration = 0;
       ytVideoCurrentTime = 0;
+      userPausedIntent = false;
+      ytStopPauseWatchdog();
       try { el.audio.pause(); } catch (_){}
       el.audio.removeAttribute('src');
       el.audio.load();
+
       const iframe = document.createElement('iframe');
       iframe.setAttribute('allow', 'autoplay; encrypted-media');
       iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:#000;';
-      iframe.src = 'https://www.youtube.com/embed/' + encodeURIComponent(videoId) + '?autoplay=1&enablejsapi=1&controls=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&fs=0&disablekb=1&cc_load_policy=0&hl=en&origin=' + encodeURIComponent(location.origin);
+      // autoplay=0 — стартуем только по команде
+      iframe.src = 'https://www.youtube.com/embed/' + encodeURIComponent(videoId) +
+        '?autoplay=0&enablejsapi=1&controls=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&fs=0&disablekb=1&cc_load_policy=0&hl=en&origin=' +
+        encodeURIComponent(location.origin);
+
       let resolved = false;
       const finish = (err) => {
         if (resolved) return;
@@ -175,14 +320,21 @@
         if (myId !== undefined && myId !== playRequestId){ reject(new Error('Aborted')); return; }
         if (err) reject(err); else resolve();
       };
+      const tryPlay = () => {
+        if (myId !== undefined && myId !== playRequestId) return;
+        if (userPausedIntent){ ytSendCommand('pauseVideo'); return; }
+        ytSendCommand('playVideo');
+        ytSendCommand('setVolume', [state.volume]);
+      };
       iframe.addEventListener('load', () => {
         setTimeout(() => {
-          ytSendCommand('playVideo');
-          ytSendCommand('setVolume', [state.volume]);
           ytSendCommand('addEventListener', ['onStateChange']);
           ytSendCommand('addEventListener', ['infoDelivery']);
-        }, 250);
-        setTimeout(() => finish(), 800);
+        }, 150);
+        setTimeout(tryPlay, 250);
+        setTimeout(tryPlay, 800);
+        setTimeout(tryPlay, 1800);
+        setTimeout(() => finish(), 900);
       });
       iframe.addEventListener('error', () => finish(new Error('iframe load error')));
       wrap.appendChild(iframe);
@@ -232,7 +384,7 @@
   function resetBackground(){ state.background.src = ''; saveBackgroundData('').catch(() => {}); applyBackground(''); notify('Фон сброшен'); }
 
   // ============================================================
-  // EQUALIZER
+  // EQ
   // ============================================================
   const EQ_BANDS = [
     { freq: 60,    type: 'lowshelf',  label: '60' },
@@ -249,61 +401,36 @@
 
   function initAudioGraph(){
     if (audioGraphReady){
-      if (audioCtx && audioCtx.state === 'suspended'){
-        audioCtx.resume().then(() => applyEq()).catch(() => {});
-      } else {
-        applyEq();
-      }
+      if (audioCtx && audioCtx.state === 'suspended'){ audioCtx.resume().then(() => applyEq()).catch(() => {}); }
+      else { applyEq(); }
       return;
     }
     try {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      console.log('[eq] audioCtx created, state =', audioCtx.state);
-
       sourceNode = audioCtx.createMediaElementSource(el.audio);
-
-      fadeGain = audioCtx.createGain();
-      fadeGain.gain.value = 1;
-
-      volumeGain = audioCtx.createGain();
-      volumeGain.gain.value = state.volume / 100;
-
+      fadeGain = audioCtx.createGain(); fadeGain.gain.value = 1;
+      volumeGain = audioCtx.createGain(); volumeGain.gain.value = state.volume / 100;
       eqFilters = EQ_BANDS.map(b => {
         const f = audioCtx.createBiquadFilter();
-        f.type = b.type;
-        f.frequency.value = b.freq;
+        f.type = b.type; f.frequency.value = b.freq;
         if (b.type === 'peaking') f.Q.value = 1.0;
         f.gain.value = 0;
         return f;
       });
-
       sourceNode.connect(fadeGain);
       fadeGain.connect(volumeGain);
       let prev = volumeGain;
       eqFilters.forEach(f => { prev.connect(f); prev = f; });
       prev.connect(audioCtx.destination);
-
       audioGraphReady = true;
-      console.log('[eq] graph built. bands:', state.eq.bands, 'on:', state.eq.on);
       applyEq();
-
-      if (audioCtx.state === 'suspended'){
-        audioCtx.resume().then(() => {
-          console.log('[eq] resumed');
-          applyEq();
-        }).catch(e => console.warn('[eq] resume failed:', e.message));
-      }
+      if (audioCtx.state === 'suspended'){ audioCtx.resume().then(() => applyEq()).catch(() => {}); }
     } catch (e){
-      console.warn('[eq] init failed:', e.message);
       audioCtx = null; audioGraphReady = false; fadeGain = null; volumeGain = null; eqFilters = null;
     }
   }
-
   function applyEq(){
-    if (!eqFilters || !audioGraphReady || !audioCtx){
-      console.log('[eq] applyEq skip: ready=' + audioGraphReady);
-      return;
-    }
+    if (!eqFilters || !audioGraphReady || !audioCtx) return;
     const on = state.eq.on;
     state.eq.bands.forEach((g, i) => {
       if (!eqFilters[i]) return;
@@ -312,7 +439,6 @@
       eqFilters[i].gain.setValueAtTime(target, audioCtx.currentTime);
     });
   }
-
   function rampFadeTo(target, ms){
     if (!audioGraphReady || !fadeGain || !audioCtx) return;
     const now = audioCtx.currentTime;
@@ -320,18 +446,13 @@
     fadeGain.gain.setValueAtTime(fadeGain.gain.value, now);
     fadeGain.gain.linearRampToValueAtTime(target, now + ms / 1000);
   }
-  function fadeOutAndWait(ms){
-    if (!audioGraphReady || !fadeGain || !audioCtx) return Promise.resolve();
-    rampFadeTo(0, ms);
-    return new Promise(res => setTimeout(res, ms + 30));
-  }
+  function fadeOutAndWait(ms){ if (!audioGraphReady || !fadeGain || !audioCtx) return Promise.resolve(); rampFadeTo(0, ms); return new Promise(res => setTimeout(res, ms + 30)); }
   function fadeIn(ms){
     if (!audioGraphReady || !fadeGain || !audioCtx) return;
     fadeGain.gain.cancelScheduledValues(audioCtx.currentTime);
     fadeGain.gain.setValueAtTime(0, audioCtx.currentTime);
     fadeGain.gain.linearRampToValueAtTime(1, audioCtx.currentTime + ms / 1000);
   }
-
   function setEqBand(i, v){
     state.eq.bands[i] = Number(v);
     state.eq.on = state.eq.bands.some(x => Number(x) !== 0);
@@ -341,12 +462,10 @@
   }
   function applyEqPreset(n){
     const p = EQ_PRESETS[n]; if (!p) return;
-    state.eq.bands = p.slice();
-    state.eq.on = p.some(x => Number(x) !== 0);
+    state.eq.bands = p.slice(); state.eq.on = p.some(x => Number(x) !== 0);
     store.set('nova_eq', JSON.stringify(state.eq));
     if (!audioGraphReady) initAudioGraph();
-    applyEq();
-    renderEqualizerBands();
+    applyEq(); renderEqualizerBands();
   }
   function renderEqualizerBands(){
     if (!el.equalizerBands) return;
@@ -379,18 +498,11 @@
   }
   function openEqualizer(){
     initAudioGraph();
-    if (audioCtx && audioCtx.state === 'suspended'){
-      audioCtx.resume().then(() => applyEq()).catch(() => {});
-    }
-    renderEqualizerBands();
-    renderEqualizerPresets();
-    el.equalizerModal.classList.add('open');
-    el.equalizerModal.setAttribute('aria-hidden', 'false');
+    if (audioCtx && audioCtx.state === 'suspended'){ audioCtx.resume().then(() => applyEq()).catch(() => {}); }
+    renderEqualizerBands(); renderEqualizerPresets();
+    el.equalizerModal.classList.add('open'); el.equalizerModal.setAttribute('aria-hidden', 'false');
   }
-  function closeEqualizer(){
-    el.equalizerModal.classList.remove('open');
-    el.equalizerModal.setAttribute('aria-hidden', 'true');
-  }
+  function closeEqualizer(){ el.equalizerModal.classList.remove('open'); el.equalizerModal.setAttribute('aria-hidden', 'true'); }
 
   // ============================================================
   // USER
@@ -438,7 +550,9 @@
     if (!authToken) return;
     try {
       const [me, favs, hist] = await Promise.all([apiAuth('/api/me'), apiAuth('/api/favorites'), apiAuth('/api/history')]);
-      state.user = me; state.favorites = Array.isArray(favs) ? favs : []; state.history = Array.isArray(hist) ? hist : [];
+      state.user = me;
+      state.favorites = Array.isArray(favs) ? favs : [];
+      state.history = Array.isArray(hist) ? hist : [];
       store.set('nova_user', JSON.stringify(me));
       renderUser(); renderFavorites(); renderLibrary();
       loadRecommendations();
@@ -495,8 +609,14 @@
   function coverFor(t){ return t && t.cover ? t.cover : ''; }
   function sourceClass(s){ if (s === 'FULL') return 'full'; if (s === 'PREVIEW') return 'preview'; return 'catalog'; }
   function isBadArtist(n){ const x = normalizeSearch(n); return !x || /^(unknown( artist)?|various artists|no name|без названия|null|undefined)$/i.test(x); }
-  function isNoiseTrack(t){ const ti = normalizeSearch(t.title), ar = normalizeSearch(t.artist); if (!ti || isBadArtist(ar) || /^(unknown|без названия|null|undefined)$/i.test(ti)) return true; return /(^| )(karaoke|instrumental|reaction|parody|tribute|8d)( |$)/i.test(ti); }
   function normalizeSearch(v){ return String(v || '').toLowerCase().replace(/[’'`]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim(); }
+  function cleanTitleForSearchLocal(t){
+    if (!t) return '';
+    return String(t)
+      .replace(/\([^)]*\)/g, ' ').replace(/\[[^\]]*\]/g, ' ').replace(/#\S+/g, ' ')
+      .replace(/\b(official|lyric|lyrics|video|audio|visualizer|hd|hq|4k|prod\.?|explicit|clean|mv|m\/v)\b/gi, ' ')
+      .replace(/\s+/g, ' ').trim();
+  }
   function notify(m){
     if (!settings.notifications) return;
     el.toast.textContent = m;
@@ -623,7 +743,10 @@
 
   function prefetchTracks(tracks){
     tracks.forEach(t => {
-      const title = String(t.title || '').trim(); const artist = String(t.artist || '').trim();
+      const rawTitle = String(t.title || '').trim();
+      const rawArtist = String(t.artist || '').trim();
+      const title = cleanTitleForSearchLocal(rawTitle) || rawTitle;
+      const artist = cleanTitleForSearchLocal(rawArtist) || rawArtist;
       if (!title && !artist) return;
       const ck = normalizeSearch(title + ' ' + artist);
       const cached = localResolveCache.get(ck);
@@ -646,9 +769,7 @@
       el.recommendationsSection.style.display = '';
       el.homeRecommendations.innerHTML = '';
       state.recommendations.slice(0, 12).forEach(t => el.homeRecommendations.appendChild(makeHomeTrackCard(t)));
-    } else {
-      el.recommendationsSection.style.display = 'none';
-    }
+    } else { el.recommendationsSection.style.display = 'none'; }
 
     const popular = state.popularTracks.length ? state.popularTracks : state.tracks.slice(0, 12);
     el.homePopular.innerHTML = '';
@@ -770,10 +891,10 @@
   }
 
   async function playUrl(url, myId){
+    userPausedIntent = false; ytStopPauseWatchdog();
     if (audioGraphReady && state.currentTrack && state.playState === 'playing'){ await fadeOutAndWait(350); }
     el.audio.pause();
-    el.audio.removeAttribute('src');
-    el.audio.load();
+    el.audio.removeAttribute('src'); el.audio.load();
     el.audio.src = url;
     if (!audioGraphReady) el.audio.volume = state.volume / 100;
     el.audio.load();
@@ -792,11 +913,7 @@
       el.audio.addEventListener('error', bad, { once: true });
       setTimeout(() => { if (done) return; done = true; cleanup(); reject(new Error('timeout')); }, 25000);
       const cancelTick = setInterval(() => {
-        if (myId !== undefined && myId !== playRequestId){
-          if (done) return; done = true; cleanup();
-          try { el.audio.pause(); } catch(_){}
-          reject(new Error('Aborted'));
-        }
+        if (myId !== undefined && myId !== playRequestId){ if (done) return; done = true; cleanup(); try { el.audio.pause(); } catch(_){} reject(new Error('Aborted')); }
       }, 100);
       el.audio.play().catch(bad);
     });
@@ -814,44 +931,31 @@
   }
 
   // ============================================================
-  // ОЧЕРЕДЬ
+  // QUEUE
   // ============================================================
   function addToQueue(track){
     if (!track) return;
     const k = trackKey(track);
     if (state.queue.some(x => trackKey(x) === k)) { notify('Уже в очереди'); return; }
-    state.queue.push(track);
-    updateQueue();
-    notify('Добавлено в очередь');
+    state.queue.push(track); updateQueue(); notify('Добавлено в очередь');
   }
   function removeFromQueue(index){
     if (index < 0 || index >= state.queue.length) return;
-    state.queue.splice(index, 1);
-    updateQueue();
+    state.queue.splice(index, 1); updateQueue();
   }
-  function clearQueue(){
-    state.queue = [];
-    updateQueue();
-    notify('Очередь очищена');
-  }
+  function clearQueue(){ state.queue = []; updateQueue(); notify('Очередь очищена'); }
   function updateQueue(){
     if (!el.queueContent) return;
-    if (!state.queue.length){
-      el.queueContent.innerHTML = '<div class="queue-empty">Очередь пуста</div>';
-      return;
-    }
+    if (!state.queue.length){ el.queueContent.innerHTML = '<div class="queue-empty">Очередь пуста</div>'; return; }
     el.queueContent.innerHTML = '';
     state.queue.forEach((t, i) => {
       const row = document.createElement('div');
       row.className = 'queue-row' + (state.currentTrack && trackKey(state.currentTrack) === trackKey(t) ? ' active' : '');
-      const cover = document.createElement('img');
-      cover.className = 'queue-cover'; cover.alt = '';
+      const cover = document.createElement('img'); cover.className = 'queue-cover'; cover.alt = '';
       cover.src = t.cover || 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" fill="#111"/><text x="20" y="26" fill="#444" font-size="16" text-anchor="middle">♪</text></svg>');
-      const main = document.createElement('div');
-      main.className = 'queue-main';
+      const main = document.createElement('div'); main.className = 'queue-main';
       main.innerHTML = '<div class="queue-title-text">' + escapeHtml(t.title || '—') + '</div><div class="queue-artist-text">' + escapeHtml(t.artist || '—') + '</div>';
-      const rm = document.createElement('button');
-      rm.className = 'queue-remove'; rm.textContent = '×'; rm.title = 'Убрать';
+      const rm = document.createElement('button'); rm.className = 'queue-remove'; rm.textContent = '×'; rm.title = 'Убрать';
       rm.addEventListener('click', e => { e.stopPropagation(); removeFromQueue(i); });
       row.append(cover, main, rm);
       row.addEventListener('click', () => {
@@ -864,39 +968,39 @@
   }
 
   // ============================================================
-  // РЕКОМЕНДАЦИИ + ОТЧЁТ О ПРОСЛУШИВАНИИ
+  // REPORT + RECOMMENDATIONS
   // ============================================================
   function reportTrackPlay(track){
     if (!track || !state.user || !authToken) return;
-    apiAuth('/api/track-play', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(track)
-    }).catch(() => {});
+    apiAuth('/api/track-play', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(track) }).catch(() => {});
   }
-
   async function loadRecommendations(){
     if (!state.user || !authToken){ state.recommendations = []; return; }
     try {
       const r = await apiAuth('/api/recommendations');
       state.recommendations = (r.results || []).map(normalizeTrack).filter(Boolean);
-      if (el.recommendationsSub) el.recommendationsSub.textContent = (r.based_on && r.based_on.length)
-        ? 'По мотивам: ' + r.based_on.slice(0, 3).join(', ')
-        : 'Популярное сейчас';
+      if (el.recommendationsSub) el.recommendationsSub.textContent = (r.based_on && r.based_on.length) ? 'По мотивам: ' + r.based_on.slice(0, 3).join(', ') : 'Популярное сейчас';
       renderHome();
     } catch (_){ state.recommendations = []; }
   }
 
+  // ============================================================
+  // PLAY TRACK
+  // ============================================================
   async function playTrack(index, opts = {}){
     if (!Number.isInteger(index) || index < 0 || index >= state.tracks.length) return;
     const track = state.tracks[index];
     const isSame = state.currentTrack && (trackKey(track) === trackKey(state.currentTrack));
     const isPlayingOrPaused = (state.playState === 'playing' || state.playState === 'paused' || state.playState === 'buffering');
     if (isSame && isPlayingOrPaused && !opts.force){ openSongInfo(state.currentTrack); return; }
+
     const myId = ++playRequestId;
     if (playAbort){ try { playAbort.abort(); } catch (_){} }
     const controller = new AbortController();
     playAbort = controller;
+
+    userPausedIntent = false; ytStopPauseWatchdog();
+
     if (audioGraphReady && state.currentTrack && state.playState === 'playing'){ await fadeOutAndWait(350); }
     try { el.audio.pause(); } catch (_){}
     state.currentIndex = index;
@@ -908,16 +1012,20 @@
     initAudioGraph();
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().then(() => applyEq()).catch(() => {});
 
-    const title = String(track.title || '').trim();
-    const artist = String(track.artist || '').trim();
+    const rawTitle = String(track.title || '').trim();
+    const rawArtist = String(track.artist || '').trim();
+    const title = cleanTitleForSearchLocal(rawTitle) || rawTitle;
+    const artist = cleanTitleForSearchLocal(rawArtist) || rawArtist;
     if (!title && !artist){ state.playState = 'error'; updatePlayButtons(); return; }
+
     const ck = normalizeSearch(title + ' ' + artist);
     let streamUrl = '';
     const local = localResolveCache.get(ck);
     if (local && Date.now() - local.time < LOCAL_RESOLVE_TTL) streamUrl = local.streamUrl;
+
     if (!streamUrl){
       try {
-        const params = new URLSearchParams({ title, artist, duration: String(track.duration || 0) });
+        const params = new URLSearchParams({ title, artist, duration: String(track.duration || 0), q: [title, artist].filter(Boolean).join(' ') });
         const r = await fetch(apiBase() + '/api/audio/resolve?' + params.toString(), { headers: { Accept: 'application/json' }, signal: controller.signal });
         if (myId !== playRequestId) return;
         const d = await r.json();
@@ -926,6 +1034,7 @@
     }
     if (myId !== playRequestId) return;
     if (!streamUrl){ state.playState = 'error'; updatePlayButtons(); notify('Не удалось найти аудио'); return; }
+
     try {
       await playStream(streamUrl, myId);
       if (myId !== playRequestId) return;
@@ -934,30 +1043,44 @@
       addHistory(track);
       reportTrackPlay(track);
       if (!state.queue.some(x => trackKey(x) === trackKey(track))) state.queue.push(track);
-      updateQueue();
-      renderHome(); updateInfoDrawer(); updatePlayer();
+      updateQueue(); renderHome(); updateInfoDrawer(); updatePlayer();
       setTimeout(updateProgress, 100); setTimeout(updateProgress, 400); setTimeout(updateProgress, 1000);
       setTimeout(applyEq, 200);
       setTimeout(loadRecommendations, 8000);
     } catch (e){
       if (myId !== playRequestId) return;
       if (e.message === 'Aborted') return;
-      console.warn('[play]', e.message);
       state.playState = 'error'; updatePlayButtons(); notify('Не удалось запустить трек');
     }
   }
 
+  // ============================================================
+  // PLAY / PAUSE
+  // ============================================================
   function playCurrentOrFirst(){
     initAudioGraph();
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().then(() => applyEq()).catch(() => {});
+
+    // YouTube
     if (ytIframe && ytCurrentVideo){
-      try {
-        if (state.playState === 'playing'){ ytSendCommand('pauseVideo'); state.playState = 'paused'; }
-        else { ytSendCommand('playVideo'); state.playState = 'playing'; }
+      const isCurrentlyPlaying = (state.playState === 'playing' && !userPausedIntent);
+      if (isCurrentlyPlaying){
+        // === ПАУЗА ===
+        state.playState = 'paused';
         updatePlayButtons();
-      } catch (_){}
+        ytForcePause();
+      } else {
+        // === PLAY ===
+        userPausedIntent = false;
+        ytStopPauseWatchdog();
+        state.playState = 'playing';
+        updatePlayButtons();
+        ytPlay();
+      }
       return;
     }
+
+    // HTML5 audio
     if (state.currentTrack){
       if (state.playState === 'loading') return;
       if (el.audio.paused){
@@ -967,19 +1090,24 @@
           fadeGain.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 0.15);
         }
         el.audio.play().then(() => { state.playState = 'playing'; updatePlayButtons(); }).catch(() => playTrack(state.currentIndex, { force: true }));
-      } else { el.audio.pause(); state.playState = 'paused'; updatePlayButtons(); }
+      } else {
+        el.audio.pause(); state.playState = 'paused'; updatePlayButtons();
+      }
       return;
     }
     if (state.tracks.length) playTrack(0);
   }
+
   function previous(){
     if (!state.tracks.length) return;
-    if (el.audio.currentTime > 4){ el.audio.currentTime = 0; return; }
+    if (!ytIframe && el.audio.currentTime > 4){ el.audio.currentTime = 0; return; }
+    userPausedIntent = false;
     let i = state.currentIndex - 1; if (i < 0) i = state.tracks.length - 1;
     playTrack(i, { force: true });
   }
   function next(){
     if (!state.tracks.length) return;
+    userPausedIntent = false;
     if (state.shuffle){
       let ni = state.currentIndex;
       if (state.tracks.length > 1){ while (ni === state.currentIndex) ni = Math.floor(Math.random() * state.tracks.length); }
@@ -991,7 +1119,9 @@
   function seekDelta(delta){
     if (ytIframe && ytCurrentVideo){
       const t = Math.max(0, ytVideoCurrentTime + delta);
-      ytSendCommand('seekTo', [t, true]); ytVideoCurrentTime = t; updateProgress(); return;
+      ytSendCommand('seekTo', [t, true]); ytVideoCurrentTime = t; updateProgress();
+      if (userPausedIntent) ytSendCommand('pauseVideo');
+      return;
     }
     if (!Number.isFinite(el.audio.duration) || el.audio.duration <= 0) return;
     el.audio.currentTime = Math.max(0, Math.min(el.audio.duration, (el.audio.currentTime || 0) + delta));
@@ -1008,7 +1138,9 @@
     const pct = Number(value0to1000) / 1000;
     if (ytIframe && ytCurrentVideo && ytVideoDuration > 0){
       const t = ytVideoDuration * pct;
-      ytSendCommand('seekTo', [t, true]); ytVideoCurrentTime = t; updateProgress(); return;
+      ytSendCommand('seekTo', [t, true]); ytVideoCurrentTime = t; updateProgress();
+      if (userPausedIntent){ ytSendCommand('pauseVideo'); } else { ytPlay(); }
+      return;
     }
     if (!Number.isFinite(el.audio.duration) || el.audio.duration <= 0) return;
     el.audio.currentTime = el.audio.duration * pct;
@@ -1036,11 +1168,8 @@
 
   function setVolume(v){
     state.volume = Math.max(0, Math.min(100, Number(v) || 0));
-    if (audioGraphReady && volumeGain && audioCtx){
-      volumeGain.gain.setTargetAtTime(state.volume / 100, audioCtx.currentTime, 0.01);
-    } else {
-      el.audio.volume = state.volume / 100;
-    }
+    if (audioGraphReady && volumeGain && audioCtx){ volumeGain.gain.setTargetAtTime(state.volume / 100, audioCtx.currentTime, 0.01); }
+    else { el.audio.volume = state.volume / 100; }
     if (el.volumeMini) el.volumeMini.value = state.volume;
     if (el.volumeLarge) el.volumeLarge.value = state.volume;
     if (el.settingsVolumeValue) el.settingsVolumeValue.textContent = state.volume + '%';
@@ -1092,7 +1221,7 @@
   function updatePlayButtons(){
     const isYt = !!(ytIframe && ytCurrentVideo);
     let playing;
-    if (isYt){ playing = state.playState === 'playing'; }
+    if (isYt){ playing = state.playState === 'playing' && !userPausedIntent; }
     else { playing = !!state.currentTrack && state.playState === 'playing' && !el.audio.paused && el.audio.currentTime > 0; }
     const loading = state.playState === 'loading';
     [el.miniPlay, el.largePlayBtn].forEach(b => { if (b) b.classList.toggle('loading', loading); });
@@ -1183,10 +1312,17 @@
       const totalReleases = (d.albums?.length || 0) + (d.singles?.length || 0);
       if (totalReleases) meta.push('<span>💿 ' + totalReleases + ' релизов</span>');
       el.artistHeroMeta.innerHTML = meta.join('');
+
       const allTracks = (d.top_tracks || []).map(normalizeTrack).filter(Boolean);
       const INITIAL = 5;
       let expanded = false;
-      const renderTopTracks = () => { renderList(el.artistTracks, expanded ? allTracks : allTracks.slice(0, INITIAL)); };
+      const renderTopTracks = () => {
+        if (!allTracks.length){
+          el.artistTracks.innerHTML = '<div class="empty"><div>У этого артиста пока нет доступных треков.</div></div>';
+          return;
+        }
+        renderList(el.artistTracks, expanded ? allTracks : allTracks.slice(0, INITIAL));
+      };
       renderTopTracks();
       if (allTracks.length > INITIAL){
         el.artistShowAllBtn.classList.remove('hidden');
@@ -1299,6 +1435,9 @@
   function closeLyrics(){ el.lyricsModal.classList.remove('open'); el.lyricsModal.setAttribute('aria-hidden', 'true'); }
   function findSimilar(){ if (!state.currentTrack){ notify('Сначала включи трек'); return; } const a = String(state.currentTrack.artist || '').trim(); if (!a) return; el.searchInput.value = a; showView('search'); search(a); }
 
+  // ============================================================
+  // HANDLERS
+  // ============================================================
   on(el.searchButton, 'click', () => search(el.searchInput.value));
   on(el.searchInput, 'keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); search(el.searchInput.value); } });
   document.querySelectorAll('.nav-btn').forEach(btn => { btn.addEventListener('click', () => { const v = btn.dataset.view; if (v === 'search'){ showSearchView(); el.searchInput.focus(); return; } showView(v); }); });
@@ -1367,12 +1506,8 @@
   on(el.hotkeysToggle, 'click', () => { settings.hotkeys = !settings.hotkeys; store.set('nova_hotkeys', settings.hotkeys ? '1' : '0'); applyToggle(el.hotkeysToggle, settings.hotkeys); });
   on(el.autoplayToggle, 'click', () => { settings.autoplay = !settings.autoplay; store.set('nova_autoplay', settings.autoplay ? '1' : '0'); applyToggle(el.autoplayToggle, settings.autoplay); });
   on(el.playerBack, 'click', () => showView(previousView || 'home'));
-
   on(el.queueClear, 'click', clearQueue);
-  on(el.miniVolIcon, 'click', () => {
-    if (state.volume > 0){ mutedBefore = state.volume; setVolume(0); }
-    else setVolume(mutedBefore || 100);
-  });
+  on(el.miniVolIcon, 'click', () => { if (state.volume > 0){ mutedBefore = state.volume; setVolume(0); } else setVolume(mutedBefore || 100); });
 
   on(el.audio, 'loadedmetadata', updateProgress);
   on(el.audio, 'durationchange', updateProgress);
@@ -1391,8 +1526,7 @@
   });
   on(el.audio, 'play', () => { preEndFadeTriggered = false; });
   on(el.audio, 'ended', () => {
-    state.playState = 'idle';
-    preEndFadeTriggered = false;
+    state.playState = 'idle'; preEndFadeTriggered = false;
     if (state.repeat){ el.audio.currentTime = 0; rampFadeTo(1, 200); el.audio.play().catch(() => {}); return; }
     next();
   });
@@ -1416,11 +1550,17 @@
   });
   window.addEventListener('beforeunload', persist);
 
+  // Интервал прогресса + страховка от YT-самозапуска
   setInterval(() => {
+    if (userPausedIntent && ytIframe && ytCurrentVideo){
+      ytSendCommand('pauseVideo');
+      if (state.playState === 'playing'){ state.playState = 'paused'; updatePlayButtons(); }
+    }
     if (ytIframe && ytCurrentVideo) { updateProgress(); return; }
     if (state.currentTrack && state.playState === 'playing') updateProgress();
   }, 500);
 
+  // Стартовая инициализация
   applyTheme();
   applyToggle(el.notificationsToggle, settings.notifications);
   applyToggle(el.hotkeysToggle, settings.hotkeys);
@@ -1459,6 +1599,7 @@
   }
   startup();
 
+  // Волны
   (function initWaves(){
     const canvas = document.getElementById('waveCanvas'); if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -1471,7 +1612,10 @@
       for (let i = 0; i < 4; i++){
         ctx.beginPath();
         const amp = 18 + i * 8, speed = 0.008 + i * 0.003, yBase = H * 0.6 + i * 18;
-        for (let x = 0; x <= W; x += 6){ const y = yBase + Math.sin(x * 0.006 + t * speed * 10 + i) * amp + Math.sin(x * 0.014 + t * speed * 6 + i * 2) * (amp * 0.4); if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }
+        for (let x = 0; x <= W; x += 6){
+          const y = yBase + Math.sin(x * 0.006 + t * speed * 10 + i) * amp + Math.sin(x * 0.014 + t * speed * 6 + i * 2) * (amp * 0.4);
+          if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
         ctx.strokeStyle = accent; ctx.globalAlpha = 0.06 + i * 0.04; ctx.lineWidth = 2.5 - i * 0.4; ctx.stroke();
       }
       ctx.globalAlpha = 1; t++; raf = requestAnimationFrame(draw);
