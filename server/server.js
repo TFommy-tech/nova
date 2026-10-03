@@ -827,45 +827,103 @@ function artistSimilarity(wantArtist, gotArtist){
   return best;
 }
 
+// === Строгая проверка: канал принадлежит артисту? ===
+function isChannelOfficialForArtist(channel, artist){
+  if (!channel || !artist) return false;
+  const c = String(channel).toLowerCase().trim();
+  const a = String(artist).toLowerCase().trim();
+  if (!c || !a) return false;
+
+  // 1. Точное совпадение
+  if (c === a) return true;
+
+  // 2. "Artist - Topic"
+  if (c === a + ' - topic') return true;
+  if (c.endsWith(' - topic')){
+    const prefix = c.slice(0, -8).trim();
+    if (prefix === a) return true;
+  }
+
+  // 3. Канал НАЧИНАЕТСЯ с имени артиста + разделитель
+  //    "плим - Official", "Lil Uzi Vert - Topic", "Ariana Grande VEVO"
+  if (c.startsWith(a + ' ') || c.startsWith(a + '-') || c.startsWith(a + '–') || c.startsWith(a + '—')){
+    return true;
+  }
+
+  // 4. "ArtistVEVO" / "ArtistOfficial" — слитно
+  if (c.startsWith(a)){
+    const tail = c.slice(a.length).trim();
+    if (/^(vevo|official|records|music|musics|rec)$/i.test(tail)) return true;
+  }
+
+  return false;
+}
+
 function checkMatch(candidate, wantTitle, wantArtist, wantDuration){
   const aSim = artistSimilarity(wantArtist, candidate.artist);
   if (aSim < 0.5) return 0;
   const tSim = titleSimilarity(wantTitle, candidate.title);
   if (tSim < 0.6) return 0;
 
+  // === Жёсткая проверка для YouTube ===
   if (candidate.provider === 'youtube'){
+    // 1. Мусорные слова в названии
     if (isBadYoutubeTitle(candidate.title)){
       console.log('[filter] youtube bad title:', candidate.title);
       return 0;
     }
+
+    // 2. Длительность
     const dur = Number(candidate.duration || 0);
     if (dur > 0){
-      if (dur > 900){
+      // Слишком длинное — точно не песня
+      if (dur > 480){
         console.log('[filter] youtube too long:', Math.round(dur) + 's |', candidate.title);
         return 0;
       }
+      // Слишком короткое — нарезка/превью
+      if (dur < 45 && wantDuration < 45){
+        console.log('[filter] youtube too short:', Math.round(dur) + 's');
+        return 0;
+      }
+      // Если знаем длительность оригинала — сравниваем
       if (wantDuration > 30){
         const ratio = dur / wantDuration;
-        if (ratio < 0.5 || ratio > 2.0){
-          console.log('[filter] youtube dur mismatch:', Math.round(dur) + 's vs want ' + Math.round(wantDuration) + 's');
+        if (ratio < 0.6 || ratio > 1.7){
+          console.log('[filter] youtube dur mismatch:', Math.round(dur) + 's vs want ' + Math.round(wantDuration) + 's |', candidate.title);
+          return 0;
+        }
+      } else {
+        // Не знаем длину — требуем чтобы видео было в диапазоне песни
+        if (dur > 420 || dur < 40){
+          console.log('[filter] youtube dur out of range:', Math.round(dur) + 's |', candidate.title);
           return 0;
         }
       }
     }
-    const channel = String(candidate.channel || candidate.artist || '').toLowerCase();
-    const artistWords = normalizeSearchText(wantArtist).split(/\s+/).filter(x => x.length > 2);
-    if (artistWords.length && channel){
-      const hasArtist = artistWords.some(w => channel.includes(w));
-      const isOfficial =
-        /- topic$/.test(channel) || /\bofficial\b/.test(channel) ||
-        /\brecords?\b/.test(channel) || /\bvevo\b/.test(channel) ||
-        /\bmusic\b/.test(channel) || /\bmu[sz]ic\b/.test(channel);
-      if (!hasArtist && !isOfficial){
-        console.log('[filter] youtube wrong channel:', channel, '| artist:', wantArtist);
+
+    // 3. Канал должен принадлежать артисту
+    const channel = String(candidate.channel || '');
+    if (!isChannelOfficialForArtist(channel, wantArtist)){
+      // Исключение: название содержит точный artist + "official"/"audio"/"lyric"/"vevo"
+      const t = String(candidate.title || '').toLowerCase();
+      const a = String(wantArtist || '').toLowerCase();
+      if (!t.includes(a)){
+        console.log('[filter] youtube wrong channel (no artist in title):', channel, '| artist:', wantArtist);
+        return 0;
+      }
+      if (!/\b(official|vevo|lyric|audio|visualizer)\b/i.test(t)){
+        console.log('[filter] youtube wrong channel (no official keyword):', channel);
+        return 0;
+      }
+      // И название должно совпадать очень плотно
+      if (titleSimilarity(wantTitle, candidate.title) < 0.85){
+        console.log('[filter] youtube wrong channel (weak title):', candidate.title);
         return 0;
       }
     }
   }
+
   return aSim * 0.4 + tSim * 0.6;
 }
 
