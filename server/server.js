@@ -543,7 +543,12 @@ const INVIDIOUS_INSTANCES = [
   'https://inv.nadeko.net',
   'https://yewtu.be',
   'https://invidious.nerdvpn.de',
-  'https://iv.melmac.space'
+  'https://iv.melmac.space',
+  'https://invidious.privacyredirect.com',
+  'https://vid.puffyan.us',
+  'https://invidious.projectsegfau.lt',
+  'https://inv.tux.pizza',
+  'https://invidious.reallyaweso.me'
 ];
 
 const PIPED_INSTANCES = [
@@ -748,41 +753,67 @@ api.get('/api/lyrics', async (req, res) => {
 });
 
 // ============================================================
-// FIND PLAYABLE
+// FIND PLAYABLE — Audius приоритет, 4 попытки, YouTube — резерв
 // ============================================================
 async function findPlayableAudio(query){
-  const aq = normalizeSearchText(query);
+  const rawQuery = String(query || '').trim();
+  if (!rawQuery) throw new Error('empty query');
 
-  try {
-    const r = await searchAudius(aq);
-    const best = (r.results || [])
-      .filter(x => x.source === 'FULL')
-      .sort((a, b) => scoreProviderTrack(b, aq) - scoreProviderTrack(a, aq))[0];
-    if (best?.id){
-      return {
+  const tryAudius = async (q) => {
+    try {
+      const r = await searchAudius(q);
+      const list = (r.results || []).filter(x => x.source === 'FULL' && x.id);
+      if (!list.length) return null;
+      const best = list.sort((a, b) =>
+        scoreProviderTrack(b, rawQuery) - scoreProviderTrack(a, rawQuery)
+      )[0];
+      return best?.id ? {
         provider: 'audius',
         streamUrl: '/api/audio/audius/' + encodeURIComponent(best.id),
         title: best.title,
         artist: best.artist
-      };
-    }
-  } catch (e){ /* next */ }
+      } : null;
+    } catch (_){ return null; }
+  };
 
-  const meta = await searchYouTubeMeta(query);
-  const ys = meta.results || [];
-  if (!ys.length) throw new Error('no playable source');
+  // 1. Полный запрос
+  let r = await tryAudius(rawQuery);
+  if (r) return r;
 
-  for (const c of ys){
-    const vid = c.id.replace('yt_', '');
-    if (!/^[A-Za-z0-9_-]{6,20}$/.test(vid)) continue;
-    return {
-      provider: 'youtube',
-      streamUrl: '/api/audio/youtube/' + encodeURIComponent(vid),
-      videoId: vid,
-      title: c.title,
-      duration: c.duration
-    };
+  // 2. Обрезаем до 4 слов (обычно название трека)
+  const words = rawQuery.split(/\s+/).filter(Boolean);
+  if (words.length > 1){
+    r = await tryAudius(words.slice(0, 4).join(' '));
+    if (r) return r;
+    // 3. Обрезаем до 2 слов
+    r = await tryAudius(words.slice(0, 2).join(' '));
+    if (r) return r;
   }
+
+  // 4. Только последнее слово (часто это исполнитель)
+  if (words.length >= 2){
+    r = await tryAudius(words[words.length - 1]);
+    if (r) return r;
+  }
+
+  // 5. Резерв — YouTube
+  try {
+    const meta = await searchYouTubeMeta(rawQuery);
+    const ys = meta.results || [];
+    if (ys.length){
+      const c = ys[0];
+      const vid = c.id.replace('yt_', '');
+      if (/^[A-Za-z0-9_-]{6,20}$/.test(vid)){
+        return {
+          provider: 'youtube',
+          streamUrl: '/api/audio/youtube/' + encodeURIComponent(vid),
+          videoId: vid,
+          title: c.title,
+          duration: c.duration
+        };
+      }
+    }
+  } catch (_){}
 
   throw new Error('no playable source');
 }
