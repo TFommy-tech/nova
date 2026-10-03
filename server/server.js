@@ -715,26 +715,28 @@ api.get('/api/download/audius/:id', async (req, res) => {
 });
 
 // ============================================================
-// ARTIST SEARCH BY NAME (для треков без Deezer-ID)
+// ARTIST SEARCH BY NAME — только точное совпадение
 // ============================================================
 api.get('/api/artist-search', async (req, res) => {
   const q = String(req.query.q || '').trim();
   if (!q) return res.status(400).json({ error: 'empty' });
   try {
-    const url = 'https://api.deezer.com/search/artist?q=' + encodeURIComponent(q) + '&limit=10';
+    const url = 'https://api.deezer.com/search/artist?q=' + encodeURIComponent(q) + '&limit=15';
     const r = await jsonFetch(url, {}, 7000);
     const d = await readJson(r);
     const items = Array.isArray(d?.data) ? d.data : [];
     if (!items.length) return res.status(404).json({ error: 'not found' });
 
     const norm = normalizeSearchText(q);
-    let best = items[0];
-    for (const a of items){
-      const an = normalizeSearchText(a.name);
-      if (an === norm){ best = a; break; }
-      if (norm.includes(an) && an.length > 2){ best = a; break; }
+
+    const exact = items.filter(a => normalizeSearchText(a.name) === norm);
+    if (!exact.length){
+      console.log('[artist-search]', q, '→ no exact match. Candidates:', items.slice(0, 5).map(a => a.name).join(' | '));
+      return res.status(404).json({ error: 'no exact match' });
     }
-    console.log('[artist-search]', q, '→', best.name, '(' + best.id + ')');
+    exact.sort((a, b) => (b.nb_fan || 0) - (a.nb_fan || 0));
+    const best = exact[0];
+    console.log('[artist-search]', q, '→', best.name, '(id=' + best.id + ', fans=' + (best.nb_fan || 0) + ')');
     res.json({
       id: String(best.id),
       name: best.name,
