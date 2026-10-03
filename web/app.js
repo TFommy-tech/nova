@@ -49,7 +49,7 @@
    'backgroundLayer','backgroundShade','startupScreen','startupStatus','backgroundInput','localAudioInput',
    'backgroundBtn','backgroundResetBtn','settingsOpenFileBtn','openLocalFileBtn',
    'infoDrawer','infoDrawerClose','infoCover','infoTitle','infoArtist','infoMeta','infoFavorite','infoQueue',
-   'artistHeroImage','artistHeroName','artistTracks','artistAlbums','artistSingles',
+   'artistHeroImage','artistHeroName','artistHeroMeta','artistBanner','artistShowAllBtn','artistTracks','artistAlbums','artistSingles',
    'albumHeroImage','albumHeroName','albumHeroArtist','albumHeroMeta','albumTracks','albumPlay',
    'trackGrid','miniPlayer','miniCover','miniTitle','miniArtist','miniPlay','miniPlayIcon',
    'largePlayIcon','bigCover','nowTitle','nowArtist','progress','currentTime','duration','queueContent',
@@ -75,15 +75,10 @@
   let authMode = 'login';
   let audioCtx = null, sourceNode = null, eqFilters = null;
 
-  // ============================================================
-  // YOUTUBE — СКРЫТЫЙ IFRAME
-  // ============================================================
   function ytSendCommand(func, args){
     if (!ytIframe || !ytIframe.contentWindow) return;
     try {
-      ytIframe.contentWindow.postMessage(JSON.stringify({
-        event: 'command', func: func, args: args || []
-      }), '*');
+      ytIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: func, args: args || [] }), '*');
     } catch (_){}
   }
 
@@ -93,7 +88,6 @@
     try { data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; }
     catch (_){ return; }
     if (!data || !data.event) return;
-
     if (data.event === 'onStateChange'){
       const s = data.info;
       if (s === 1){ state.playState = 'playing'; updatePlayButtons(); }
@@ -115,17 +109,14 @@
     return new Promise((resolve, reject) => {
       const wrap = document.getElementById('youtubePlayerWrap');
       if (!wrap) return reject(new Error('no youtube wrap'));
-
       wrap.innerHTML = '';
       ytIframe = null;
       ytCurrentVideo = videoId;
       ytVideoDuration = 0;
       ytVideoCurrentTime = 0;
-
       try { el.audio.pause(); } catch (_){}
       el.audio.removeAttribute('src');
       el.audio.load();
-
       const iframe = document.createElement('iframe');
       iframe.setAttribute('allow', 'autoplay; encrypted-media');
       iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:#000;';
@@ -133,10 +124,8 @@
         + '?autoplay=1&enablejsapi=1&controls=0&modestbranding=1&rel=0'
         + '&iv_load_policy=3&playsinline=1&fs=0&disablekb=1&cc_load_policy=0&hl=en'
         + '&origin=' + encodeURIComponent(location.origin);
-
       let resolved = false;
       const finish = (err) => { if (resolved) return; resolved = true; if (err) reject(err); else resolve(); };
-
       iframe.addEventListener('load', () => {
         setTimeout(() => {
           ytSendCommand('playVideo');
@@ -147,7 +136,6 @@
         setTimeout(() => finish(), 500);
       });
       iframe.addEventListener('error', () => finish(new Error('iframe load error')));
-
       wrap.appendChild(iframe);
       ytIframe = iframe;
       setTimeout(() => finish(), 3000);
@@ -312,6 +300,12 @@
   // ============================================================
   function escapeHtml(v){ return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
   function formatTime(s){ if (!Number.isFinite(s) || s < 0) return '0:00'; const sec = Math.floor(s), m = Math.floor(sec / 60), r = String(sec % 60).padStart(2, '0'); return m + ':' + r; }
+  function formatNumber(n){
+    n = Number(n) || 0;
+    if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+    return String(n);
+  }
   function trackKey(t){ return [t.source || '', t.id || '', t.title || '', t.artist || ''].join('|'); }
   function coverFor(t){ return t && t.cover ? t.cover : ''; }
   function sourceClass(s){ if (s === 'FULL') return 'full'; if (s === 'PREVIEW') return 'preview'; return 'catalog'; }
@@ -561,9 +555,6 @@
   async function playTrack(index, opts = {}){
     if (!Number.isInteger(index) || index < 0 || index >= state.tracks.length) return;
     const track = state.tracks[index];
-
-    // Сравниваем трек по trackKey, а не по индексу,
-    // потому что список state.tracks мог поменяться после нового поиска.
     const isSame = state.currentTrack && (trackKey(track) === trackKey(state.currentTrack));
     const isPlayingOrPaused = (state.playState === 'playing' || state.playState === 'paused' || state.playState === 'buffering');
     if (isSame && isPlayingOrPaused && !opts.force){ openSongInfo(state.currentTrack); return; }
@@ -786,12 +777,20 @@
   }
   function showSearchView(){ showView('search'); }
 
+  // ============================================================
+  // ARTIST PAGE
+  // ============================================================
   async function showArtist(id, name){
     showView('artist');
     el.artistHeroName.textContent = name || 'Исполнитель';
     el.artistHeroImage.removeAttribute('src');
+    el.artistHeroMeta.innerHTML = '';
+    el.artistBanner.style.backgroundImage = 'none';
     el.artistTracks.innerHTML = '<div class="empty">Загрузка…</div>';
-    el.artistAlbums.innerHTML = ''; el.artistSingles.innerHTML = '';
+    el.artistAlbums.innerHTML = '';
+    el.artistSingles.innerHTML = '';
+    el.artistShowAllBtn.classList.add('hidden');
+
     if (!name && !id){
       el.artistTracks.innerHTML = '<div class="empty">Нет данных.</div>';
       return;
@@ -801,7 +800,6 @@
       let artistId = id;
       let artistPicture = '';
 
-      // Если нет Deezer-ID — ищем по имени
       if (!artistId && name){
         try {
           const sr = await fetch(apiBase() + '/api/artist-search?q=' + encodeURIComponent(name));
@@ -816,7 +814,10 @@
 
       if (!artistId){
         el.artistHeroName.textContent = name || 'Исполнитель';
-        if (artistPicture) el.artistHeroImage.src = artistPicture;
+        if (artistPicture){
+          el.artistHeroImage.src = artistPicture;
+          el.artistBanner.style.backgroundImage = 'url("' + artistPicture.replace(/"/g, '\\"') + '")';
+        }
         el.artistTracks.innerHTML = '<div class="empty">Не удалось найти этого артиста в каталоге.</div>';
         return;
       }
@@ -825,29 +826,66 @@
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'unavailable');
 
-      el.artistHeroName.textContent = d.artist?.name || name || 'Исполнитель';
-      const pic = d.artist?.picture_xl || d.artist?.picture_big || artistPicture;
-      if (pic) el.artistHeroImage.src = pic;
+      const artist = d.artist || {};
+      const pic = artist.picture_xl || artist.picture_big || artistPicture || '';
+      el.artistHeroName.textContent = artist.name || name || 'Исполнитель';
+      if (pic){
+        el.artistHeroImage.src = pic;
+        el.artistBanner.style.backgroundImage = 'url("' + pic.replace(/"/g, '\\"') + '")';
+      }
 
-      renderList(el.artistTracks, (d.top_tracks || []).map(normalizeTrack));
+      // Мета-инфа
+      const meta = [];
+      if (artist.nb_fan) meta.push('<span>❤ ' + formatNumber(artist.nb_fan) + ' фанатов</span>');
+      if (d.top_tracks && d.top_tracks.length) meta.push('<span>♪ ' + d.top_tracks.length + ' треков в топе</span>');
+      const totalReleases = (d.albums?.length || 0) + (d.singles?.length || 0);
+      if (totalReleases) meta.push('<span>💿 ' + totalReleases + ' релизов</span>');
+      el.artistHeroMeta.innerHTML = meta.join('');
 
-      const albums = (d.albums || []).filter(x => x.type !== 'single');
+      // Топ-треки: показываем 5, остальные — по кнопке
+      const allTracks = (d.top_tracks || []).map(normalizeTrack);
+      const INITIAL = 5;
+      let expanded = false;
+      const renderTopTracks = () => {
+        renderList(el.artistTracks, expanded ? allTracks : allTracks.slice(0, INITIAL));
+      };
+      renderTopTracks();
+
+      if (allTracks.length > INITIAL){
+        el.artistShowAllBtn.classList.remove('hidden');
+        el.artistShowAllBtn.textContent = 'Показать все (' + allTracks.length + ')';
+        el.artistShowAllBtn.onclick = () => {
+          expanded = !expanded;
+          el.artistShowAllBtn.textContent = expanded ? 'Свернуть' : 'Показать все (' + allTracks.length + ')';
+          renderTopTracks();
+        };
+      } else {
+        el.artistShowAllBtn.classList.add('hidden');
+      }
+
+      const albums = (d.albums || []).filter(x => x.record_type !== 'single');
       el.artistAlbums.innerHTML = '';
-      if (!albums.length) el.artistAlbums.innerHTML = '<div class="empty" style="grid-column:1/-1"><div>Альбомов нет</div></div>';
-      albums.forEach(a => el.artistAlbums.appendChild(makeHomeAlbumCard({
-        id: String(a.id), albumId: String(a.id),
-        title: a.title, artist: d.artist?.name || name,
-        cover: a.cover_xl || a.cover_big || a.cover_medium || ''
-      })));
+      if (!albums.length){
+        el.artistAlbums.innerHTML = '<div class="empty" style="grid-column:1/-1"><div>Альбомов нет</div></div>';
+      } else {
+        albums.forEach(a => el.artistAlbums.appendChild(makeHomeAlbumCard({
+          id: String(a.id), albumId: String(a.id),
+          title: a.title, artist: artist.name || name,
+          cover: a.cover_xl || a.cover_big || a.cover_medium || ''
+        })));
+      }
 
-      const singles = d.singles || [];
+      const singles = (d.singles || []);
       el.artistSingles.innerHTML = '';
-      if (!singles.length) el.artistSingles.innerHTML = '<div class="empty" style="grid-column:1/-1"><div>Синглов нет</div></div>';
-      singles.forEach(a => el.artistSingles.appendChild(makeHomeAlbumCard({
-        id: String(a.id), albumId: String(a.id),
-        title: a.title, artist: d.artist?.name || name,
-        cover: a.cover_xl || a.cover_big || a.cover_medium || ''
-      })));
+      if (!singles.length){
+        el.artistSingles.innerHTML = '<div class="empty" style="grid-column:1/-1"><div>Синглов нет</div></div>';
+      } else {
+        singles.forEach(a => el.artistSingles.appendChild(makeHomeAlbumCard({
+          id: String(a.id), albumId: String(a.id),
+          title: a.title, artist: artist.name || name,
+          cover: a.cover_xl || a.cover_big || a.cover_medium || ''
+        })));
+      }
     } catch (e){
       console.error('[showArtist]', e);
       el.artistTracks.innerHTML = '<div class="empty">Не удалось загрузить данные артиста.</div>';
