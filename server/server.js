@@ -61,9 +61,6 @@ function isNoiseTrack(item){
   return false;
 }
 
-// ============================================================
-// ФИЛЬТР МУСОРНЫХ ТРЕКОВ Deezer
-// ============================================================
 const NOISE_PATTERNS = [
   /\bspeed\s*up\b/i, /\bsped\s*up\b/i, /\bslowed\b/i, /\bslow\s*\+\s*reverb\b/i,
   /\bnightcore\b/i, /\bremix\b/i, /\bbootleg\b/i, /\bmash[\s-]?up\b/i,
@@ -89,9 +86,6 @@ function isNoiseDeezerTrack(t, artistId){
   return false;
 }
 
-// ============================================================
-// ФИЛЬТР МУСОРНЫХ ВИДЕО YouTube
-// ============================================================
 const BAD_YT_WORDS = [
   'разбор', 'реакция', 'reaction', 'review', 'обзор', 'интервью', 'interview',
   'подкаст', 'podcast', 'премьера клипа', 'премьера', 'premiere', 'тизер', 'teaser',
@@ -172,10 +166,8 @@ api.get('/api/auth/discord/callback', async (req, res) => {
     const tokenRes = await fetch('https://discord.com/api/oauth2/token', { method: 'POST', body: tokenParams, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
     const tokenData = await tokenRes.json();
     if (!tokenData.access_token) return res.status(400).send('Token error');
-
     const userRes = await fetch('https://discord.com/api/users/@me', { headers: { Authorization: 'Bearer ' + tokenData.access_token } });
     const user = await userRes.json();
-
     const userId = user.id;
     if (!db.users[userId]){
       db.users[userId] = { id: userId, username: user.username, avatar: user.avatar || '', discriminator: user.discriminator || '0', provider: 'discord', createdAt: Date.now() };
@@ -186,7 +178,6 @@ api.get('/api/auth/discord/callback', async (req, res) => {
     if (!db.favorites[userId]) db.favorites[userId] = [];
     if (!db.history[userId]) db.history[userId] = [];
     saveDb(db);
-
     const token = jwt.sign({ id: userId, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
     res.redirect('/?login=success&token=' + encodeURIComponent(token));
   } catch (e){ console.error('[Discord]', e.message); res.status(500).send('Auth error'); }
@@ -326,7 +317,7 @@ async function searchAudius(q){
 }
 
 // ============================================================
-// YOUTUBE SEARCH META
+// YOUTUBE
 // ============================================================
 async function searchYouTubeMeta(q){
   try {
@@ -700,7 +691,7 @@ api.get('/api/download/audius/:id', async (req, res) => {
 });
 
 // ============================================================
-// ARTIST SEARCH BY NAME
+// ARTIST SEARCH
 // ============================================================
 api.get('/api/artist-search', async (req, res) => {
   const q = String(req.query.q || '').trim();
@@ -713,27 +704,17 @@ api.get('/api/artist-search', async (req, res) => {
     if (!items.length) return res.status(404).json({ error: 'not found' });
     const norm = normalizeSearchText(q);
     const exact = items.filter(a => normalizeSearchText(a.name) === norm);
-    if (!exact.length){
-      console.log('[artist-search]', q, '→ no exact match. Candidates:', items.slice(0, 5).map(a => a.name).join(' | '));
-      return res.status(404).json({ error: 'no exact match' });
-    }
+    if (!exact.length) return res.status(404).json({ error: 'no exact match' });
     exact.sort((a, b) => (b.nb_fan || 0) - (a.nb_fan || 0));
     const best = exact[0];
-    console.log('[artist-search]', q, '→', best.name, '(id=' + best.id + ', fans=' + (best.nb_fan || 0) + ')');
     res.json({
       id: String(best.id), name: best.name,
       picture: best.picture_xl || best.picture_big || best.picture_medium || '',
       nb_fan: best.nb_fan || 0
     });
-  } catch (e){
-    console.error('[artist-search]', e.message);
-    res.status(502).json({ error: e.message });
-  }
+  } catch (e){ res.status(502).json({ error: e.message }); }
 });
 
-// ============================================================
-// ARTIST — с фильтром
-// ============================================================
 api.get('/api/artist/:id', async (req, res) => {
   const id = encodeURIComponent(req.params.id);
   try {
@@ -746,9 +727,7 @@ api.get('/api/artist/:id', async (req, res) => {
     const top = await readJson(t);
     const albums = await readJson(al);
     const rawTracks = Array.isArray(top.data) ? top.data : [];
-    console.log('[artist]', id, 'raw top tracks:', rawTracks.length);
     const filtered = rawTracks.filter(tr => !isNoiseDeezerTrack(tr, id));
-    console.log('[artist]', id, 'after filter:', filtered.length);
     filtered.sort((a, b) => (b.rank || 0) - (a.rank || 0));
     const all = Array.isArray(albums.data) ? albums.data : [];
     res.json({
@@ -769,23 +748,79 @@ api.get('/api/album/:id', async (req, res) => {
   } catch (e){ res.status(502).json({ error: e.message }); }
 });
 
+// ============================================================
+// LYRICS — 3 уровня fallback
+// ============================================================
 api.get('/api/lyrics', async (req, res) => {
   const track = String(req.query.track_name || '').trim();
   const artist = String(req.query.artist_name || '').trim();
   const album = String(req.query.album_name || '').trim();
   const dur = Number(req.query.duration || 0);
-  if (!track || !artist) return res.status(400).json({ found: false });
+  if (!track && !artist) return res.status(400).json({ found: false });
+
+  // Чистим название от скобок, (Official Video) и т.п.
+  const cleanTrack = track
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\[[^\]]*\]/g, '')
+    .replace(/\b(official|audio|video|lyric|lyrics|visualizer|hd|hq|explicit)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // === 1. Точный get ===
   try {
-    const params = new URLSearchParams({ track_name: track, artist_name: artist });
+    const params = new URLSearchParams({ track_name: cleanTrack });
+    if (artist) params.set('artist_name', artist);
     if (album) params.set('album_name', album);
     if (dur > 0) params.set('duration', String(Math.round(dur)));
     const r = await jsonFetch('https://lrclib.net/api/get?' + params.toString(), { headers: { 'User-Agent': 'NOVA/2.0' } }, 10000);
     if (r.ok){
       const d = await readJson(r);
-      if (d.plainLyrics || d.syncedLyrics) return res.json({ found: true, plainLyrics: d.plainLyrics || '', syncedLyrics: d.syncedLyrics || '', source: 'LRCLIB' });
+      if (d.plainLyrics || d.syncedLyrics) {
+        console.log('[lyrics] exact:', cleanTrack, '-', artist);
+        return res.json({ found: true, plainLyrics: d.plainLyrics || '', syncedLyrics: d.syncedLyrics || '', source: 'LRCLIB' });
+      }
     }
-    res.status(404).json({ found: false });
-  } catch (e){ res.status(502).json({ found: false }); }
+  } catch (e){ console.warn('[lyrics/get]', e.message); }
+
+  // === 2. Search с track + artist ===
+  try {
+    const q = [cleanTrack, artist].filter(Boolean).join(' ');
+    const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q }).toString(), { headers: { 'User-Agent': 'NOVA/2.0' } }, 10000);
+    if (r.ok){
+      const arr = await r.json();
+      if (Array.isArray(arr) && arr.length){
+        const normArt = normalizeSearchText(artist);
+        let best = arr[0];
+        if (normArt){
+          for (const item of arr){
+            if (normalizeSearchText(item.artistName || '') === normArt){ best = item; break; }
+          }
+        }
+        if (best.plainLyrics || best.syncedLyrics){
+          console.log('[lyrics] search:', best.trackName, '-', best.artistName);
+          return res.json({ found: true, plainLyrics: best.plainLyrics || '', syncedLyrics: best.syncedLyrics || '', source: 'LRCLIB' });
+        }
+      }
+    }
+  } catch (e){ console.warn('[lyrics/search]', e.message); }
+
+  // === 3. Только track ===
+  try {
+    const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q: cleanTrack }).toString(), { headers: { 'User-Agent': 'NOVA/2.0' } }, 10000);
+    if (r.ok){
+      const arr = await r.json();
+      if (Array.isArray(arr) && arr.length){
+        const best = arr[0];
+        if (best.plainLyrics || best.syncedLyrics){
+          console.log('[lyrics] track-only:', best.trackName);
+          return res.json({ found: true, plainLyrics: best.plainLyrics || '', syncedLyrics: best.syncedLyrics || '', source: 'LRCLIB' });
+        }
+      }
+    }
+  } catch (e){ console.warn('[lyrics/track]', e.message); }
+
+  console.log('[lyrics] not found:', cleanTrack, '-', artist);
+  res.status(404).json({ found: false });
 });
 
 // ============================================================
@@ -827,35 +862,22 @@ function artistSimilarity(wantArtist, gotArtist){
   return best;
 }
 
-// === Строгая проверка: канал принадлежит артисту? ===
 function isChannelOfficialForArtist(channel, artist){
   if (!channel || !artist) return false;
   const c = String(channel).toLowerCase().trim();
   const a = String(artist).toLowerCase().trim();
   if (!c || !a) return false;
-
-  // 1. Точное совпадение
   if (c === a) return true;
-
-  // 2. "Artist - Topic"
   if (c === a + ' - topic') return true;
   if (c.endsWith(' - topic')){
     const prefix = c.slice(0, -8).trim();
     if (prefix === a) return true;
   }
-
-  // 3. Канал НАЧИНАЕТСЯ с имени артиста + разделитель
-  //    "плим - Official", "Lil Uzi Vert - Topic", "Ariana Grande VEVO"
-  if (c.startsWith(a + ' ') || c.startsWith(a + '-') || c.startsWith(a + '–') || c.startsWith(a + '—')){
-    return true;
-  }
-
-  // 4. "ArtistVEVO" / "ArtistOfficial" — слитно
+  if (c.startsWith(a + ' ') || c.startsWith(a + '-') || c.startsWith(a + '–') || c.startsWith(a + '—')) return true;
   if (c.startsWith(a)){
     const tail = c.slice(a.length).trim();
     if (/^(vevo|official|records|music|musics|rec)$/i.test(tail)) return true;
   }
-
   return false;
 }
 
@@ -865,65 +887,28 @@ function checkMatch(candidate, wantTitle, wantArtist, wantDuration){
   const tSim = titleSimilarity(wantTitle, candidate.title);
   if (tSim < 0.6) return 0;
 
-  // === Жёсткая проверка для YouTube ===
   if (candidate.provider === 'youtube'){
-    // 1. Мусорные слова в названии
-    if (isBadYoutubeTitle(candidate.title)){
-      console.log('[filter] youtube bad title:', candidate.title);
-      return 0;
-    }
-
-    // 2. Длительность
+    if (isBadYoutubeTitle(candidate.title)) return 0;
     const dur = Number(candidate.duration || 0);
     if (dur > 0){
-      // Слишком длинное — точно не песня
-      if (dur > 480){
-        console.log('[filter] youtube too long:', Math.round(dur) + 's |', candidate.title);
-        return 0;
-      }
-      // Слишком короткое — нарезка/превью
-      if (dur < 45 && wantDuration < 45){
-        console.log('[filter] youtube too short:', Math.round(dur) + 's');
-        return 0;
-      }
-      // Если знаем длительность оригинала — сравниваем
+      if (dur > 480) return 0;
+      if (dur < 45 && wantDuration < 45) return 0;
       if (wantDuration > 30){
         const ratio = dur / wantDuration;
-        if (ratio < 0.6 || ratio > 1.7){
-          console.log('[filter] youtube dur mismatch:', Math.round(dur) + 's vs want ' + Math.round(wantDuration) + 's |', candidate.title);
-          return 0;
-        }
+        if (ratio < 0.6 || ratio > 1.7) return 0;
       } else {
-        // Не знаем длину — требуем чтобы видео было в диапазоне песни
-        if (dur > 420 || dur < 40){
-          console.log('[filter] youtube dur out of range:', Math.round(dur) + 's |', candidate.title);
-          return 0;
-        }
+        if (dur > 420 || dur < 40) return 0;
       }
     }
-
-    // 3. Канал должен принадлежать артисту
     const channel = String(candidate.channel || '');
     if (!isChannelOfficialForArtist(channel, wantArtist)){
-      // Исключение: название содержит точный artist + "official"/"audio"/"lyric"/"vevo"
       const t = String(candidate.title || '').toLowerCase();
       const a = String(wantArtist || '').toLowerCase();
-      if (!t.includes(a)){
-        console.log('[filter] youtube wrong channel (no artist in title):', channel, '| artist:', wantArtist);
-        return 0;
-      }
-      if (!/\b(official|vevo|lyric|audio|visualizer)\b/i.test(t)){
-        console.log('[filter] youtube wrong channel (no official keyword):', channel);
-        return 0;
-      }
-      // И название должно совпадать очень плотно
-      if (titleSimilarity(wantTitle, candidate.title) < 0.85){
-        console.log('[filter] youtube wrong channel (weak title):', candidate.title);
-        return 0;
-      }
+      if (!t.includes(a)) return 0;
+      if (!/\b(official|vevo|lyric|audio|visualizer)\b/i.test(t)) return 0;
+      if (titleSimilarity(wantTitle, candidate.title) < 0.85) return 0;
     }
   }
-
   return aSim * 0.4 + tSim * 0.6;
 }
 
@@ -945,14 +930,12 @@ async function findPlayableAudio({ title, artist, duration, full }){
         .sort((a, b) => b.s - a.s);
       if (scored.length){
         const best = scored[0].c;
-        console.log('[resolve] audius match:', best.artist, '-', best.title, '| score:', scored[0].s.toFixed(3));
         return {
           provider: 'audius',
           streamUrl: '/api/audio/audius/' + encodeURIComponent(best.id),
           title: best.title, artist: best.artist
         };
       }
-      console.log('[resolve] audius: no match for', searchQuery, '(' + list.length + ' candidates)');
     }
   } catch (e){ console.warn('[resolve/audius]', e.message); }
 
@@ -967,7 +950,6 @@ async function findPlayableAudio({ title, artist, duration, full }){
       const best = scored[0].c;
       const vid = String(best.id).replace('yt_', '');
       if (/^[A-Za-z0-9_-]{6,20}$/.test(vid)){
-        console.log('[resolve] youtube match:', best.artist, '-', best.title, '| dur:', Math.round(best.duration || 0) + 's');
         return {
           provider: 'youtube',
           streamUrl: '/api/audio/youtube/' + encodeURIComponent(vid),
@@ -975,7 +957,6 @@ async function findPlayableAudio({ title, artist, duration, full }){
         };
       }
     }
-    console.log('[resolve] youtube: no match after filter, candidates:', list.length);
   } catch (e){ console.warn('[resolve/youtube]', e.message); }
 
   throw new Error('no matching track');
