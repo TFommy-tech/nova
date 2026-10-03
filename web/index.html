@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru" data-accent="purple">
+<html lang="ru" data-accent="purple" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -114,7 +114,9 @@
 
     <section id="artistView" class="view hidden">
       <div class="artist-page">
-        <button id="artistBack" class="settings-action artist-back">← Назад</button>
+        <button id="artistBack" class="nav-back" title="Назад">
+          <svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        </button>
 
         <div class="artist-banner" id="artistBanner">
           <div class="artist-banner-bg" id="artistBannerBg"></div>
@@ -149,7 +151,24 @@
       </div>
     </section>
 
-    <section id="albumView" class="view hidden"><div class="library-view"><button id="albumBack" class="settings-action">← Назад</button><div style="margin-top:18px;display:flex;gap:18px;align-items:center"><img id="albumHeroImage" class="list-cover" style="width:180px;height:180px;border-radius:12px" alt=""><div><div class="player-overline">ALBUM</div><h1 id="albumHeroName" class="section-title" style="margin:0">Альбом</h1><div id="albumHeroArtist" class="now-artist">—</div><div id="albumHeroMeta" class="settings-user" style="margin-top:7px">—</div><button id="albumPlay" class="settings-action primary" style="margin-top:14px">Воспроизвести</button></div></div><div class="home-section"><div class="home-section-head"><h2>Треклист</h2></div><div id="albumTracks" class="list"></div></div></div></section>
+    <section id="albumView" class="view hidden">
+      <div class="library-view">
+        <button id="albumBack" class="nav-back" title="Назад">
+          <svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        </button>
+        <div style="margin-top:60px;display:flex;gap:18px;align-items:center">
+          <img id="albumHeroImage" class="list-cover" style="width:180px;height:180px;border-radius:12px" alt="">
+          <div>
+            <div class="player-overline">ALBUM</div>
+            <h1 id="albumHeroName" class="section-title" style="margin:0">Альбом</h1>
+            <div id="albumHeroArtist" class="now-artist">—</div>
+            <div id="albumHeroMeta" class="settings-user" style="margin-top:7px">—</div>
+            <button id="albumPlay" class="settings-action primary" style="margin-top:14px">Воспроизвести</button>
+          </div>
+        </div>
+        <div class="home-section"><div class="home-section-head"><h2>Треклист</h2></div><div id="albumTracks" class="list"></div></div>
+      </div>
+    </section>
 
     <section id="libraryView" class="view hidden"><div class="library-view"><h1 class="section-title">Моя музыка</h1><div class="section-subtitle">История прослушиваний и сохранённые треки.</div><div id="libraryList" class="list"></div></div></section>
 
@@ -162,6 +181,14 @@
             <div><h1 class="section-title">Настройки</h1><div class="section-subtitle">Плеер, источники и локальные данные NOVA.</div></div>
             <div id="settingsUser" class="settings-user">Локальный профиль</div>
           </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Тема</div>
+            <div class="settings-grid">
+              <div class="setting"><div class="setting-copy"><div class="setting-label">Тема приложения</div><div class="setting-hint">Тёмная или светлая.</div></div><div class="setting-value"><button id="themeToggle" class="settings-action">Тёмная</button></div></div>
+            </div>
+          </div>
+
           <div class="settings-section">
             <div class="settings-section-title">Внешний вид</div>
             <div style="margin-top:14px">
@@ -174,13 +201,24 @@
             </div>
             <div class="bg-presets" id="bgPresets"></div>
           </div>
+
           <div class="settings-section">
             <div class="settings-section-title">Воспроизведение</div>
             <div class="settings-grid">
               <div class="setting"><div class="setting-copy"><div class="setting-label">Громкость</div><div class="setting-hint">Синхронизируется между плеерами.</div></div><div class="setting-value" id="settingsVolumeValue">100%</div></div>
               <div class="setting"><div class="setting-copy"><div class="setting-label">Локальные файлы</div><div class="setting-hint">MP3, WAV, OGG, M4A.</div></div><div class="setting-value"><button id="settingsOpenFileBtn" class="settings-action">Открыть</button></div></div>
+              <div class="setting"><div class="setting-copy"><div class="setting-label">Автовоспроизведение</div><div class="setting-hint">Сразу начинать воспроизведение.</div></div><div class="setting-value"><button id="autoplayToggle" class="settings-action primary">Вкл</button></div></div>
             </div>
           </div>
+
+          <div class="settings-section">
+            <div class="settings-section-title">Интерфейс</div>
+            <div class="settings-grid">
+              <div class="setting"><div class="setting-copy"><div class="setting-label">Уведомления</div><div class="setting-hint">Всплывающие сообщения.</div></div><div class="setting-value"><button id="notificationsToggle" class="settings-action primary">Вкл</button></div></div>
+              <div class="setting"><div class="setting-copy"><div class="setting-label">Горячие клавиши</div><div class="setting-hint">Space, стрелки, M.</div></div><div class="setting-value"><button id="hotkeysToggle" class="settings-action primary">Вкл</button></div></div>
+            </div>
+          </div>
+
           <div class="settings-section">
             <div class="settings-section-title">Данные</div>
             <div class="settings-actions">
@@ -194,6 +232,9 @@
 
     <section id="playerView" class="view hidden">
       <div class="player-view">
+        <button id="playerBack" class="nav-back" title="Назад">
+          <svg viewBox="0 0 24 24"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
+        </button>
         <div class="player-layout">
           <div class="big-cover-wrap">
             <img id="bigCover" class="big-cover" alt="">
