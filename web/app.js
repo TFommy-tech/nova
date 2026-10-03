@@ -49,7 +49,7 @@
    'backgroundLayer','backgroundShade','startupScreen','startupStatus','backgroundInput','localAudioInput',
    'backgroundBtn','backgroundResetBtn','settingsOpenFileBtn','openLocalFileBtn',
    'infoDrawer','infoDrawerClose','infoCover','infoTitle','infoArtist','infoMeta','infoFavorite','infoQueue',
-   'artistHeroImage','artistHeroName','artistHeroMeta','artistBanner','artistShowAllBtn','artistTracks','artistAlbums','artistSingles',
+   'artistHeroImage','artistHeroName','artistHeroMeta','artistBanner','artistBannerBg','artistShowAllBtn','artistTracks','artistAlbums','artistSingles',
    'albumHeroImage','albumHeroName','albumHeroArtist','albumHeroMeta','albumTracks','albumPlay',
    'trackGrid','miniPlayer','miniCover','miniTitle','miniArtist','miniPlay','miniPlayIcon',
    'largePlayIcon','bigCover','nowTitle','nowArtist','progress','currentTime','duration','queueContent',
@@ -145,9 +145,6 @@
     });
   }
 
-  // ============================================================
-  // BACKGROUND
-  // ============================================================
   function openLocalAudioPicker(){ el.localAudioInput.click(); }
   function openBackgroundPicker(){ el.backgroundInput.click(); }
   function backgroundDb(){
@@ -180,9 +177,6 @@
   }
   function resetBackground(){ state.background.src = ''; saveBackgroundData('').catch(() => {}); applyBackground(''); notify('Фон сброшен'); }
 
-  // ============================================================
-  // EQUALIZER
-  // ============================================================
   const EQ_BANDS = [ {freq:60,type:'lowshelf',label:'60'}, {freq:230,type:'peaking',label:'230'}, {freq:910,type:'peaking',label:'910'}, {freq:3600,type:'peaking',label:'3.6k'}, {freq:14000,type:'highshelf',label:'14k'} ];
   const EQ_PRESETS = { 'Flat':[0,0,0,0,0], 'Bass Boost':[8,6,2,0,0], 'Vocal':[-2,0,3,5,3], 'Rock':[5,3,-1,3,5], 'Pop':[-1,2,4,3,-1], 'Jazz':[3,2,-2,2,4], 'Classical':[4,2,0,2,4], 'Loudness':[6,4,0,3,5] };
   function initAudioGraph(){
@@ -214,9 +208,6 @@
   function openEqualizer(){ initAudioGraph(); if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {}); renderEqualizerBands(); renderEqualizerPresets(); el.equalizerModal.classList.add('open'); el.equalizerModal.setAttribute('aria-hidden', 'false'); }
   function closeEqualizer(){ el.equalizerModal.classList.remove('open'); el.equalizerModal.setAttribute('aria-hidden', 'true'); }
 
-  // ============================================================
-  // USER
-  // ============================================================
   function avatarUrl(u){
     if (!u) return '';
     if (!u.avatar){ const idx = u.id && /^\d+$/.test(u.id) ? Number(BigInt(u.id) >> 22n) % 6 : 0; return 'https://cdn.discordapp.com/embed/avatars/' + idx + '.png'; }
@@ -295,9 +286,6 @@
     finally { el.authSubmit.disabled = false; if (el.authSubmitText) el.authSubmitText.textContent = authMode === 'login' ? 'Войти' : 'Создать аккаунт'; }
   }
 
-  // ============================================================
-  // HELPERS
-  // ============================================================
   function escapeHtml(v){ return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
   function formatTime(s){ if (!Number.isFinite(s) || s < 0) return '0:00'; const sec = Math.floor(s), m = Math.floor(sec / 60), r = String(sec % 60).padStart(2, '0'); return m + ':' + r; }
   function formatNumber(n){
@@ -342,21 +330,50 @@
     try { const r = await fetch(apiBase() + '/api/health', { headers: { Accept: 'application/json' } }); if (!r.ok) throw new Error('health'); setConnection(true, 'API: online'); }
     catch (e){ if (!silent) setConnection(false, 'API: offline'); }
   }
+
   function normalizeTrack(t){
+    if (!t) return null;
+    const artistObj = (t.artist && typeof t.artist === 'object') ? t.artist : null;
+    const albumObj  = (t.album  && typeof t.album  === 'object') ? t.album  : null;
+
+    const artistName = artistObj
+      ? (artistObj.name || '')
+      : (t.artistName || t.artist || (t.artists && t.artists[0] && t.artists[0].name) || '');
+    const artistId = artistObj
+      ? String(artistObj.id || '')
+      : (t.artistId ? String(t.artistId)
+         : (t.artists && t.artists[0] ? String(t.artists[0].id) : '') || '');
+
+    const albumTitle = albumObj
+      ? (albumObj.title || '')
+      : (t.albumName || t.collectionName || t.album || '');
+    const albumId = albumObj
+      ? String(albumObj.id || '')
+      : (t.albumId ? String(t.albumId) : '');
+
+    const cover = t.cover || t.artwork || t.artworkUrl100
+      || (albumObj && (albumObj.cover_xl || albumObj.cover_big || albumObj.cover_medium))
+      || '';
+
     return {
       id: t.id || t.trackId || t.uri || t.link || cryptoLike(t),
       title: t.title || t.trackName || t.name || 'Без названия',
-      artist: t.artist || t.artistName || (t.artists && t.artists[0] && t.artists[0].name) || '',
-      artistId: t.artistId || (t.artists && t.artists[0] && t.artists[0].id) || '',
-      cover: t.cover || t.artwork || t.artworkUrl100 || '',
-      preview: '', source: String(t.source || 'CATALOG').toUpperCase(),
-      downloadable: !!t.downloadable, downloadUrl: t.downloadUrl || '',
-      album: t.album || t.albumName || t.collectionName || '', albumId: t.albumId || '',
+      artist: artistName,
+      artistId,
+      cover,
+      preview: t.preview || '',
+      source: String(t.source || 'CATALOG').toUpperCase(),
+      downloadable: !!t.downloadable,
+      downloadUrl: t.downloadUrl || '',
+      album: albumTitle,
+      albumId,
       duration: Number(t.duration || (Number(t.trackTimeMillis || 0) / 1000) || 0),
       bitrate: Number(t.bitrate || t.bitrate_kbps || 0),
-      popularity: Number(t.popularity || 0), provider: t.provider || '',
+      popularity: Number(t.popularity || t.rank || 0),
+      provider: t.provider || '',
       sourceUrl: t.sourceUrl || t.link || t.external_url || '',
-      releaseDate: t.releaseDate || '', localUrl: t.localUrl || ''
+      releaseDate: t.releaseDate || '',
+      localUrl: t.localUrl || ''
     };
   }
   function cryptoLike(t){ const s = [t.title || '', t.artist || '', t.source || ''].join('|'); let h = 0; for (let i = 0; i < s.length; i++){ h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; } return 't_' + Math.abs(h); }
@@ -397,7 +414,7 @@
       const d = await r.json();
       if (reqId !== state.searchRequest) return;
       let tracks = [];
-      try { tracks = Array.isArray(d.results) ? d.results.map(normalizeTrack) : []; } catch (e){ tracks = []; }
+      try { tracks = Array.isArray(d.results) ? d.results.map(normalizeTrack).filter(Boolean) : []; } catch (e){ tracks = []; }
       state.tracks = sortSearchResults(tracks, q);
       try { renderTracks(); } catch (e){ console.error(e); }
       try { renderHome(); } catch (e){ console.error(e); }
@@ -777,19 +794,24 @@
   }
   function showSearchView(){ showView('search'); }
 
-  // ============================================================
-  // ARTIST PAGE
-  // ============================================================
   async function showArtist(id, name){
     showView('artist');
     el.artistHeroName.textContent = name || 'Исполнитель';
     el.artistHeroImage.removeAttribute('src');
     el.artistHeroMeta.innerHTML = '';
-    el.artistBanner.style.backgroundImage = 'none';
+    el.artistBannerBg.style.backgroundImage = 'none';
+    el.artistBannerBg.classList.remove('loaded');
     el.artistTracks.innerHTML = '<div class="empty">Загрузка…</div>';
     el.artistAlbums.innerHTML = '';
     el.artistSingles.innerHTML = '';
     el.artistShowAllBtn.classList.add('hidden');
+
+    el.artistHeroImage.onload = () => {
+      const src = el.artistHeroImage.src;
+      if (!src) return;
+      el.artistBannerBg.style.backgroundImage = 'url("' + src.replace(/"/g, '\\"') + '")';
+      el.artistBannerBg.classList.add('loaded');
+    };
 
     if (!name && !id){
       el.artistTracks.innerHTML = '<div class="empty">Нет данных.</div>';
@@ -803,22 +825,21 @@
       if (!artistId && name){
         try {
           const sr = await fetch(apiBase() + '/api/artist-search?q=' + encodeURIComponent(name));
-          const sd = await sr.json();
+          const sd = await sr.json().catch(() => ({}));
           if (sr.ok && sd && sd.id){
             artistId = sd.id;
             artistPicture = sd.picture || '';
             console.log('[artist] found by name:', name, '→', artistId, '(', sd.name, ')');
+          } else {
+            console.log('[artist] no exact match for', name);
           }
         } catch (e){ console.warn('[artist-search]', e.message); }
       }
 
       if (!artistId){
         el.artistHeroName.textContent = name || 'Исполнитель';
-        if (artistPicture){
-          el.artistHeroImage.src = artistPicture;
-          el.artistBanner.style.backgroundImage = 'url("' + artistPicture.replace(/"/g, '\\"') + '")';
-        }
-        el.artistTracks.innerHTML = '<div class="empty">Не удалось найти этого артиста в каталоге.</div>';
+        if (artistPicture) el.artistHeroImage.src = artistPicture;
+        el.artistTracks.innerHTML = '<div class="empty">Точных совпадений артиста не найдено. Возможно, его нет в Deezer.</div>';
         return;
       }
 
@@ -829,12 +850,8 @@
       const artist = d.artist || {};
       const pic = artist.picture_xl || artist.picture_big || artistPicture || '';
       el.artistHeroName.textContent = artist.name || name || 'Исполнитель';
-      if (pic){
-        el.artistHeroImage.src = pic;
-        el.artistBanner.style.backgroundImage = 'url("' + pic.replace(/"/g, '\\"') + '")';
-      }
+      if (pic) el.artistHeroImage.src = pic;
 
-      // Мета-инфа
       const meta = [];
       if (artist.nb_fan) meta.push('<span>❤ ' + formatNumber(artist.nb_fan) + ' фанатов</span>');
       if (d.top_tracks && d.top_tracks.length) meta.push('<span>♪ ' + d.top_tracks.length + ' треков в топе</span>');
@@ -842,13 +859,10 @@
       if (totalReleases) meta.push('<span>💿 ' + totalReleases + ' релизов</span>');
       el.artistHeroMeta.innerHTML = meta.join('');
 
-      // Топ-треки: показываем 5, остальные — по кнопке
-      const allTracks = (d.top_tracks || []).map(normalizeTrack);
+      const allTracks = (d.top_tracks || []).map(normalizeTrack).filter(Boolean);
       const INITIAL = 5;
       let expanded = false;
-      const renderTopTracks = () => {
-        renderList(el.artistTracks, expanded ? allTracks : allTracks.slice(0, INITIAL));
-      };
+      const renderTopTracks = () => { renderList(el.artistTracks, expanded ? allTracks : allTracks.slice(0, INITIAL)); };
       renderTopTracks();
 
       if (allTracks.length > INITIAL){
@@ -904,7 +918,7 @@
       el.albumHeroArtist.textContent = d.artist?.name || '—';
       el.albumHeroMeta.textContent = [d.release_date?.slice?.(0, 4), d.record_type, raw.length + ' треков'].filter(Boolean).join(' · ');
       if (d.cover_xl) el.albumHeroImage.src = d.cover_xl;
-      const tracks = raw.map(normalizeTrack);
+      const tracks = raw.map(normalizeTrack).filter(Boolean);
       el.albumTracks.innerHTML = '';
       tracks.forEach((t, i) => {
         const row = document.createElement('div'); row.className = 'list-row';
@@ -926,6 +940,7 @@
       const row = document.createElement('div'); row.className = 'list-row';
       const cover = document.createElement('img'); cover.className = 'list-cover'; cover.alt = '';
       if (track.cover) cover.src = track.cover;
+      else { cover.src = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect width="48" height="48" fill="#111"/><text x="24" y="30" fill="#444" font-size="18" text-anchor="middle">♪</text></svg>'); }
       const main = document.createElement('div'); main.className = 'list-main';
       const t = document.createElement('strong'); t.textContent = track.title || 'Без названия';
       const a = document.createElement('span'); a.textContent = track.artist || '—';
@@ -1099,7 +1114,7 @@
     finally { setTimeout(() => el.startupScreen.classList.add('hidden'), 250); }
   }
   async function loadPopular(){
-    try { const r = await fetch(apiBase() + '/api/popular'); const d = await r.json(); state.popularTracks = (d.results || []).map(normalizeTrack); }
+    try { const r = await fetch(apiBase() + '/api/popular'); const d = await r.json(); state.popularTracks = (d.results || []).map(normalizeTrack).filter(Boolean); }
     catch (e){ console.warn('[popular]', e.message); }
   }
   startup();
@@ -1171,7 +1186,7 @@
           const d = await r.json();
           if (input.value.trim() !== q) return;
           show(d.results || []);
-          if (d.results && d.results.length) prefetchTracks(d.results.slice(0, 6).map(normalizeTrack));
+          if (d.results && d.results.length) prefetchTracks(d.results.slice(0, 6).map(normalizeTrack).filter(Boolean));
         } catch (e){ if (e.name !== 'AbortError') console.warn(e); }
       }, 250);
     }
