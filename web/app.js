@@ -99,13 +99,13 @@
           origin: window.location.origin
         },
         events: {
-          'onReady': () => { console.log('[yt] player ready'); positionYtPlayer(); },
+          'onReady': () => { console.log('[yt] player ready'); scheduleYtPosition(); },
           'onStateChange': (e) => {
             if (!window.YT) return;
             if (e.data === YT.PlayerState.PLAYING){
               state.playState = 'playing';
               updatePlayButtons();
-              positionYtPlayer();
+              scheduleYtPosition();
               if (ytPendingResolve){ const r = ytPendingResolve; ytPendingResolve = null; ytPendingReject = null; r(); }
             }
             if (e.data === YT.PlayerState.PAUSED){ state.playState = 'paused'; updatePlayButtons(); }
@@ -131,6 +131,7 @@
       const cover = document.querySelector('.big-cover-wrap');
       if (!cover) return;
       const r = cover.getBoundingClientRect();
+      if (r.width < 50 || r.height < 50) return;
       wrap.classList.remove('mode-floating');
       wrap.classList.add('mode-large');
       wrap.style.top = r.top + 'px';
@@ -139,12 +140,21 @@
       wrap.style.height = r.height + 'px';
       wrap.style.right = 'auto';
       wrap.style.bottom = 'auto';
+      wrap.style.borderRadius = '12px';
     } else {
       wrap.classList.remove('mode-large');
       wrap.classList.add('mode-floating');
       wrap.style.top = ''; wrap.style.left = ''; wrap.style.width = ''; wrap.style.height = '';
       wrap.style.right = ''; wrap.style.bottom = '';
+      wrap.style.borderRadius = '';
     }
+  }
+  function scheduleYtPosition(){
+    positionYtPlayer();
+    setTimeout(positionYtPlayer, 50);
+    setTimeout(positionYtPlayer, 250);
+    setTimeout(positionYtPlayer, 600);
+    setTimeout(positionYtPlayer, 1000);
   }
 
   async function playYouTube(videoId){
@@ -157,20 +167,17 @@
           tries++;
           if (window.YT && window.YT.Player){ if (!ytPlayerReady){ ytPlayerReady = true; } if (!ytPlayer) ensureYtPlayer(); }
           if (ytPlayer){ clearInterval(t); res(); }
-          else if (tries > 100){ clearInterval(t); console.error('[yt] timeout. window.YT =', !!window.YT); rej(new Error('YT API timeout — блокировщик рекламы или CSP')); }
+          else if (tries > 100){ clearInterval(t); console.error('[yt] timeout. window.YT =', !!window.YT); rej(new Error('YT API timeout')); }
         }, 200);
       });
     }
     if (!ytPlayer || typeof ytPlayer.loadVideoById !== 'function') throw new Error('YT player not ready');
-
     const ytWrap = document.getElementById('youtubePlayerWrap');
     if (ytWrap) ytWrap.classList.add('active');
     try { el.audio.pause(); } catch (_){}
     el.audio.removeAttribute('src'); el.audio.load();
-
     ytCurrentVideo = videoId;
-    setTimeout(positionYtPlayer, 30);
-
+    scheduleYtPosition();
     await new Promise((res, rej) => {
       ytPendingResolve = res; ytPendingReject = rej;
       try {
@@ -596,13 +603,36 @@
     ytCurrentVideo = '';
     await playUrl(url);
   }
-  async function playTrack(index){
+
+  async function playTrack(index, opts = {}){
     if (!Number.isInteger(index) || index < 0 || index >= state.tracks.length) return;
+
+    const isSame = (index === state.currentIndex) && state.currentTrack;
+    const isPlayingOrPaused = (state.playState === 'playing' || state.playState === 'paused' || state.playState === 'buffering');
+    if (isSame && isPlayingOrPaused && !opts.force){
+      openSongInfo(state.currentTrack);
+      return;
+    }
+
     const track = state.tracks[index];
-    state.currentIndex = index; state.currentTrack = track; state.playState = 'loading';
-    updateMiniPlayer(); updatePlayer(); updateInfoDrawer(); updatePlayButtons();
+    state.currentIndex = index;
+    state.currentTrack = track;
+    state.playState = 'loading';
+
+    if (el.progress){ el.progress.value = 0; el.progress.style.setProperty('--progress', '0%'); }
+    if (el.miniProgress){ el.miniProgress.value = 0; el.miniProgress.style.setProperty('--progress', '0%'); }
+    if (el.currentTime) el.currentTime.textContent = '0:00';
+    if (el.duration) el.duration.textContent = '0:00';
+    if (el.miniTime) el.miniTime.textContent = '0:00 / 0:00';
+
+    updateMiniPlayer();
+    updatePlayer();
+    updateInfoDrawer();
+    updatePlayButtons();
+
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
-    const title = String(track.title || '').trim(); const artist = String(track.artist || '').trim();
+    const title = String(track.title || '').trim();
+    const artist = String(track.artist || '').trim();
     if (!title && !artist){ state.playState = 'error'; updatePlayButtons(); return; }
     const ck = normalizeSearch(title + ' ' + artist);
     let streamUrl = '';
@@ -619,12 +649,20 @@
     if (!streamUrl){ state.playState = 'error'; updatePlayButtons(); notify('Не удалось найти аудио'); return; }
     try {
       await playStream(streamUrl);
-      state.playState = 'playing'; updatePlayButtons();
-      addHistory(track); renderHome(); updateInfoDrawer(); updatePlayer();
+      state.playState = 'playing';
+      updatePlayButtons();
+      addHistory(track);
+      renderHome();
+      updateInfoDrawer();
+      updatePlayer();
+      setTimeout(updateProgress, 100);
+      setTimeout(updateProgress, 500);
     } catch (e){
-      console.warn('[play]', e.message); state.playState = 'error'; updatePlayButtons(); notify('Не удалось запустить трек');
+      console.warn('[play]', e.message);
+      state.playState = 'error'; updatePlayButtons(); notify('Не удалось запустить трек');
     }
   }
+
   function playCurrentOrFirst(){
     if (ytPlayer && ytCurrentVideo && state.currentTrack && (state.currentTrack.provider === 'youtube' || ytCurrentVideo)){
       try { if (state.playState === 'playing'){ ytPlayer.pauseVideo(); state.playState = 'paused'; } else { ytPlayer.playVideo(); state.playState = 'playing'; } updatePlayButtons(); } catch (_){}
@@ -632,32 +670,36 @@
     }
     if (state.currentTrack){
       if (state.playState === 'loading') return;
-      if (el.audio.paused){ el.audio.play().then(() => { state.playState = 'playing'; updatePlayButtons(); }).catch(() => playTrack(state.currentIndex)); }
+      if (el.audio.paused){ el.audio.play().then(() => { state.playState = 'playing'; updatePlayButtons(); }).catch(() => playTrack(state.currentIndex, { force: true })); }
       else { el.audio.pause(); state.playState = 'paused'; updatePlayButtons(); }
       return;
     }
     if (state.tracks.length) playTrack(0);
   }
-  function previous(){ if (!state.tracks.length) return; if (el.audio.currentTime > 4){ el.audio.currentTime = 0; return; } let i = state.currentIndex - 1; if (i < 0) i = state.tracks.length - 1; playTrack(i); }
-  function next(){ if (!state.tracks.length) return; if (state.shuffle){ let ni = state.currentIndex; if (state.tracks.length > 1){ while (ni === state.currentIndex) ni = Math.floor(Math.random() * state.tracks.length); } playTrack(ni); return; } let ni = state.currentIndex + 1; if (ni >= state.tracks.length) ni = 0; playTrack(ni); }
-
-  // Перемотка на ±5 секунд
+  function previous(){
+    if (!state.tracks.length) return;
+    if (el.audio.currentTime > 4){ el.audio.currentTime = 0; return; }
+    let i = state.currentIndex - 1; if (i < 0) i = state.tracks.length - 1;
+    playTrack(i, { force: true });
+  }
+  function next(){
+    if (!state.tracks.length) return;
+    if (state.shuffle){
+      let ni = state.currentIndex;
+      if (state.tracks.length > 1){ while (ni === state.currentIndex) ni = Math.floor(Math.random() * state.tracks.length); }
+      playTrack(ni, { force: true }); return;
+    }
+    let ni = state.currentIndex + 1; if (ni >= state.tracks.length) ni = 0;
+    playTrack(ni, { force: true });
+  }
   function seekDelta(delta){
-    // YouTube
     if (ytPlayer && ytCurrentVideo && state.currentTrack && state.currentTrack.provider === 'youtube'){
-      try {
-        const cur = ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : 0;
-        const dur = ytPlayer.getDuration ? ytPlayer.getDuration() : 0;
-        const t = Math.max(0, Math.min(dur, cur + delta));
-        ytPlayer.seekTo(t, true);
-      } catch (_){}
+      try { const cur = ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : 0; const dur = ytPlayer.getDuration ? ytPlayer.getDuration() : 0; const t = Math.max(0, Math.min(dur, cur + delta)); ytPlayer.seekTo(t, true); } catch (_){}
       return;
     }
-    // Audio
     if (!Number.isFinite(el.audio.duration) || el.audio.duration <= 0) return;
     el.audio.currentTime = Math.max(0, Math.min(el.audio.duration, (el.audio.currentTime || 0) + delta));
   }
-
   function toggleRepeat(){ state.repeat = !state.repeat; updateModeButtons(); notify(state.repeat ? 'Повтор включён' : 'Повтор выключен'); }
   function toggleShuffle(){ state.shuffle = !state.shuffle; updateModeButtons(); notify(state.shuffle ? 'Перемешивание включено' : 'Перемешивание выключено'); }
   function updateModeButtons(){
@@ -666,8 +708,6 @@
     if (el.shuffleBtn) el.shuffleBtn.style.color = state.shuffle ? 'var(--accent)' : '';
     if (el.miniShuffle) el.miniShuffle.classList.toggle('active', state.shuffle);
   }
-
-  // Перематывает по значению 0..1000
   function seekToValue(value0to1000){
     const pct = Number(value0to1000) / 1000;
     if (ytPlayer && ytCurrentVideo && state.currentTrack && state.currentTrack.provider === 'youtube'){
@@ -755,7 +795,7 @@
     if (isYt){
       if (ytWrap) ytWrap.classList.add('active');
       el.bigCover.style.display = 'none';
-      setTimeout(positionYtPlayer, 30);
+      scheduleYtPosition();
     } else {
       if (ytWrap) ytWrap.classList.remove('active', 'mode-large', 'mode-floating');
       el.bigCover.style.display = '';
@@ -812,7 +852,7 @@
     if (view === 'home') renderHome();
     if (view === 'library') renderLibrary();
     if (view === 'favorites') renderFavorites();
-    setTimeout(positionYtPlayer, 50);
+    scheduleYtPosition();
   }
   function showSearchView(){ showView('search'); }
 
@@ -856,11 +896,11 @@
       tracks.forEach((t, i) => {
         const row = document.createElement('div'); row.className = 'list-row';
         row.innerHTML = '<div style="color:var(--text-dim);font-size:10px">' + String(i + 1).padStart(2, '0') + '</div><div class="list-main"><strong>' + escapeHtml(t.title) + '</strong><span>' + escapeHtml(t.artist) + '</span></div><div class="row-actions"><button class="small-btn">▶</button></div>';
-        row.querySelector('button').onclick = e => { e.stopPropagation(); state.tracks = tracks.slice(); playTrack(i); showView('player'); };
+        row.querySelector('button').onclick = e => { e.stopPropagation(); state.tracks = tracks.slice(); playTrack(i, { force: true }); showView('player'); };
         row.onclick = () => { state.tracks = tracks.slice(); playTrack(i); };
         el.albumTracks.appendChild(row);
       });
-      el.albumPlay.onclick = () => { state.tracks = tracks.slice(); if (tracks.length) playTrack(0); };
+      el.albumPlay.onclick = () => { state.tracks = tracks.slice(); if (tracks.length) playTrack(0, { force: true }); };
     } catch (e){ el.albumTracks.innerHTML = '<div class="empty">Не удалось загрузить.</div>'; }
   }
   on(document.getElementById('artistBack'), 'click', () => showView('home'));
@@ -880,7 +920,7 @@
       const actions = document.createElement('div'); actions.className = 'row-actions';
       const play = document.createElement('button'); play.className = 'small-btn'; play.textContent = '▶';
       const fav = document.createElement('button'); fav.className = 'small-btn'; fav.textContent = isFavorite(track) ? '♥' : '♡';
-      play.addEventListener('click', e => { e.stopPropagation(); const i = state.tracks.findIndex(x => trackKey(x) === trackKey(track)); if (i >= 0){ playTrack(i); showView('player'); } else { state.tracks = [track]; playTrack(0); } });
+      play.addEventListener('click', e => { e.stopPropagation(); const i = state.tracks.findIndex(x => trackKey(x) === trackKey(track)); if (i >= 0){ playTrack(i, { force: true }); showView('player'); } else { state.tracks = [track]; playTrack(0, { force: true }); } });
       fav.addEventListener('click', e => { e.stopPropagation(); toggleFavorite(track); renderLibrary(); renderFavorites(); });
       actions.append(play, fav);
       row.append(cover, main, actions);
@@ -959,44 +999,33 @@
     const f = e.target.files?.[0]; if (!f) return;
     const url = URL.createObjectURL(f);
     const track = { id: 'local_' + Date.now(), title: f.name.replace(/\.[^.]+$/, ''), artist: 'Локальный файл', source: 'LOCAL', localUrl: url, duration: 0, provider: 'local' };
-    state.tracks.unshift(track); playTrack(state.tracks.indexOf(track));
+    state.tracks.unshift(track); playTrack(state.tracks.indexOf(track), { force: true });
   });
   on(el.infoDrawerClose, 'click', closeInfoDrawer);
   on(el.infoFavorite, 'click', () => { if (state.currentTrack){ toggleFavorite(state.currentTrack); updateInfoDrawer(); } });
   on(el.infoQueue, 'click', () => notify('Очередь в плеере'));
   on(el.songInfoClose, 'click', closeSongInfo);
   on(el.songInfoModal, 'click', e => { if (e.target === el.songInfoModal) closeSongInfo(); });
-  on(el.songInfoPlay, 'click', () => { if (!songInfoCurrent) return; const i = state.tracks.findIndex(x => trackKey(x) === trackKey(songInfoCurrent)); if (i >= 0) playTrack(i); else { state.tracks.unshift(songInfoCurrent); playTrack(0); } closeSongInfo(); showView('player'); });
+  on(el.songInfoPlay, 'click', () => { if (!songInfoCurrent) return; const i = state.tracks.findIndex(x => trackKey(x) === trackKey(songInfoCurrent)); if (i >= 0) playTrack(i, { force: true }); else { state.tracks.unshift(songInfoCurrent); playTrack(0, { force: true }); } closeSongInfo(); showView('player'); });
   on(el.songInfoFavorite, 'click', () => { if (!songInfoCurrent) return; toggleFavorite(songInfoCurrent); el.songInfoFavorite.textContent = isFavorite(songInfoCurrent) ? '♥ В избранном' : '♡ В избранное'; });
   on(el.songInfoDownload, 'click', () => { if (!songInfoCurrent) return; if (songInfoCurrent.downloadUrl){ const a = document.createElement('a'); a.href = songInfoCurrent.downloadUrl; a.download = ''; a.click(); } else notify('Скачивание недоступно'); });
   on(el.equalizerClose, 'click', closeEqualizer);
   on(el.equalizerModal, 'click', e => { if (e.target === el.equalizerModal) closeEqualizer(); });
   on(el.equalizerBtn, 'click', openEqualizer);
-
-  // === Управление плеером ===
   on(el.miniPlay, 'click', playCurrentOrFirst);
   on(el.largePlayBtn, 'click', playCurrentOrFirst);
-
-  // prev/next: обычный клик = предыдущий/следующий трек, Shift = -/+ 5 сек
   on(el.miniPrev, 'click', (e) => { if (e.shiftKey){ seekDelta(-5); notify('−5 сек'); } else previous(); });
   on(el.prevBtn, 'click', (e) => { if (e.shiftKey){ seekDelta(-5); notify('−5 сек'); } else previous(); });
   on(el.miniNext, 'click', (e) => { if (e.shiftKey){ seekDelta(5); notify('+5 сек'); } else next(); });
   on(el.nextBtn, 'click', (e) => { if (e.shiftKey){ seekDelta(5); notify('+5 сек'); } else next(); });
-
   on(el.miniRepeat, 'click', toggleRepeat);
   on(el.repeatBtn, 'click', toggleRepeat);
   on(el.miniShuffle, 'click', toggleShuffle);
   on(el.shuffleBtn, 'click', toggleShuffle);
-
-  // === НОВЫЕ кнопки мини-плеера ===
   on(el.miniFavorite, 'click', () => { if (state.currentTrack) toggleFavorite(state.currentTrack); });
   on(el.miniLyrics, 'click', showLyrics);
   on(el.miniExpand, 'click', () => showView('player'));
-
-  // Клик по треку в мини-плеере — открыть плеер
   on(el.miniTrackClick, 'click', () => { if (state.currentTrack) showView('player'); });
-
-  // Клик по плавающему YouTube
   on(document.getElementById('youtubePlayerWrap'), 'click', () => {
     const wrap = document.getElementById('youtubePlayerWrap');
     if (!wrap) return;
@@ -1005,8 +1034,6 @@
       try { const s = ytPlayer.getPlayerState(); if (s === 1) ytPlayer.pauseVideo(); else if (s === 2) ytPlayer.playVideo(); } catch (_){}
     }
   });
-
-  // === Прогресс ===
   on(el.progress, 'input', seekFromProgress);
   on(el.miniProgress, 'input', seekFromMiniProgress);
   on(el.downloadBtn, 'click', downloadCurrent);
@@ -1042,7 +1069,7 @@
     else if (e.key.toLowerCase() === 'm') setVolume(state.volume > 0 ? 0 : 100);
   });
   window.addEventListener('beforeunload', persist);
-  window.addEventListener('resize', positionYtPlayer);
+  window.addEventListener('resize', scheduleYtPosition);
 
   setInterval(() => { if (ytPlayer && ytCurrentVideo && state.currentTrack && state.currentTrack.provider === 'youtube') updateProgress(); }, 1000);
 
