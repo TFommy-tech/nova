@@ -596,3 +596,120 @@ html[data-theme="light"] .login-divider::before, html[data-theme="light"] .login
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+/* ============================================================
+   NOVA CUSTOM CURSOR
+   ============================================================ */
+html.nova-custom-cursor,
+html.nova-custom-cursor * {
+  cursor: none !important;
+}
+
+.nova-cursor-dot,
+.nova-cursor-ring,
+.nova-cursor-trail {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 2147483647;
+  will-change: transform;
+  opacity: 0;
+  transition: opacity .18s ease-out;
+}
+
+.nova-cursor-dot.visible,
+.nova-cursor-ring.visible,
+.nova-cursor-trail.visible {
+  opacity: 1;
+}
+
+/* Точка */
+.nova-cursor-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent, #a855f7);
+  box-shadow: 0 0 10px var(--accent, #a855f7), 0 0 20px rgba(168,85,247,.35);
+  transition: opacity .18s ease-out, width .18s cubic-bezier(.34,1.56,.64,1), height .18s cubic-bezier(.34,1.56,.64,1), background .2s ease;
+  transform-origin: center center;
+}
+
+/* Кольцо */
+.nova-cursor-ring {
+  width: 36px;
+  height: 36px;
+  border: 1.5px solid rgba(255,255,255,.5);
+  border-radius: 50%;
+  transition: opacity .18s ease-out, width .25s cubic-bezier(.34,1.56,.64,1), height .25s cubic-bezier(.34,1.56,.64,1), border-color .25s ease, background .25s ease, transform .1s ease;
+  background: rgba(255,255,255,.02);
+  backdrop-filter: blur(0.5px);
+}
+
+/* Мягкий "след" */
+.nova-cursor-trail {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent, #a855f7) 0%, transparent 65%);
+  opacity: 0;
+  transition: opacity .18s ease-out;
+  filter: blur(4px);
+  mix-blend-mode: screen;
+}
+.nova-cursor-trail.visible {
+  opacity: .12;
+}
+
+/* Ховер на интерактивных */
+.nova-cursor-ring.hover {
+  width: 56px;
+  height: 56px;
+  border-color: var(--accent, #a855f7);
+  background: rgba(168,85,247,.12);
+  box-shadow: 0 0 30px rgba(168,85,247,.35);
+}
+
+.nova-cursor-dot.hover {
+  width: 3px;
+  height: 3px;
+  background: #fff;
+  box-shadow: 0 0 14px #fff;
+}
+
+/* Клик */
+.nova-cursor-dot.click {
+  width: 2px;
+  height: 2px;
+  box-shadow: 0 0 6px #fff;
+}
+
+.nova-cursor-ring.click {
+  width: 24px;
+  height: 24px;
+  border-color: #fff;
+  background: rgba(255,255,255,.15);
+}
+
+/* Поле ввода — маленькое кольцо */
+.nova-cursor-ring.typing {
+  width: 4px;
+  height: 22px;
+  border-radius: 2px;
+  border-color: var(--accent, #a855f7);
+  background: rgba(168,85,247,.25);
+  box-shadow: 0 0 14px rgba(168,85,247,.4);
+}
+
+/* Отключаем на тач-устройствах автоматически, но на всякий случай */
+@media (pointer: coarse) {
+  html.nova-custom-cursor, html.nova-custom-cursor * { cursor: auto !important; }
+  .nova-cursor-dot, .nova-cursor-ring, .nova-cursor-trail { display: none !important; }
+}
+
+/* Стандартные курсоры для text/pointer сохраняем внутри UI */
+html.nova-custom-cursor input,
+html.nova-custom-cursor textarea,
+html.nova-custom-cursor select,
+html.nova-custom-cursor [contenteditable="true"] {
+  cursor: text !important;
+}
