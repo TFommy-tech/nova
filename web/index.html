@@ -70,6 +70,7 @@
       <div class="home-view">
         <div class="home-hero"><canvas id="waveCanvas" class="home-waves"></canvas><div class="home-hero-content"><div class="home-kicker">NOVA MUSIC</div><h1 id="homeGreeting" class="home-title">Добро пожаловать в NOVA</h1><div class="home-sub">Музыка, которую хочется включать</div></div></div>
         <div class="home-section"><div class="home-section-head"><h2>Продолжить слушать</h2><span>Недавнее</span></div><div id="homeContinue" class="home-row"></div></div>
+        <div class="home-section" id="recommendationsSection" style="display:none"><div class="home-section-head"><h2>Для тебя</h2><span id="recommendationsSub">На основе твоих прослушиваний</span></div><div id="homeRecommendations" class="home-row"></div></div>
         <div class="home-section"><div class="home-section-head"><h2>Популярное сейчас</h2><span>Топ хиты</span></div><div id="homePopular" class="home-row"></div></div>
         <div class="home-section" id="artistsSection" style="display:none"><div class="home-section-head"><h2>Исполнители</h2><span>По поиску</span></div><div id="homeArtists" class="home-row artist-row"></div></div>
         <div class="home-section"><div class="home-section-head"><h2>Альбомы</h2><span>Из поиска</span></div><div id="homeAlbums" class="home-row"></div></div>
@@ -175,8 +176,10 @@
               <button id="similarBtn" class="inline-control">Similar</button>
             </div>
             <div class="player-bottom-row">
-              <div class="queue-box"><div class="queue-title">Queue</div><div id="queueContent" class="queue-content">Queue is empty</div></div>
-              <div class="similar-box"><div class="queue-title">NOVA</div><div class="queue-content">No tracks yet</div></div>
+              <div class="queue-box queue-box-wide">
+                <div class="queue-head"><div class="queue-title">Очередь</div><button id="queueClear" class="queue-clear" title="Очистить">Очистить</button></div>
+                <div id="queueContent" class="queue-content queue-list">Очередь пуста</div>
+              </div>
             </div>
           </div>
         </div>
@@ -202,15 +205,15 @@
       <button id="miniFavorite" class="mini-btn" title="В избранное"><svg viewBox="0 0 24 24"><path d="M20.8 8.8c0 5.2-8.8 10.7-8.8 10.7S3.2 14 3.2 8.8A4.7 4.7 0 0 1 12 6.3a4.7 4.7 0 0 1 8.8 2.5z"/></svg></button>
       <button id="miniLyrics" class="mini-btn" title="Текст песни"><svg viewBox="0 0 24 24"><path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg></button>
       <button id="miniExpand" class="mini-btn" title="Развернуть плеер"><svg viewBox="0 0 24 24"><path d="M4 14v6h6"/><path d="M20 10V4h-6"/><path d="m4 20 6-6"/><path d="m20 4-6 6"/></svg></button>
-      <div class="mini-volume" title="Громкость"><svg class="mini-vol-icon" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18 6a8 8 0 0 1 0 12"/></svg><input id="volumeMini" class="mini-volume-range" type="range" min="0" max="100" value="100" aria-label="Громкость"></div>
+      <div class="mini-volume" title="Громкость"><svg id="miniVolIcon" class="mini-vol-icon" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18 6a8 8 0 0 1 0 12"/></svg><input id="volumeMini" class="mini-volume-range" type="range" min="0" max="100" value="100" aria-label="Громкость"></div>
     </div>
   </div>
 
-  <div id="infoDrawer" class="info-drawer" aria-hidden="true"><div class="info-head"><strong>Сейчас играет</strong><button id="infoDrawerClose" class="info-close">×</button></div><div class="info-body"><img id="infoCover" class="info-cover" alt=""><div id="infoTitle" class="info-title">Ничего не играет</div><div id="infoArtist" class="info-artist">—</div><div id="infoMeta" class="info-meta">—</div><div class="info-actions"><button id="infoFavorite" class="info-action">В избранное</button><button id="infoQueue" class="info-action">Очередь</button></div></div></div>
+  <div id="infoDrawer" class="info-drawer" aria-hidden="true"><div class="info-head"><strong>Сейчас играет</strong><button id="infoDrawerClose" class="info-close">×</button></div><div class="info-body"><img id="infoCover" class="info-cover" alt=""><div id="infoTitle" class="info-title">Ничего не играет</div><div id="infoArtist" class="info-artist">—</div><div id="infoMeta" class="info-meta">—</div><div class="info-actions"><button id="infoFavorite" class="info-action">В избранное</button><button id="infoQueue" class="info-action">В очередь</button></div></div></div>
 
   <div id="lyricsModal" class="lyrics-modal" aria-hidden="true"><div class="lyrics-panel"><div class="lyrics-top"><div class="lyrics-title"><strong id="lyricsTrackTitle">Текст</strong><span id="lyricsTrackArtist">—</span></div><button id="lyricsClose" class="lyrics-close">×</button></div><div id="lyricsBody" class="lyrics-body"><div class="lyrics-loading">Загрузка текста…</div></div></div></div>
 
-  <div id="songInfoModal" class="song-info-modal" aria-hidden="true"><div class="song-info-card"><button id="songInfoClose" class="song-info-close">×</button><img id="songInfoCover" class="song-info-cover" alt=""><div id="songInfoSource" class="song-source">CATALOG</div><h2 id="songInfoTitle" class="song-info-title">—</h2><div id="songInfoArtist" class="song-info-artist">—</div><div class="song-info-rows"><div class="song-info-row"><span>Альбом</span><div id="songInfoAlbum" class="song-info-value">—</div></div><div class="song-info-row"><span>Длительность</span><div id="songInfoMeta" class="song-info-value">—</div></div></div><div class="song-info-actions"><button id="songInfoPlay" class="song-info-btn primary">▶ Воспроизвести</button><button id="songInfoFavorite" class="song-info-btn">♡ В избранное</button><button id="songInfoDownload" class="song-info-btn">↓ Скачать</button></div></div></div>
+  <div id="songInfoModal" class="song-info-modal" aria-hidden="true"><div class="song-info-card"><button id="songInfoClose" class="song-info-close">×</button><img id="songInfoCover" class="song-info-cover" alt=""><div id="songInfoSource" class="song-source">CATALOG</div><h2 id="songInfoTitle" class="song-info-title">—</h2><div id="songInfoArtist" class="song-info-artist">—</div><div class="song-info-rows"><div class="song-info-row"><span>Альбом</span><div id="songInfoAlbum" class="song-info-value">—</div></div><div class="song-info-row"><span>Длительность</span><div id="songInfoMeta" class="song-info-value">—</div></div></div><div class="song-info-actions"><button id="songInfoPlay" class="song-info-btn primary">▶ Воспроизвести</button><button id="songInfoFavorite" class="song-info-btn">♡ В избранное</button><button id="songInfoQueue" class="song-info-btn">+ В очередь</button><button id="songInfoDownload" class="song-info-btn">↓ Скачать</button></div></div></div>
 
   <div id="equalizerModal" class="eq-modal" aria-hidden="true"><div class="eq-card"><button id="equalizerClose" class="song-info-close">×</button><h2 class="eq-title">Эквалайзер</h2><p class="eq-sub">5-полосный · Web Audio API</p><div class="eq-presets" id="equalizerPresets"></div><div class="eq-bands" id="equalizerBands"></div></div></div>
 
