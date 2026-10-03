@@ -39,6 +39,7 @@ const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '';
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
 const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || '';
 
+// Кэши
 const resolveCache = new Map();
 const searchCache = new Map();
 const lyricsCache = new Map();
@@ -46,7 +47,8 @@ const artistCache = new Map();
 const RESOLVE_TTL = 30 * 60 * 1000;
 const SEARCH_TTL = 2 * 60 * 1000;
 const LYRICS_TTL = 24 * 60 * 60 * 1000;
-const ARTIST_TTL = 20 * 60 * 1000;
+const ARTIST_TTL = 10 * 60 * 1000;
+const ARTIST_EMPTY_TTL = 60 * 1000;   // пустой ответ кэшируем всего минуту
 
 setInterval(() => {
   const now = Date.now();
@@ -54,7 +56,7 @@ setInterval(() => {
   for (const [k, v] of searchCache) if (now - v.time > SEARCH_TTL) { searchCache.delete(k); cleaned++; }
   for (const [k, v] of resolveCache) if (now - v.time > RESOLVE_TTL) { resolveCache.delete(k); cleaned++; }
   for (const [k, v] of lyricsCache) if (now - v.time > LYRICS_TTL) { lyricsCache.delete(k); cleaned++; }
-  for (const [k, v] of artistCache) if (now - v.time > ARTIST_TTL) { artistCache.delete(k); cleaned++; }
+  for (const [k, v] of artistCache) if (now - v.time > (v.ttl || ARTIST_TTL)) { artistCache.delete(k); cleaned++; }
   if (cleaned) console.log('[cache] cleaned ' + cleaned);
 }, 5 * 60 * 1000);
 
@@ -105,7 +107,6 @@ function shuffle(arr){
   for (let i = a.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
   return a;
 }
-
 const NOISE_PATTERNS = [
   /\bspeed\s*up\b/i, /\bsped\s*up\b/i, /\bslowed\s*\+?\s*reverb\b/i,
   /\bnightcore\s*version\b/i, /\bkaraoke\s*version\b/i, /\binstrumental\s*version\b/i,
@@ -275,7 +276,7 @@ api.get('/api/recently-played', authMiddleware, (req, res) => {
 });
 
 // ============================================================
-// ВНЕШНИЕ API
+// HELPERS
 // ============================================================
 function jsonFetch(url, options = {}, timeoutMs = 12000){
   const controller = new AbortController();
@@ -314,7 +315,7 @@ async function searchItunes(q, opts = {}){
       id: 'itunes_' + String(tr.trackId || ''),
       title: tr.trackName || 'Untitled',
       artist: tr.artistName || '',
-      artistId: '',
+      artistId: String(tr.artistId || ''),
       cover: (tr.artworkUrl100 || '').replace('100x100', '600x600'),
       album: tr.collectionName || '',
       albumId: '',
@@ -493,7 +494,7 @@ api.get('/api/health', async (req, res) => {
   ]);
   const allOk = Object.values(checks).every(c => c.ok);
   res.status(allOk ? 200 : 207).json({
-    ok: allOk, service: 'NOVA', version: '3.4.0',
+    ok: allOk, service: 'NOVA', version: '3.5.0',
     uptime: Math.round(process.uptime()),
     users: Object.keys(db.users).length,
     caches: { search: searchCache.size, resolve: resolveCache.size, lyrics: lyricsCache.size, artist: artistCache.size },
@@ -505,7 +506,7 @@ api.get('/api/health', async (req, res) => {
 // ПОПУЛЯРНОЕ
 // ============================================================
 api.get('/api/popular', async (req, res) => {
-  const cacheKey = 'popular:v7';
+  const cacheKey = 'popular:v8';
   const cached = searchCache.get(cacheKey);
   if (cached && Date.now() - cached.time < 10 * 60 * 1000) return res.json(cached.data);
 
@@ -602,7 +603,7 @@ api.get('/api/recommendations', authMiddleware, async (req, res) => {
 
   const topArtists = [...artistCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([a]) => a);
   if (!topArtists.length){
-    const cached = searchCache.get('popular:v7');
+    const cached = searchCache.get('popular:v8');
     if (cached && cached.data?.results?.length) return res.json({ results: shuffle(cached.data.results).slice(0, 30), based_on: [] });
     return res.json({ results: [], based_on: [] });
   }
@@ -619,7 +620,7 @@ api.get('/api/recommendations', authMiddleware, async (req, res) => {
       for (const x of strict){
         const t = {
           id: 'itunes_' + String(x.trackId || ''), title: x.trackName || 'Untitled',
-          artist: x.artistName || '', artistId: '',
+          artist: x.artistName || '', artistId: String(x.artistId || ''),
           cover: (x.artworkUrl100 || '').replace('100x100', '600x600'),
           album: x.collectionName || '', albumId: '', preview: '',
           source: 'CATALOG', sourceUrl: x.trackViewUrl || '', downloadable: false,
@@ -647,17 +648,15 @@ api.get('/api/audio/resolve', rateLimit, async (req, res) => {
   const legacyQ = String(req.query.q || '').trim();
   const q = legacyQ || [title, artist].filter(Boolean).join(' ');
   if (!q && !title && !artist) return res.status(400).json({ ok: false, error: 'empty' });
-
   const ck = normalizeSearchText(q) + (duration > 0 ? '|d' + Math.round(duration) : '');
   const cached = resolveCache.get(ck);
   if (cached && Date.now() - cached.time < RESOLVE_TTL) return res.json({ ok: true, ...cached.data, cached: true });
-
   try {
     const r = await findPlayableAudio({ title, artist, duration, full: q });
     resolveCache.set(ck, { time: Date.now(), data: r });
     res.json({ ok: true, ...r });
   } catch (e){
-    console.log('[resolve] failed for', JSON.stringify({ title, artist, duration }), '→', e.message);
+    console.log('[resolve] failed', JSON.stringify({ title, artist }), '→', e.message);
     res.status(502).json({ ok: false, error: e.message });
   }
 });
@@ -670,12 +669,11 @@ api.post('/api/audio/prefetch', async (req, res) => {
       try {
         const title = String(t.title || '').trim();
         const artist = String(t.artist || '').trim();
-        const duration = Number(t.duration || 0);
         const q = [title, artist].filter(Boolean).join(' ');
         if (!q) continue;
-        const ck = normalizeSearchText(q) + (duration > 0 ? '|d' + Math.round(duration) : '');
+        const ck = normalizeSearchText(q);
         if (resolveCache.has(ck) && Date.now() - resolveCache.get(ck).time < RESOLVE_TTL) continue;
-        const r = await findPlayableAudio({ title, artist, duration, full: q });
+        const r = await findPlayableAudio({ title, artist, duration: Number(t.duration || 0), full: q });
         resolveCache.set(ck, { time: Date.now(), data: r });
       } catch (e){}
     }
@@ -695,7 +693,6 @@ api.get('/api/audio/youtube/:videoId', async (req, res) => {
   const vid = String(req.params.videoId || '');
   if (!/^[A-Za-z0-9_-]{6,20}$/.test(vid)) return res.status(400).end();
   const range = req.headers.range || '';
-
   for (const base of INVIDIOUS_INSTANCES){
     try {
       const url = base + '/latest_version?id=' + vid + '&itag=140&local=true';
@@ -720,7 +717,6 @@ api.get('/api/audio/youtube/:videoId', async (req, res) => {
       return;
     } catch (e){}
   }
-
   for (const base of PIPED_STREAM_INSTANCES){
     try {
       const r = await fetch(base + '/streams/' + vid, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
@@ -789,7 +785,74 @@ api.get('/api/download/audius/:id', async (req, res) => {
 });
 
 // ============================================================
-// АРТИСТ — ЖЁСТКИЙ, БЕЗ МУСОРА
+// iTunes ARTIST LOOKUP — ЖЁСТКО ПО ARTISTID, ЧУЖИХ НЕ ВОЗЬМЁТ
+// ============================================================
+async function findItunesArtistId(name){
+  try {
+    const params = new URLSearchParams({ term: name, media: 'music', entity: 'musicArtist', limit: '5' });
+    const r = await jsonFetch('https://itunes.apple.com/search?' + params.toString(), {}, 8000);
+    const d = await readJson(r);
+    const items = Array.isArray(d?.results) ? d.results : [];
+    if (!items.length) return null;
+    const norm = normalizeSearchText(name);
+    const exact = items.find(x => normalizeSearchText(x.artistName) === norm);
+    const best = exact || items[0];
+    return best ? String(best.artistId) : null;
+  } catch (e){ return null; }
+}
+
+async function itunesArtistTracks(itunesArtistId, limit = 50){
+  try {
+    const params = new URLSearchParams({ id: itunesArtistId, entity: 'song', limit: String(limit) });
+    const r = await jsonFetch('https://itunes.apple.com/lookup?' + params.toString(), {}, 9000);
+    const d = await readJson(r);
+    const items = Array.isArray(d?.results) ? d.results : [];
+    const tracks = items.filter(x => x.wrapperType === 'track' || x.kind === 'song');
+    return tracks.map(tr => ({
+      id: 'itunes_' + String(tr.trackId || ''),
+      title: tr.trackName || 'Untitled',
+      title_short: tr.trackName || 'Untitled',
+      duration: Number(tr.trackTimeMillis || 0) / 1000,
+      rank: 0,
+      preview: '',
+      artist: { id: '', name: tr.artistName || '' },
+      album: {
+        id: 'itunes_album_' + (tr.collectionId || ''),
+        title: tr.collectionName || '',
+        cover_medium: (tr.artworkUrl100 || '').replace('100x100', '500x500')
+      },
+      provider: 'itunes',
+      source: 'CATALOG'
+    }));
+  } catch (e){ return []; }
+}
+
+async function itunesArtistAlbums(itunesArtistId, limit = 100){
+  try {
+    const params = new URLSearchParams({ id: itunesArtistId, entity: 'album', limit: String(limit) });
+    const r = await jsonFetch('https://itunes.apple.com/lookup?' + params.toString(), {}, 9000);
+    const d = await readJson(r);
+    const items = Array.isArray(d?.results) ? d.results : [];
+    const albums = items.filter(x => x.wrapperType === 'collection' && x.collectionType !== 'TV Season');
+    return albums
+      .filter(x => !isBadAlbumTitle(x.collectionName))
+      .map(x => ({
+        id: 'itunes_album_' + x.collectionId,
+        title: x.collectionName,
+        cover_medium: (x.artworkUrl100 || '').replace('100x100', '500x500'),
+        cover_big: (x.artworkUrl100 || '').replace('100x100', '1000x1000'),
+        cover_xl: (x.artworkUrl100 || '').replace('100x100', '1000x1000'),
+        record_type: Number(x.trackCount || 0) <= 3 ? 'single' : 'album',
+        nb_tracks: Number(x.trackCount || 0),
+        release_date: x.releaseDate || '',
+        artist: { id: '', name: x.artistName || '' },
+        provider: 'itunes'
+      }));
+  } catch (e){ return []; }
+}
+
+// ============================================================
+// АРТИСТ
 // ============================================================
 api.get('/api/artist-search', rateLimit, async (req, res) => {
   const q = String(req.query.q || '').trim();
@@ -815,100 +878,118 @@ api.get('/api/artist-search', rateLimit, async (req, res) => {
 
 api.get('/api/artist/:id', rateLimit, async (req, res) => {
   const id = encodeURIComponent(req.params.id);
-  const cacheKey = 'artist:v4:' + id;
+  const cacheKey = 'artist:v5:' + id;
   const cached = artistCache.get(cacheKey);
-  if (cached && Date.now() - cached.time < ARTIST_TTL){
-    return res.json(cached.data);
-  }
+  if (cached && Date.now() - cached.time < (cached.ttl || ARTIST_TTL)) return res.json(cached.data);
 
   try {
-    const a = await jsonFetch('https://api.deezer.com/artist/' + id, {}, 7000);
+    // 1. Профиль из Deezer
+    const a = await jsonFetch('https://api.deezer.com/artist/' + id, {}, 8000);
     const artist = await readJson(a);
     if (!artist || !artist.id) return res.status(404).json({ error: 'not found' });
     const artistName = artist.name || '';
-    const normArtist = normalizeSearchText(artistName);
     const artistIdStr = String(artist.id);
 
     let top_tracks = [];
     let tracksSource = 'none';
     const seenTrackIds = new Set();
-
     const pushStrict = (arr, src) => {
-      if (!Array.isArray(arr)) return;
+      if (!Array.isArray(arr)) return 0;
+      let added = 0;
       for (const tr of arr){
         if (!tr || !tr.id) continue;
         if (seenTrackIds.has(String(tr.id))) continue;
-        // ЖЁСТКАЯ ПРОВЕРКА: если у трека есть artist.id — он должен совпадать
         if (tr.artist && tr.artist.id && String(tr.artist.id) !== artistIdStr) continue;
         if (isNoiseDeezerTrack(tr)) continue;
         seenTrackIds.add(String(tr.id));
         top_tracks.push(tr);
+        added++;
       }
-      if (top_tracks.length) tracksSource = src;
+      if (added) tracksSource = src;
+      return added;
     };
 
-    // Стратегия 1: /artist/{id}/top
-    if (!top_tracks.length){
-      try {
-        const t = await jsonFetch('https://api.deezer.com/artist/' + id + '/top?limit=100', {}, 7000);
-        const top = await readJson(t);
-        const rawTracks = Array.isArray(top.data) ? top.data : [];
-        const before = top_tracks.length;
-        pushStrict(rawTracks, 'deezer-top');
-        console.log('[artist]', id, '(' + normArtist + ') strat1 top: raw=' + rawTracks.length + ' kept=' + (top_tracks.length - before));
-      } catch (e){ console.log('[artist]', id, 'strat1 fail:', e.message); }
-    }
+    // === Стратегия 1: /artist/{id}/top ===
+    try {
+      const t = await jsonFetch('https://api.deezer.com/artist/' + id + '/top?limit=100', {}, 8000);
+      const top = await readJson(t);
+      const raw = Array.isArray(top.data) ? top.data : [];
+      const added = pushStrict(raw, 'deezer-top');
+      console.log('[artist]', id, 'strat1 top raw=' + raw.length + ' added=' + added);
+    } catch (e){ console.log('[artist]', id, 'strat1 fail:', e.message); }
 
-    // Стратегия 2: /search/track?q=artist:"Name"
+    // === Стратегия 2: /search/track ===
     if (!top_tracks.length && artistName){
       try {
         const params = new URLSearchParams({ q: 'artist:"' + artistName + '"', limit: '100' });
         const r = await jsonFetch('https://api.deezer.com/search/track?' + params.toString(), {}, 9000);
         const d = await readJson(r);
         const items = Array.isArray(d?.data) ? d.data : [];
-        const before = top_tracks.length;
-        pushStrict(items, 'deezer-search');
-        console.log('[artist]', id, '(' + normArtist + ') strat2 search: raw=' + items.length + ' kept=' + (top_tracks.length - before));
+        const added = pushStrict(items, 'deezer-search');
+        console.log('[artist]', id, 'strat2 search raw=' + items.length + ' added=' + added);
       } catch (e){ console.log('[artist]', id, 'strat2 fail:', e.message); }
     }
 
-    // Стратегия 3: собрать треки из альбомов (самая стабильная с облака)
+    // === Стратегия 3: треки из альбомов Deezer ===
     if (!top_tracks.length){
       try {
-        const al = await jsonFetch('https://api.deezer.com/artist/' + id + '/albums?limit=100', {}, 8000);
+        const al = await jsonFetch('https://api.deezer.com/artist/' + id + '/albums?limit=100', {}, 9000);
         const albums = await readJson(al);
-        const allAlbums = Array.isArray(albums.data) ? albums.data : [];
-        const ownedAlbums = allAlbums.filter(x => isOwnedAlbum(x, artistIdStr, artistName) && !isBadAlbumTitle(x.title));
-        console.log('[artist]', id, '(' + normArtist + ') strat3 albums:', allAlbums.length, '→ owned:', ownedAlbums.length);
-        const topAlbums = ownedAlbums.slice(0, 10);
-        const before = top_tracks.length;
-        await Promise.allSettled(topAlbums.map(async alb => {
+        const all = Array.isArray(albums.data) ? albums.data : [];
+        const owned = all.filter(x => isOwnedAlbum(x, artistIdStr, artistName) && !isBadAlbumTitle(x.title));
+        console.log('[artist]', id, 'strat3 albums raw=' + all.length + ' owned=' + owned.length);
+        const top10 = owned.slice(0, 10);
+        await Promise.allSettled(top10.map(async alb => {
           try {
-            const rr = await jsonFetch('https://api.deezer.com/album/' + encodeURIComponent(alb.id) + '/tracks?limit=100', {}, 7000);
+            const rr = await jsonFetch('https://api.deezer.com/album/' + encodeURIComponent(alb.id) + '/tracks?limit=100', {}, 8000);
             const dd = await readJson(rr);
             const trs = Array.isArray(dd?.data) ? dd.data : [];
             pushStrict(trs, 'deezer-albums');
           } catch (e){}
         }));
-        console.log('[artist]', id, '(' + normArtist + ') strat3 kept=' + (top_tracks.length - before));
       } catch (e){ console.log('[artist]', id, 'strat3 fail:', e.message); }
     }
 
-    // Финальная сортировка и обрезка
-    top_tracks = top_tracks
-      .sort((a, b) => (b.rank || b.position || 0) - (a.rank || a.position || 0))
-      .slice(0, 60);
+    // === Стратегия 4: iTunes через lookup по artistId (жёстко) ===
+    // Используется ТОЛЬКО если Deezer вернул 0. iTunes lookup даёт треки,
+    // привязанные к конкретному iTunes artistId — не может вернуть чужого.
+    if (!top_tracks.length && artistName){
+      try {
+        const itunesArtistId = await findItunesArtistId(artistName);
+        if (itunesArtistId){
+          const itunesTracks = await itunesArtistTracks(itunesArtistId, 50);
+          console.log('[artist]', id, 'strat4 iTunes lookup artistId=' + itunesArtistId + ' → tracks=' + itunesTracks.length);
+          if (itunesTracks.length){
+            top_tracks = itunesTracks;
+            tracksSource = 'itunes-lookup';
+          }
+        }
+      } catch (e){ console.log('[artist]', id, 'strat4 fail:', e.message); }
+    }
 
-    console.log('[artist]', id, '(' + normArtist + ') FINAL tracks:', top_tracks.length, 'source:', tracksSource);
+    // Сортировка и обрезка
+    top_tracks = top_tracks.sort((a, b) => (b.rank || b.popularity || 0) - (a.rank || a.popularity || 0)).slice(0, 60);
 
-    // Альбомы
+    // === АЛЬБОМЫ ===
     let owned = [];
     try {
-      const al = await jsonFetch('https://api.deezer.com/artist/' + id + '/albums?limit=200', {}, 7000);
+      const al = await jsonFetch('https://api.deezer.com/artist/' + id + '/albums?limit=200', {}, 8000);
       const albums = await readJson(al);
       const all = Array.isArray(albums.data) ? albums.data : [];
       owned = all.filter(x => isOwnedAlbum(x, artistIdStr, artistName) && !isBadAlbumTitle(x.title));
     } catch (e){ console.log('[artist]', id, 'albums fetch fail:', e.message); }
+
+    // Если Deezer-альбомов нет — берём iTunes
+    if (!owned.length && artistName){
+      try {
+        const itunesArtistId = await findItunesArtistId(artistName);
+        if (itunesArtistId){
+          const itunesAlbums = await itunesArtistAlbums(itunesArtistId, 100);
+          console.log('[artist]', id, 'iTunes albums artistId=' + itunesArtistId + ' → ' + itunesAlbums.length);
+          owned = itunesAlbums;
+        }
+      } catch (e){}
+    }
 
     const payload = {
       artist,
@@ -917,7 +998,12 @@ api.get('/api/artist/:id', rateLimit, async (req, res) => {
       albums: owned.filter(x => x.record_type !== 'single'),
       singles: owned.filter(x => x.record_type === 'single')
     };
-    artistCache.set(cacheKey, { time: Date.now(), data: payload });
+
+    // Пустой результат кэшируем на минуту, не на 10
+    const isEmpty = top_tracks.length === 0 && owned.length === 0;
+    artistCache.set(cacheKey, { time: Date.now(), data: payload, ttl: isEmpty ? ARTIST_EMPTY_TTL : ARTIST_TTL });
+
+    console.log('[artist]', id, '(' + artistName + ') FINAL tracks=' + top_tracks.length + ' albums=' + owned.length + ' source=' + tracksSource);
     res.json(payload);
   } catch (e){
     res.status(502).json({ error: e.message });
@@ -979,7 +1065,6 @@ api.get('/api/lyrics', async (req, res) => {
   if (cached && Date.now() - cached.time < LYRICS_TTL) return res.json(cached.data);
   const cleanTrack = track.replace(/\([^)]*\)/g, '').replace(/\[[^\]]*\]/g, '').replace(/\b(official|audio|video|lyric|lyrics|visualizer|hd|hq|explicit)\b/gi, '').replace(/\s+/g, ' ').trim();
   const send = (payload) => { lyricsCache.set(cacheKey, { time: Date.now(), data: payload }); res.json(payload); };
-
   try {
     const params = new URLSearchParams({ track_name: cleanTrack });
     if (artist) params.set('artist_name', artist);
@@ -991,7 +1076,6 @@ api.get('/api/lyrics', async (req, res) => {
       if (d.plainLyrics || d.syncedLyrics) return send({ found: true, plainLyrics: d.plainLyrics || '', syncedLyrics: d.syncedLyrics || '', source: 'LRCLIB' });
     }
   } catch (e){}
-
   try {
     const q = [cleanTrack, artist].filter(Boolean).join(' ');
     const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q }).toString(), { headers: { 'User-Agent': 'NOVA/2.0' } }, 10000);
@@ -1005,7 +1089,6 @@ api.get('/api/lyrics', async (req, res) => {
       }
     }
   } catch (e){}
-
   try {
     const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q: cleanTrack }).toString(), { headers: { 'User-Agent': 'NOVA/2.0' } }, 10000);
     if (r.ok){
@@ -1016,7 +1099,6 @@ api.get('/api/lyrics', async (req, res) => {
       }
     }
   } catch (e){}
-
   send({ found: false });
 });
 
@@ -1033,7 +1115,6 @@ function cleanTitleForSearch(title){
   t = t.replace(/\s+/g, ' ').trim();
   return t;
 }
-
 function titleSimilarity(wantTitle, gotTitle){
   const w = normalizeSearchText(wantTitle), g = normalizeSearchText(gotTitle);
   if (!w) return 1; if (!g) return 0;
@@ -1070,10 +1151,8 @@ function checkMatch(candidate, wantTitle, wantArtist, wantDuration, { strict = t
     const dur = Number(candidate.duration || 0);
     if (dur > 0){
       if (dur > 600) return 0;
-      if (wantDuration > 30){
-        const ratio = dur / wantDuration;
-        if (ratio < 0.5 || ratio > 1.8) return 0;
-      } else if (dur < 30) return 0;
+      if (wantDuration > 30){ const ratio = dur / wantDuration; if (ratio < 0.5 || ratio > 1.8) return 0; }
+      else if (dur < 30) return 0;
     }
     if (!strict){
       const t = String(candidate.title || '').toLowerCase();
@@ -1087,7 +1166,6 @@ function checkMatch(candidate, wantTitle, wantArtist, wantDuration, { strict = t
   }
   return aSim * 0.4 + tSim * 0.6;
 }
-
 async function findPlayableAudio({ title, artist, duration, full }){
   const cleanTitle = cleanTitleForSearch(title);
   const cleanArtist = cleanTitleForSearch(artist);
@@ -1138,13 +1216,11 @@ async function findPlayableAudio({ title, artist, duration, full }){
           const best = scored[0].c;
           const vid = String(best.id).replace('yt_', '');
           if (!/^[A-Za-z0-9_-]{6,20}$/.test(vid)) continue;
-          console.log('[resolve] hit YT', strict ? '(strict)' : '(soft)', ':', best.title, '| ch:', best.channel);
           return { provider: 'youtube', streamUrl: '/api/audio/youtube/' + encodeURIComponent(vid), videoId: vid, title: best.title, duration: best.duration };
         }
       } catch (e){}
     }
   }
-
   throw new Error('no matching track');
 }
 
@@ -1161,7 +1237,6 @@ api.use((err, req, res, next) => {
   if (res.headersSent) return next(err);
   res.status(500).json({ ok: false, error: err.message || 'internal' });
 });
-
 function startServer(options = {}){
   const port = Number(options.port || PORT);
   const host = options.host || HOST;
@@ -1171,17 +1246,12 @@ function startServer(options = {}){
       console.log('[NOVA] listening on http://' + host + ':' + port);
       console.log('[NOVA] DB at ' + DB_PATH);
       console.log('[NOVA] users: ' + Object.keys(db.users).length);
-      if (IS_PROD && !process.env.DATA_DIR){
-        console.warn('[NOVA] WARNING: DATA_DIR not set — DB reset on restart!');
-      }
+      if (IS_PROD && !process.env.DATA_DIR) console.warn('[NOVA] WARNING: DATA_DIR not set — DB reset on restart!');
       console.log('============================================================');
       resolve(server);
     });
     server.once('error', reject);
   });
 }
-
-if (require.main === module){
-  startServer().catch(e => { console.error('[fatal]', e); process.exit(1); });
-}
+if (require.main === module){ startServer().catch(e => { console.error('[fatal]', e); process.exit(1); }); }
 module.exports = { api, startServer };
