@@ -82,9 +82,7 @@
     if (!ytIframe || !ytIframe.contentWindow) return;
     try {
       ytIframe.contentWindow.postMessage(JSON.stringify({
-        event: 'command',
-        func: func,
-        args: args || []
+        event: 'command', func: func, args: args || []
       }), '*');
     } catch (_){}
   }
@@ -132,17 +130,8 @@
       iframe.setAttribute('allow', 'autoplay; encrypted-media');
       iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:#000;';
       iframe.src = 'https://www.youtube.com/embed/' + encodeURIComponent(videoId)
-        + '?autoplay=1'
-        + '&enablejsapi=1'
-        + '&controls=0'
-        + '&modestbranding=1'
-        + '&rel=0'
-        + '&iv_load_policy=3'
-        + '&playsinline=1'
-        + '&fs=0'
-        + '&disablekb=1'
-        + '&cc_load_policy=0'
-        + '&hl=en'
+        + '?autoplay=1&enablejsapi=1&controls=0&modestbranding=1&rel=0'
+        + '&iv_load_policy=3&playsinline=1&fs=0&disablekb=1&cc_load_policy=0&hl=en'
         + '&origin=' + encodeURIComponent(location.origin);
 
       let resolved = false;
@@ -161,7 +150,6 @@
 
       wrap.appendChild(iframe);
       ytIframe = iframe;
-
       setTimeout(() => finish(), 3000);
       setTimeout(() => {
         try { iframe.contentWindow.postMessage(JSON.stringify({event:'listening', id:'nova'}), '*'); } catch (_){}
@@ -572,12 +560,17 @@
 
   async function playTrack(index, opts = {}){
     if (!Number.isInteger(index) || index < 0 || index >= state.tracks.length) return;
-    const isSame = (index === state.currentIndex) && state.currentTrack;
+    const track = state.tracks[index];
+
+    // Сравниваем трек по trackKey, а не по индексу,
+    // потому что список state.tracks мог поменяться после нового поиска.
+    const isSame = state.currentTrack && (trackKey(track) === trackKey(state.currentTrack));
     const isPlayingOrPaused = (state.playState === 'playing' || state.playState === 'paused' || state.playState === 'buffering');
     if (isSame && isPlayingOrPaused && !opts.force){ openSongInfo(state.currentTrack); return; }
 
-    const track = state.tracks[index];
-    state.currentIndex = index; state.currentTrack = track; state.playState = 'loading';
+    state.currentIndex = index;
+    state.currentTrack = track;
+    state.playState = 'loading';
 
     if (el.progress){ el.progress.value = 0; el.progress.style.setProperty('--progress', '0%'); }
     if (el.miniProgress){ el.miniProgress.value = 0; el.miniProgress.style.setProperty('--progress', '0%'); }
@@ -740,7 +733,6 @@
     el.nowArtist.onclick = () => showArtist(t.artistId || '', t.artist || '');
     el.nowTitle.classList.add('inline-link');
     el.nowTitle.onclick = () => openSongInfo(t);
-    // Обложка ВСЕГДА показывается (даже для YouTube-трека)
     el.bigCover.style.display = '';
     if (coverFor(t)) el.bigCover.src = coverFor(t); else el.bigCover.removeAttribute('src');
     updateQueue(); updatePlayButtons();
@@ -800,22 +792,68 @@
     el.artistHeroImage.removeAttribute('src');
     el.artistTracks.innerHTML = '<div class="empty">Загрузка…</div>';
     el.artistAlbums.innerHTML = ''; el.artistSingles.innerHTML = '';
-    if (!id){ el.artistTracks.innerHTML = '<div class="empty">Нет данных.</div>'; return; }
+    if (!name && !id){
+      el.artistTracks.innerHTML = '<div class="empty">Нет данных.</div>';
+      return;
+    }
+
     try {
-      const r = await fetch(apiBase() + '/api/artist/' + encodeURIComponent(id));
+      let artistId = id;
+      let artistPicture = '';
+
+      // Если нет Deezer-ID — ищем по имени
+      if (!artistId && name){
+        try {
+          const sr = await fetch(apiBase() + '/api/artist-search?q=' + encodeURIComponent(name));
+          const sd = await sr.json();
+          if (sr.ok && sd && sd.id){
+            artistId = sd.id;
+            artistPicture = sd.picture || '';
+            console.log('[artist] found by name:', name, '→', artistId, '(', sd.name, ')');
+          }
+        } catch (e){ console.warn('[artist-search]', e.message); }
+      }
+
+      if (!artistId){
+        el.artistHeroName.textContent = name || 'Исполнитель';
+        if (artistPicture) el.artistHeroImage.src = artistPicture;
+        el.artistTracks.innerHTML = '<div class="empty">Не удалось найти этого артиста в каталоге.</div>';
+        return;
+      }
+
+      const r = await fetch(apiBase() + '/api/artist/' + encodeURIComponent(artistId));
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'unavailable');
+
       el.artistHeroName.textContent = d.artist?.name || name || 'Исполнитель';
-      if (d.artist?.picture_xl || d.artist?.picture_big) el.artistHeroImage.src = d.artist.picture_xl || d.artist.picture_big;
+      const pic = d.artist?.picture_xl || d.artist?.picture_big || artistPicture;
+      if (pic) el.artistHeroImage.src = pic;
+
       renderList(el.artistTracks, (d.top_tracks || []).map(normalizeTrack));
+
       const albums = (d.albums || []).filter(x => x.type !== 'single');
       el.artistAlbums.innerHTML = '';
-      albums.forEach(a => el.artistAlbums.appendChild(makeHomeAlbumCard({ id: String(a.id), albumId: String(a.id), title: a.title, artist: d.artist?.name || name, cover: a.cover_xl || a.cover_big || a.cover_medium || '' })));
+      if (!albums.length) el.artistAlbums.innerHTML = '<div class="empty" style="grid-column:1/-1"><div>Альбомов нет</div></div>';
+      albums.forEach(a => el.artistAlbums.appendChild(makeHomeAlbumCard({
+        id: String(a.id), albumId: String(a.id),
+        title: a.title, artist: d.artist?.name || name,
+        cover: a.cover_xl || a.cover_big || a.cover_medium || ''
+      })));
+
       const singles = d.singles || [];
       el.artistSingles.innerHTML = '';
-      singles.forEach(a => el.artistSingles.appendChild(makeHomeAlbumCard({ id: String(a.id), albumId: String(a.id), title: a.title, artist: d.artist?.name || name, cover: a.cover_xl || a.cover_big || a.cover_medium || '' })));
-    } catch (e){ el.artistTracks.innerHTML = '<div class="empty">Не удалось загрузить.</div>'; }
+      if (!singles.length) el.artistSingles.innerHTML = '<div class="empty" style="grid-column:1/-1"><div>Синглов нет</div></div>';
+      singles.forEach(a => el.artistSingles.appendChild(makeHomeAlbumCard({
+        id: String(a.id), albumId: String(a.id),
+        title: a.title, artist: d.artist?.name || name,
+        cover: a.cover_xl || a.cover_big || a.cover_medium || ''
+      })));
+    } catch (e){
+      console.error('[showArtist]', e);
+      el.artistTracks.innerHTML = '<div class="empty">Не удалось загрузить данные артиста.</div>';
+    }
   }
+
   async function showAlbum(id){
     showView('album');
     el.albumTracks.innerHTML = '<div class="empty">Загрузка…</div>';
