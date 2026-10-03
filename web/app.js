@@ -1,11 +1,5 @@
 // ============================================================
-// web/app.js — клиент NOVA
-// ============================================================
-// Ключевые моменты:
-//  1) Пауза YouTube: агрессивный watchdog каждые 200 мс, защита от
-//     самопроизвольного возобновления.
-//  2) Курсор: рисованный в стиле «точка + плавное кольцо».
-//  3) Очередь, рекомендации, отчёт о прослушивании.
+// web/app.js — клиент NOVA (часть A)
 // ============================================================
 (function(){
   'use strict';
@@ -111,61 +105,59 @@
   let authMode = 'login';
 
   // ============================================================
-  // КУРСОР — КРАСИВАЯ ТОЧКА + ПЛАВНОЕ КОЛЬЦО
+  // КУРСОР — оптимизированный, без backdrop-filter
   // ============================================================
   (function initCustomCursor(){
-    // Только на устройствах с мышью
     if (window.matchMedia && !window.matchMedia('(pointer: fine)').matches) return;
 
-    // Создаём элементы
     const dot = document.createElement('div');
     dot.className = 'nova-cursor-dot';
     const ring = document.createElement('div');
     ring.className = 'nova-cursor-ring';
-    const trail = document.createElement('div');
-    trail.className = 'nova-cursor-trail';
-    document.body.appendChild(trail);
     document.body.appendChild(ring);
     document.body.appendChild(dot);
 
-    let mouseX = window.innerWidth / 2, mouseY = window.innerHeight / 2;
-    let ringX = mouseX, ringY = mouseY;
-    let trailX = mouseX, trailY = mouseY;
+    let mouseX = window.innerWidth / 2;
+    let mouseY = window.innerHeight / 2;
+    let ringX = mouseX;
+    let ringY = mouseY;
+    let dotX = mouseX;
+    let dotY = mouseY;
     let visible = false;
 
     function show(){
       if (visible) return;
       visible = true;
-      dot.classList.add('visible'); ring.classList.add('visible'); trail.classList.add('visible');
+      dot.classList.add('visible');
+      ring.classList.add('visible');
     }
     function hide(){
       visible = false;
-      dot.classList.remove('visible'); ring.classList.remove('visible'); trail.classList.remove('visible');
+      dot.classList.remove('visible');
+      ring.classList.remove('visible');
     }
 
     window.addEventListener('mousemove', (e) => {
-      mouseX = e.clientX; mouseY = e.clientY;
-      dot.style.transform = 'translate3d(' + (mouseX - 3) + 'px, ' + (mouseY - 3) + 'px, 0)';
-      show();
-    });
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+      if (!visible) show();
+    }, { passive: true });
     window.addEventListener('mouseleave', hide);
     window.addEventListener('mouseenter', show);
     window.addEventListener('blur', hide);
     document.addEventListener('mouseleave', hide);
 
-    // Плавное догоняющее движение
     function tick(){
-      ringX += (mouseX - ringX) * 0.18;
-      ringY += (mouseY - ringY) * 0.18;
-      trailX += (mouseX - trailX) * 0.08;
-      trailY += (mouseY - trailY) * 0.08;
-      ring.style.transform = 'translate3d(' + (ringX - 18) + 'px, ' + (ringY - 18) + 'px, 0)';
-      trail.style.transform = 'translate3d(' + (trailX - 26) + 'px, ' + (trailY - 26) + 'px, 0)';
+      dotX += (mouseX - dotX) * 0.75;
+      dotY += (mouseY - dotY) * 0.75;
+      ringX += (mouseX - ringX) * 0.22;
+      ringY += (mouseY - ringY) * 0.22;
+      dot.style.transform = 'translate3d(' + (dotX - 3) + 'px,' + (dotY - 3) + 'px,0)';
+      ring.style.transform = 'translate3d(' + (ringX - 18) + 'px,' + (ringY - 18) + 'px,0)';
       requestAnimationFrame(tick);
     }
     requestAnimationFrame(tick);
 
-    // Ховер на интерактивных элементах
     function isInteractive(target){
       if (!target || !target.closest) return false;
       return !!target.closest('button, a, input, textarea, select, .card, .home-mini-card, .list-row, .nav-btn, .queue-row, .suggestion, .eq-preset, .accent-preset, .bg-preset, .song-info-btn, .settings-action, .login-tab');
@@ -178,19 +170,22 @@
     document.addEventListener('mouseover', (e) => {
       const t = e.target;
       if (isTextInput(t)){
-        ring.classList.add('typing'); ring.classList.remove('hover'); dot.classList.remove('hover');
+        ring.classList.add('typing');
+        ring.classList.remove('hover');
+        dot.classList.remove('hover');
       } else if (isInteractive(t)){
-        ring.classList.add('hover'); ring.classList.remove('typing'); dot.classList.add('hover');
+        ring.classList.add('hover');
+        ring.classList.remove('typing');
+        dot.classList.add('hover');
       } else {
-        ring.classList.remove('hover', 'typing'); dot.classList.remove('hover');
+        ring.classList.remove('hover', 'typing');
+        dot.classList.remove('hover');
       }
     });
 
-    // Клик — анимация сжатия
     document.addEventListener('mousedown', () => { dot.classList.add('click'); ring.classList.add('click'); });
     document.addEventListener('mouseup', () => { dot.classList.remove('click'); ring.classList.remove('click'); });
 
-    // Скрываем системный курсор
     document.documentElement.classList.add('nova-custom-cursor');
   })();
 
@@ -220,7 +215,6 @@
     } catch (_){ return false; }
   }
   function ytForcePause(){
-    // Многоуровневая пауза
     userPausedIntent = true;
     for (let i = 0; i < 8; i++){
       setTimeout(() => { if (userPausedIntent) ytSendCommand('pauseVideo'); }, i * 60);
@@ -237,7 +231,6 @@
     ytPauseWatchdog = setInterval(() => {
       if (!ytIframe || !ytCurrentVideo){ ytStopPauseWatchdog(); return; }
       if (!userPausedIntent){ ytStopPauseWatchdog(); return; }
-      // Глушим
       ytSendCommand('pauseVideo');
       if (state.playState === 'playing'){ state.playState = 'paused'; updatePlayButtons(); }
     }, 200);
@@ -254,7 +247,6 @@
     if (data.event === 'onStateChange'){
       const s = data.info;
       if (s === 1){
-        // Если пользователь намеренно поставил паузу — немедленно глушим
         if (userPausedIntent){
           ytSendCommand('pauseVideo');
           state.playState = 'paused';
@@ -277,7 +269,6 @@
     }
   });
 
-  // Защита при возврате на вкладку
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) return;
     if (userPausedIntent && ytIframe && ytCurrentVideo){
@@ -308,7 +299,6 @@
       const iframe = document.createElement('iframe');
       iframe.setAttribute('allow', 'autoplay; encrypted-media');
       iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:#000;';
-      // autoplay=0 — стартуем только по команде
       iframe.src = 'https://www.youtube.com/embed/' + encodeURIComponent(videoId) +
         '?autoplay=0&enablejsapi=1&controls=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&fs=0&disablekb=1&cc_load_policy=0&hl=en&origin=' +
         encodeURIComponent(location.origin);
@@ -758,8 +748,7 @@
     });
     try { fetch(apiBase() + '/api/audio/prefetch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tracks }) }).catch(() => {}); } catch (_) {}
   }
-
-  function renderHome(){
+    function renderHome(){
     const recent = state.history.slice(0, 8);
     el.homeContinue.innerHTML = '';
     if (!recent.length) el.homeContinue.innerHTML = '<div class="empty" style="grid-column:1/-1"><div>Начни слушать музыку</div></div>';
@@ -930,9 +919,6 @@
     await playUrl(url, myId);
   }
 
-  // ============================================================
-  // QUEUE
-  // ============================================================
   function addToQueue(track){
     if (!track) return;
     const k = trackKey(track);
@@ -967,9 +953,6 @@
     });
   }
 
-  // ============================================================
-  // REPORT + RECOMMENDATIONS
-  // ============================================================
   function reportTrackPlay(track){
     if (!track || !state.user || !authToken) return;
     apiAuth('/api/track-play', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(track) }).catch(() => {});
@@ -984,9 +967,6 @@
     } catch (_){ state.recommendations = []; }
   }
 
-  // ============================================================
-  // PLAY TRACK
-  // ============================================================
   async function playTrack(index, opts = {}){
     if (!Number.isInteger(index) || index < 0 || index >= state.tracks.length) return;
     const track = state.tracks[index];
@@ -1054,33 +1034,19 @@
     }
   }
 
-  // ============================================================
-  // PLAY / PAUSE
-  // ============================================================
   function playCurrentOrFirst(){
     initAudioGraph();
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().then(() => applyEq()).catch(() => {});
-
-    // YouTube
     if (ytIframe && ytCurrentVideo){
       const isCurrentlyPlaying = (state.playState === 'playing' && !userPausedIntent);
       if (isCurrentlyPlaying){
-        // === ПАУЗА ===
-        state.playState = 'paused';
-        updatePlayButtons();
-        ytForcePause();
+        state.playState = 'paused'; updatePlayButtons(); ytForcePause();
       } else {
-        // === PLAY ===
-        userPausedIntent = false;
-        ytStopPauseWatchdog();
-        state.playState = 'playing';
-        updatePlayButtons();
-        ytPlay();
+        userPausedIntent = false; ytStopPauseWatchdog();
+        state.playState = 'playing'; updatePlayButtons(); ytPlay();
       }
       return;
     }
-
-    // HTML5 audio
     if (state.currentTrack){
       if (state.playState === 'loading') return;
       if (el.audio.paused){
@@ -1090,9 +1056,7 @@
           fadeGain.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 0.15);
         }
         el.audio.play().then(() => { state.playState = 'playing'; updatePlayButtons(); }).catch(() => playTrack(state.currentIndex, { force: true }));
-      } else {
-        el.audio.pause(); state.playState = 'paused'; updatePlayButtons();
-      }
+      } else { el.audio.pause(); state.playState = 'paused'; updatePlayButtons(); }
       return;
     }
     if (state.tracks.length) playTrack(0);
@@ -1312,7 +1276,6 @@
       const totalReleases = (d.albums?.length || 0) + (d.singles?.length || 0);
       if (totalReleases) meta.push('<span>💿 ' + totalReleases + ' релизов</span>');
       el.artistHeroMeta.innerHTML = meta.join('');
-
       const allTracks = (d.top_tracks || []).map(normalizeTrack).filter(Boolean);
       const INITIAL = 5;
       let expanded = false;
@@ -1435,9 +1398,6 @@
   function closeLyrics(){ el.lyricsModal.classList.remove('open'); el.lyricsModal.setAttribute('aria-hidden', 'true'); }
   function findSimilar(){ if (!state.currentTrack){ notify('Сначала включи трек'); return; } const a = String(state.currentTrack.artist || '').trim(); if (!a) return; el.searchInput.value = a; showView('search'); search(a); }
 
-  // ============================================================
-  // HANDLERS
-  // ============================================================
   on(el.searchButton, 'click', () => search(el.searchInput.value));
   on(el.searchInput, 'keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); search(el.searchInput.value); } });
   document.querySelectorAll('.nav-btn').forEach(btn => { btn.addEventListener('click', () => { const v = btn.dataset.view; if (v === 'search'){ showSearchView(); el.searchInput.focus(); return; } showView(v); }); });
@@ -1550,7 +1510,6 @@
   });
   window.addEventListener('beforeunload', persist);
 
-  // Интервал прогресса + страховка от YT-самозапуска
   setInterval(() => {
     if (userPausedIntent && ytIframe && ytCurrentVideo){
       ytSendCommand('pauseVideo');
@@ -1560,7 +1519,6 @@
     if (state.currentTrack && state.playState === 'playing') updateProgress();
   }, 500);
 
-  // Стартовая инициализация
   applyTheme();
   applyToggle(el.notificationsToggle, settings.notifications);
   applyToggle(el.hotkeysToggle, settings.hotkeys);
@@ -1599,7 +1557,6 @@
   }
   startup();
 
-  // Волны
   (function initWaves(){
     const canvas = document.getElementById('waveCanvas'); if (!canvas) return;
     const ctx = canvas.getContext('2d');
