@@ -496,9 +496,16 @@ api.get('/api/search', async (req, res) => {
   res.json(payload);
 });
 
+// ============================================================
+// /api/audio/resolve — принимает title + artist (строгое совпадение)
+// ============================================================
 api.get('/api/audio/resolve', async (req, res) => {
-  const q = String(req.query.q || '').trim();
-  if (!q) return res.status(400).json({ ok: false, error: 'empty' });
+  const title = String(req.query.title || '').trim();
+  const artist = String(req.query.artist || '').trim();
+  const legacyQ = String(req.query.q || '').trim();
+  const q = legacyQ || [title, artist].filter(Boolean).join(' ');
+
+  if (!q && !title && !artist) return res.status(400).json({ ok: false, error: 'empty' });
 
   const ck = normalizeSearchText(q);
   const cached = resolveCache.get(ck);
@@ -507,7 +514,7 @@ api.get('/api/audio/resolve', async (req, res) => {
   }
 
   try {
-    const r = await findPlayableAudio(q);
+    const r = await findPlayableAudio({ title, artist, full: q });
     resolveCache.set(ck, { time: Date.now(), data: r });
     res.json({ ok: true, ...r });
   } catch (e){
@@ -516,6 +523,9 @@ api.get('/api/audio/resolve', async (req, res) => {
   }
 });
 
+// ============================================================
+// /api/audio/prefetch — обновлён под новый findPlayableAudio
+// ============================================================
 api.post('/api/audio/prefetch', async (req, res) => {
   const tracks = Array.isArray(req.body?.tracks) ? req.body.tracks.slice(0, 6) : [];
   res.json({ ok: true, count: tracks.length });
@@ -523,11 +533,13 @@ api.post('/api/audio/prefetch', async (req, res) => {
   (async () => {
     for (const t of tracks){
       try {
-        const q = [t.title, t.artist].filter(Boolean).join(' ');
+        const title = String(t.title || '').trim();
+        const artist = String(t.artist || '').trim();
+        const q = [title, artist].filter(Boolean).join(' ');
         if (!q) continue;
         const ck = normalizeSearchText(q);
         if (resolveCache.has(ck) && Date.now() - resolveCache.get(ck).time < RESOLVE_TTL) continue;
-        const r = await findPlayableAudio(q);
+        const r = await findPlayableAudio({ title, artist, full: q });
         resolveCache.set(ck, { time: Date.now(), data: r });
       } catch (e){ /* ignore */ }
     }
@@ -753,69 +765,120 @@ api.get('/api/lyrics', async (req, res) => {
 });
 
 // ============================================================
-// FIND PLAYABLE — Audius приоритет, 4 попытки, YouTube — резерв
+// FIND PLAYABLE — строгое совпадение
 // ============================================================
-async function findPlayableAudio(query){
-  const rawQuery = String(query || '').trim();
-  if (!rawQuery) throw new Error('empty query');
+function titleSimilarity(wantTitle, gotTitle){
+  const w = normalizeSearchText(wantTitle);
+  const g = normalizeSearchText(gotTitle);
+  if (!w) return 1;
+  if (!g) return 0;
 
-  const tryAudius = async (q) => {
-    try {
-      const r = await searchAudius(q);
-      const list = (r.results || []).filter(x => x.source === 'FULL' && x.id);
-      if (!list.length) return null;
-      const best = list.sort((a, b) =>
-        scoreProviderTrack(b, rawQuery) - scoreProviderTrack(a, rawQuery)
-      )[0];
-      return best?.id ? {
-        provider: 'audius',
-        streamUrl: '/api/audio/audius/' + encodeURIComponent(best.id),
-        title: best.title,
-        artist: best.artist
-      } : null;
-    } catch (_){ return null; }
-  };
+  const noise = /\b(feat|ft|featuring|prod|official|audio|video|lyrics|remix|version|edit|extended|original)\b/g;
+  const wClean = w.replace(noise, ' ').replace(/\s+/g, ' ').trim();
+  const gClean = g.replace(noise, ' ').replace(/\s+/g, ' ').trim();
 
-  // 1. Полный запрос
-  let r = await tryAudius(rawQuery);
-  if (r) return r;
+  if (wClean === gClean) return 1;
+  if (gClean.startsWith(wClean) || wClean.startsWith(gClean)) return 0.95;
+  if (gClean.includes(wClean) || wClean.includes(gClean)) return 0.9;
 
-  // 2. Обрезаем до 4 слов (обычно название трека)
-  const words = rawQuery.split(/\s+/).filter(Boolean);
-  if (words.length > 1){
-    r = await tryAudius(words.slice(0, 4).join(' '));
-    if (r) return r;
-    // 3. Обрезаем до 2 слов
-    r = await tryAudius(words.slice(0, 2).join(' '));
-    if (r) return r;
+  const wWords = wClean.split(/\s+/).filter(x => x.length > 1);
+  const gWords = gClean.split(/\s+/).filter(x => x.length > 1);
+  if (!wWords.length) return 0;
+
+  let hits = 0;
+  for (const ww of wWords){
+    if (gWords.includes(ww)) hits += 1;
+    else if (gClean.includes(ww)) hits += 0.7;
   }
+  return hits / wWords.length;
+}
 
-  // 4. Только последнее слово (часто это исполнитель)
-  if (words.length >= 2){
-    r = await tryAudius(words[words.length - 1]);
-    if (r) return r;
+function artistSimilarity(wantArtist, gotArtist){
+  const w = normalizeSearchText(wantArtist);
+  const g = normalizeSearchText(gotArtist);
+  if (!w) return 1;
+  if (!g) return 0;
+
+  if (w === g) return 1;
+  if (g.includes(w) || w.includes(g)) return 0.9;
+
+  const wWords = w.split(/\s+/).filter(x => x.length > 2);
+  if (!wWords.length) return 0;
+  let best = 0;
+  for (const ww of wWords){
+    if (g.includes(ww)) best = Math.max(best, 0.7);
   }
+  return best;
+}
 
-  // 5. Резерв — YouTube
+function checkMatch(candidate, wantTitle, wantArtist){
+  const aSim = artistSimilarity(wantArtist, candidate.artist);
+  if (aSim < 0.5) return 0;
+
+  const tSim = titleSimilarity(wantTitle, candidate.title);
+  if (tSim < 0.6) return 0;
+
+  return aSim * 0.4 + tSim * 0.6;
+}
+
+async function findPlayableAudio({ title, artist, full }){
+  const wantTitle = String(title || '').trim();
+  const wantArtist = String(artist || '').trim();
+  const fullQuery = String(full || '').trim();
+  if (!wantTitle && !wantArtist && !fullQuery) throw new Error('empty query');
+
+  const searchQuery = [wantTitle, wantArtist].filter(Boolean).join(' ').trim() || fullQuery;
+
+  // === 1. Audius со строгой проверкой ===
   try {
-    const meta = await searchYouTubeMeta(rawQuery);
-    const ys = meta.results || [];
-    if (ys.length){
-      const c = ys[0];
-      const vid = c.id.replace('yt_', '');
+    const r = await searchAudius(searchQuery);
+    const list = (r.results || []).filter(x => x.source === 'FULL' && x.id);
+    if (list.length){
+      const scored = list
+        .map(c => ({ c, s: checkMatch(c, wantTitle, wantArtist) + scoreProviderTrack(c, searchQuery) * 0.00001 }))
+        .filter(x => x.s > 0)
+        .sort((a, b) => b.s - a.s);
+
+      if (scored.length){
+        const best = scored[0].c;
+        console.log('[resolve] audius match:', best.artist, '-', best.title, '| score:', scored[0].s.toFixed(3));
+        return {
+          provider: 'audius',
+          streamUrl: '/api/audio/audius/' + encodeURIComponent(best.id),
+          title: best.title,
+          artist: best.artist
+        };
+      }
+      console.log('[resolve] audius: no match for', searchQuery, '(' + list.length + ' candidates)');
+    }
+  } catch (e){ console.warn('[resolve/audius]', e.message); }
+
+  // === 2. YouTube fallback со строгой проверкой ===
+  try {
+    const meta = await searchYouTubeMeta(searchQuery);
+    const list = (meta.results || []);
+    const scored = list
+      .map(c => ({ c, s: checkMatch(c, wantTitle, wantArtist) + scoreProviderTrack(c, searchQuery) * 0.00001 }))
+      .filter(x => x.s > 0)
+      .sort((a, b) => b.s - a.s);
+
+    if (scored.length){
+      const best = scored[0].c;
+      const vid = String(best.id).replace('yt_', '');
       if (/^[A-Za-z0-9_-]{6,20}$/.test(vid)){
+        console.log('[resolve] youtube match:', best.artist, '-', best.title);
         return {
           provider: 'youtube',
           streamUrl: '/api/audio/youtube/' + encodeURIComponent(vid),
           videoId: vid,
-          title: c.title,
-          duration: c.duration
+          title: best.title,
+          duration: best.duration
         };
       }
     }
-  } catch (_){}
+  } catch (e){ console.warn('[resolve/youtube]', e.message); }
 
-  throw new Error('no playable source');
+  throw new Error('no matching track');
 }
 
 // ============================================================
