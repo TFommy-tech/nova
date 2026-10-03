@@ -32,6 +32,13 @@
     eq: JSON.parse(store.get('nova_eq', '{"on":false,"bands":[0,0,0,0,0]}'))
   };
 
+  // === YouTube iframe state ===
+  let ytPlayer = null;
+  let ytPlayerReady = false;
+  let ytCurrentVideo = '';
+  let ytPendingResolve = null;
+  let ytPendingReject = null;
+
   function $(id){ return document.getElementById(id); }
 
   function safeEl(id){
@@ -78,6 +85,89 @@
   let searchAbort = null;
   let authMode = 'login';
   let audioCtx = null, sourceNode = null, eqFilters = null;
+
+  // ============================================================
+  // YOUTUBE IFRAME API
+  // ============================================================
+  window.onYouTubeIframeAPIReady = function(){
+    ytPlayerReady = true;
+    console.log('[yt] iframe API ready');
+    ensureYtPlayer();
+  };
+
+  function ensureYtPlayer(){
+    if (ytPlayer) return;
+    if (!ytPlayerReady) return;
+    if (!window.YT || !window.YT.Player) return;
+    const container = document.getElementById('youtubePlayer');
+    if (!container) return;
+    ytPlayer = new YT.Player('youtubePlayer', {
+      height: '1', width: '1', videoId: '',
+      playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, modestbranding: 1, playsinline: 1, origin: window.location.origin },
+      events: {
+        'onReady': () => { console.log('[yt] player ready'); },
+        'onStateChange': (e) => {
+          if (!window.YT) return;
+          if (e.data === YT.PlayerState.PLAYING){
+            if (ytPendingResolve){ const r = ytPendingResolve; ytPendingResolve = null; ytPendingReject = null; r(); }
+          }
+          if (e.data === YT.PlayerState.ENDED){
+            state.playState = 'idle';
+            if (state.repeat && ytPlayer){
+              try { ytPlayer.seekTo(0); ytPlayer.playVideo(); } catch (_){}
+              return;
+            }
+            next();
+          }
+        },
+        'onError': (e) => {
+          console.warn('[yt] error', e.data);
+          if (ytPendingReject){ const r = ytPendingReject; ytPendingResolve = null; ytPendingReject = null; r(new Error('YT error ' + e.data)); }
+        }
+      }
+    });
+  }
+
+  async function playYouTube(videoId){
+    if (!videoId) throw new Error('no video id');
+
+    if (!ytPlayer){
+      await new Promise((res, rej) => {
+        let tries = 0;
+        const t = setInterval(() => {
+          tries++;
+          if (ytPlayerReady) ensureYtPlayer();
+          if (ytPlayer){ clearInterval(t); res(); }
+          else if (tries > 60){ clearInterval(t); rej(new Error('YT API timeout')); }
+        }, 200);
+      });
+    }
+    if (!ytPlayer || typeof ytPlayer.loadVideoById !== 'function'){
+      throw new Error('YT player not ready');
+    }
+
+    ytCurrentVideo = videoId;
+    try { el.audio.pause(); } catch (_){}
+    el.audio.removeAttribute('src');
+    el.audio.load();
+
+    await new Promise((res, rej) => {
+      ytPendingResolve = res;
+      ytPendingReject = rej;
+      try {
+        ytPlayer.loadVideoById(videoId);
+        if (typeof ytPlayer.setVolume === 'function') ytPlayer.setVolume(state.volume);
+        ytPlayer.playVideo();
+      } catch (e){ rej(e); return; }
+      setTimeout(() => {
+        if (ytPendingReject){
+          const r = ytPendingReject;
+          ytPendingResolve = null; ytPendingReject = null;
+          r(new Error('YT play timeout'));
+        }
+      }, 20000);
+    });
+  }
 
   // ============================================================
   // BACKGROUND
@@ -527,7 +617,7 @@
   }
 
   // ============================================================
-  // PREFETCH (обновлено — отправляет title и artist отдельно)
+  // PREFETCH
   // ============================================================
   function prefetchTracks(tracks){
     tracks.forEach(t => {
@@ -745,6 +835,23 @@
     });
   }
 
+  async function playStream(url){
+    if (!url) throw new Error('empty url');
+
+    const ytMatch = String(url).match(/\/api\/audio\/youtube\/([A-Za-z0-9_-]{6,20})/);
+    if (ytMatch){
+      console.log('[play] using YouTube iframe for', ytMatch[1]);
+      await playYouTube(ytMatch[1]);
+      return;
+    }
+
+    if (ytPlayer && typeof ytPlayer.stopVideo === 'function'){
+      try { ytPlayer.stopVideo(); } catch (_){}
+    }
+    ytCurrentVideo = '';
+    await playUrl(url);
+  }
+
   async function playTrack(index){
     if (!Number.isInteger(index) || index < 0 || index >= state.tracks.length) return;
     const track = state.tracks[index];
@@ -787,7 +894,7 @@
     }
 
     try {
-      await playUrl(streamUrl);
+      await playStream(streamUrl);
       state.playState = 'playing';
       updatePlayButtons();
       addHistory(track);
@@ -802,6 +909,21 @@
   }
 
   function playCurrentOrFirst(){
+    // YouTube iframe управление
+    if (ytPlayer && ytCurrentVideo && state.currentTrack && state.currentTrack.provider === 'youtube'){
+      try {
+        if (state.playState === 'playing'){
+          ytPlayer.pauseVideo();
+          state.playState = 'paused';
+        } else {
+          ytPlayer.playVideo();
+          state.playState = 'playing';
+        }
+        updatePlayButtons();
+      } catch (_){}
+      return;
+    }
+
     if (state.currentTrack){
       if (state.playState === 'loading') return;
       if (el.audio.paused){
@@ -838,6 +960,21 @@
     el.audio.currentTime = el.audio.duration * (Number(el.progress.value) / 1000);
   }
   function updateProgress(){
+    // YouTube прогресс
+    if (ytPlayer && ytCurrentVideo && state.currentTrack && state.currentTrack.provider === 'youtube'){
+      try {
+        const c = ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : 0;
+        const d = ytPlayer.getDuration ? ytPlayer.getDuration() : 0;
+        if (Number.isFinite(d) && d > 0){
+          const p = Math.max(0, Math.min(100, c / d * 100));
+          el.progress.value = Math.round(p * 10);
+          el.progress.style.setProperty('--progress', p + '%');
+          el.currentTime.textContent = formatTime(c);
+          el.duration.textContent = formatTime(d);
+        }
+      } catch (_){}
+      return;
+    }
     const d = el.audio.duration;
     if (!Number.isFinite(d) || d <= 0){ el.progress.value = 0; el.progress.style.setProperty('--progress', '0%'); el.currentTime.textContent = '0:00'; el.duration.textContent = '0:00'; return; }
     const c = el.audio.currentTime || 0;
@@ -852,6 +989,9 @@
     el.audio.volume = state.volume / 100;
     el.volumeMini.value = state.volume; el.volumeLarge.value = state.volume;
     if (el.settingsVolumeValue) el.settingsVolumeValue.textContent = state.volume + '%';
+    if (ytPlayer && typeof ytPlayer.setVolume === 'function'){
+      try { ytPlayer.setVolume(state.volume); } catch (_){}
+    }
     persist();
   }
   function updateMiniPlayer(){
@@ -885,7 +1025,11 @@
     el.queueContent.innerHTML = q.map(t => '<strong>' + escapeHtml(t) + '</strong>').join('<br>');
   }
   function updatePlayButtons(){
-    const playing = !!state.currentTrack && !el.audio.paused && state.playState === 'playing';
+    const isYtPlaying = ytPlayer && ytCurrentVideo && state.currentTrack && state.currentTrack.provider === 'youtube';
+    const playing = !!state.currentTrack && (
+      (isYtPlaying && state.playState === 'playing') ||
+      (!isYtPlaying && !el.audio.paused && state.playState === 'playing')
+    );
     const loading = state.playState === 'loading';
     [el.miniPlay, el.largePlayBtn].forEach(b => { if (b) b.classList.toggle('loading', loading); });
     if (!el.miniPlayIcon || !el.largePlayIcon) return;
@@ -1105,7 +1249,7 @@
   on(el.localAudioInput, 'change', e => {
     const f = e.target.files?.[0]; if (!f) return;
     const url = URL.createObjectURL(f);
-    const track = { id: 'local_' + Date.now(), title: f.name.replace(/\.[^.]+$/, ''), artist: 'Локальный файл', source: 'LOCAL', localUrl: url, duration: 0 };
+    const track = { id: 'local_' + Date.now(), title: f.name.replace(/\.[^.]+$/, ''), artist: 'Локальный файл', source: 'LOCAL', localUrl: url, duration: 0, provider: 'local' };
     state.tracks.unshift(track); playTrack(state.tracks.indexOf(track));
   });
 
@@ -1188,6 +1332,13 @@
   });
   window.addEventListener('beforeunload', persist);
 
+  // Прогресс-бар YouTube — обновляем раз в секунду
+  setInterval(() => {
+    if (ytPlayer && ytCurrentVideo && state.currentTrack && state.currentTrack.provider === 'youtube'){
+      updateProgress();
+    }
+  }, 1000);
+
   el.volumeLarge.value = state.volume; el.volumeMini.value = state.volume;
   el.audio.volume = state.volume / 100;
   if (el.settingsVolumeValue) el.settingsVolumeValue.textContent = state.volume + '%';
@@ -1203,7 +1354,7 @@
     setTimeout(() => { if (!state.user) openLoginModal(); }, 800);
   })();
 
-  // STARTUP (без авто-запуска 'pop')
+  // STARTUP
   async function startup(){
     try {
       el.startupStatus.textContent = 'Восстанавливаем данные…';
