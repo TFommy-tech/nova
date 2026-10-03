@@ -91,54 +91,84 @@
   // ============================================================
   window.onYouTubeIframeAPIReady = function(){
     ytPlayerReady = true;
-    console.log('[yt] iframe API ready');
+    console.log('[yt] iframe API ready (callback)');
     ensureYtPlayer();
   };
 
   function ensureYtPlayer(){
     if (ytPlayer) return;
-    if (!ytPlayerReady) return;
     if (!window.YT || !window.YT.Player) return;
     const container = document.getElementById('youtubePlayer');
     if (!container) return;
-    ytPlayer = new YT.Player('youtubePlayer', {
-      height: '1', width: '1', videoId: '',
-      playerVars: { autoplay: 0, controls: 0, disablekb: 1, fs: 0, modestbranding: 1, playsinline: 1, origin: window.location.origin },
-      events: {
-        'onReady': () => { console.log('[yt] player ready'); },
-        'onStateChange': (e) => {
-          if (!window.YT) return;
-          if (e.data === YT.PlayerState.PLAYING){
-            if (ytPendingResolve){ const r = ytPendingResolve; ytPendingResolve = null; ytPendingReject = null; r(); }
-          }
-          if (e.data === YT.PlayerState.ENDED){
-            state.playState = 'idle';
-            if (state.repeat && ytPlayer){
-              try { ytPlayer.seekTo(0); ytPlayer.playVideo(); } catch (_){}
-              return;
+    try {
+      ytPlayer = new YT.Player('youtubePlayer', {
+        height: '100%', width: '100%', videoId: '',
+        playerVars: { autoplay: 0, controls: 1, disablekb: 0, fs: 0, modestbranding: 1, playsinline: 1, origin: window.location.origin, rel: 0 },
+        events: {
+          'onReady': () => { console.log('[yt] player ready'); },
+          'onStateChange': (e) => {
+            if (!window.YT) return;
+            if (e.data === YT.PlayerState.PLAYING){
+              state.playState = 'playing';
+              updatePlayButtons();
+              if (ytPendingResolve){ const r = ytPendingResolve; ytPendingResolve = null; ytPendingReject = null; r(); }
             }
-            next();
+            if (e.data === YT.PlayerState.PAUSED){
+              state.playState = 'paused';
+              updatePlayButtons();
+            }
+            if (e.data === YT.PlayerState.ENDED){
+              state.playState = 'idle';
+              if (state.repeat && ytPlayer){
+                try { ytPlayer.seekTo(0); ytPlayer.playVideo(); } catch (_){}
+                return;
+              }
+              next();
+            }
+          },
+          'onError': (e) => {
+            console.warn('[yt] error', e.data);
+            if (ytPendingReject){ const r = ytPendingReject; ytPendingResolve = null; ytPendingReject = null; r(new Error('YT error ' + e.data)); }
           }
-        },
-        'onError': (e) => {
-          console.warn('[yt] error', e.data);
-          if (ytPendingReject){ const r = ytPendingReject; ytPendingResolve = null; ytPendingReject = null; r(new Error('YT error ' + e.data)); }
         }
-      }
-    });
+      });
+    } catch (e){ console.error('[yt] ensureYtPlayer failed:', e.message); ytPlayer = null; }
   }
 
   async function playYouTube(videoId){
     if (!videoId) throw new Error('no video id');
 
+    // === ФИКС RACE CONDITION ===
+    // Если API уже успело загрузиться ДО того, как app.js повесил колбэк —
+    // onYouTubeIframeAPIReady никогда не сработает. Проверяем window.YT сами.
+    if (!ytPlayerReady && window.YT && window.YT.Player){
+      console.log('[yt] API уже загружен до app.js — инициализируем вручную');
+      ytPlayerReady = true;
+      ensureYtPlayer();
+    }
+
     if (!ytPlayer){
+      console.log('[yt] ждём загрузки YT.Player...');
       await new Promise((res, rej) => {
         let tries = 0;
         const t = setInterval(() => {
           tries++;
-          if (ytPlayerReady) ensureYtPlayer();
+          // На каждом тике проверяем window.YT напрямую — не доверяем колбэку
+          if (window.YT && window.YT.Player){
+            if (!ytPlayerReady){
+              ytPlayerReady = true;
+              console.log('[yt] API стал доступен на попытке', tries);
+            }
+            if (!ytPlayer) ensureYtPlayer();
+          }
           if (ytPlayer){ clearInterval(t); res(); }
-          else if (tries > 60){ clearInterval(t); rej(new Error('YT API timeout')); }
+          else if (tries > 100){
+            clearInterval(t);
+            console.error('[yt] YT.Player не появился за 20 секунд');
+            console.error('[yt] Проверь: window.YT =', !!window.YT, '| window.YT.Player =', !!(window.YT && window.YT.Player));
+            console.error('[yt] Проверь Console на CSP-ошибки (Refused to load...)');
+            rej(new Error('YT API timeout — блокировщик рекламы или CSP'));
+          }
         }, 200);
       });
     }
@@ -146,10 +176,16 @@
       throw new Error('YT player not ready');
     }
 
-    ytCurrentVideo = videoId;
+    // Показываем контейнер YouTube ВМЕСТО обложки
+    const ytWrap = document.getElementById('youtubePlayerWrap');
+    if (ytWrap) ytWrap.classList.add('active');
+
+    // Останавливаем <audio>
     try { el.audio.pause(); } catch (_){}
     el.audio.removeAttribute('src');
     el.audio.load();
+
+    ytCurrentVideo = videoId;
 
     await new Promise((res, rej) => {
       ytPendingResolve = res;
@@ -157,15 +193,14 @@
       try {
         ytPlayer.loadVideoById(videoId);
         if (typeof ytPlayer.setVolume === 'function') ytPlayer.setVolume(state.volume);
-        ytPlayer.playVideo();
       } catch (e){ rej(e); return; }
       setTimeout(() => {
         if (ytPendingReject){
           const r = ytPendingReject;
           ytPendingResolve = null; ytPendingReject = null;
-          r(new Error('YT play timeout'));
+          r(new Error('YouTube не запустил видео (возможно, блокировка)'));
         }
-      }, 20000);
+      }, 30000);
     });
   }
 
@@ -845,6 +880,8 @@
       return;
     }
 
+    const ytWrap = document.getElementById('youtubePlayerWrap');
+    if (ytWrap) ytWrap.classList.remove('active');
     if (ytPlayer && typeof ytPlayer.stopVideo === 'function'){
       try { ytPlayer.stopVideo(); } catch (_){}
     }
@@ -909,8 +946,7 @@
   }
 
   function playCurrentOrFirst(){
-    // YouTube iframe управление
-    if (ytPlayer && ytCurrentVideo && state.currentTrack && state.currentTrack.provider === 'youtube'){
+    if (ytPlayer && ytCurrentVideo && state.currentTrack && (state.currentTrack.provider === 'youtube' || ytCurrentVideo)){
       try {
         if (state.playState === 'playing'){
           ytPlayer.pauseVideo();
@@ -956,11 +992,19 @@
     [el.shuffleBtn, el.miniShuffle].forEach(b => { if (b) b.style.color = state.shuffle ? 'var(--accent)' : ''; });
   }
   function seekFromProgress(){
+    if (ytPlayer && ytCurrentVideo && state.currentTrack && state.currentTrack.provider === 'youtube'){
+      try {
+        const d = ytPlayer.getDuration ? ytPlayer.getDuration() : 0;
+        if (Number.isFinite(d) && d > 0){
+          ytPlayer.seekTo(d * (Number(el.progress.value) / 1000), true);
+        }
+      } catch (_){}
+      return;
+    }
     if (!Number.isFinite(el.audio.duration) || el.audio.duration <= 0) return;
     el.audio.currentTime = el.audio.duration * (Number(el.progress.value) / 1000);
   }
   function updateProgress(){
-    // YouTube прогресс
     if (ytPlayer && ytCurrentVideo && state.currentTrack && state.currentTrack.provider === 'youtube'){
       try {
         const c = ytPlayer.getCurrentTime ? ytPlayer.getCurrentTime() : 0;
@@ -1004,18 +1048,34 @@
   }
   function updatePlayer(){
     const t = state.currentTrack;
+    const ytWrap = document.getElementById('youtubePlayerWrap');
+
     if (!t){
       el.nowTitle.textContent = 'Ничего не играет'; el.nowArtist.textContent = 'Выбери трек в поиске';
       el.bigCover.removeAttribute('src'); el.duration.textContent = '0:00'; el.currentTime.textContent = '0:00';
-      el.progress.value = 0; el.progress.style.setProperty('--progress', '0%'); return;
+      el.progress.value = 0; el.progress.style.setProperty('--progress', '0%');
+      if (ytWrap) ytWrap.classList.remove('active');
+      el.bigCover.style.display = '';
+      return;
     }
+
     el.nowTitle.textContent = t.title || 'Без названия';
     el.nowArtist.textContent = t.artist || '—';
     el.nowArtist.classList.add('inline-link');
     el.nowArtist.onclick = () => showArtist(t.artistId || '', t.artist || '');
     el.nowTitle.classList.add('inline-link');
     el.nowTitle.onclick = () => openSongInfo(t);
-    if (coverFor(t)) el.bigCover.src = coverFor(t); else el.bigCover.removeAttribute('src');
+
+    const isYt = t.provider === 'youtube' || ytCurrentVideo;
+    if (isYt){
+      if (ytWrap) ytWrap.classList.add('active');
+      el.bigCover.style.display = 'none';
+    } else {
+      if (ytWrap) ytWrap.classList.remove('active');
+      el.bigCover.style.display = '';
+      if (coverFor(t)) el.bigCover.src = coverFor(t); else el.bigCover.removeAttribute('src');
+    }
+
     updateQueue(); updatePlayButtons();
   }
   function updateQueue(){
@@ -1332,7 +1392,6 @@
   });
   window.addEventListener('beforeunload', persist);
 
-  // Прогресс-бар YouTube — обновляем раз в секунду
   setInterval(() => {
     if (ytPlayer && ytCurrentVideo && state.currentTrack && state.currentTrack.provider === 'youtube'){
       updateProgress();
