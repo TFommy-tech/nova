@@ -63,6 +63,66 @@ function isNoiseTrack(item){
 }
 
 // ============================================================
+// ФИЛЬТР МУСОРНЫХ ТРЕКОВ (для страницы артиста Deezer)
+// ============================================================
+const NOISE_PATTERNS = [
+  /\bspeed\s*up\b/i,
+  /\bsped\s*up\b/i,
+  /\bslowed\b/i,
+  /\bslow\s*\+\s*reverb\b/i,
+  /\bnightcore\b/i,
+  /\bremix\b/i,
+  /\bbootleg\b/i,
+  /\bmash[\s-]?up\b/i,
+  /\bkaraoke\b/i,
+  /\binstrumental\b/i,
+  /\b8\s*d\s*audio\b/i,
+  /\b8d\b/i,
+  /\breverb\b/i,
+  /\bbass\s*boost(ed)?\b/i,
+  /\bcover\s*by\b/i,
+  /\bcover\s*version\b/i,
+  /\bnightcore\s*version\b/i,
+  /\bradio\s*edit\b/i,
+  /\bextended\s*(mix|version|edit)\b/i,
+  /\bvip\s*mix\b/i,
+  /\bdj\s*mix\b/i,
+  /\brework\b/i,
+  /\brefix\b/i,
+  /\btype\s*beat\b/i,
+  /\bmade\s*famous\s*by\b/i,
+  /\bin\s*the\s*style\s*of\b/i,
+  /\btribute\s*to\b/i,
+  /\bparody\b/i,
+  /\bflip\b/i,
+  /\btechno\s*remix\b/i,
+  /\bclub\s*mix\b/i,
+  /\bdance\s*remix\b/i,
+];
+
+function isNoiseDeezerTrack(t, artistId){
+  if (!t) return true;
+  const title = String(t.title_short || t.title || '');
+  const version = String(t.title_version || '');
+  const combined = title + ' ' + version;
+
+  // 1. Мусорные слова (speed up, remix, slowed и т.д.)
+  for (const p of NOISE_PATTERNS){
+    if (p.test(combined)) return true;
+  }
+
+  // 2. Трек должен принадлежать этому артисту
+  if (artistId && t.artist && t.artist.id){
+    if (String(t.artist.id) !== String(artistId)) return true;
+  }
+
+  // 3. Пустое или невалидное название
+  if (!title.trim()) return true;
+
+  return false;
+}
+
+// ============================================================
 // LOCAL AUTH
 // ============================================================
 function hashPassword(password, salt){ return crypto.scryptSync(password, salt, 64).toString('hex'); }
@@ -749,19 +809,38 @@ api.get('/api/artist-search', async (req, res) => {
   }
 });
 
+// ============================================================
+// ARTIST — с фильтром мусорных треков
+// ============================================================
 api.get('/api/artist/:id', async (req, res) => {
   const id = encodeURIComponent(req.params.id);
   try {
     const [a, t, al] = await Promise.all([
       jsonFetch('https://api.deezer.com/artist/' + id, {}, 7000),
-      jsonFetch('https://api.deezer.com/artist/' + id + '/top?limit=30', {}, 7000),
+      jsonFetch('https://api.deezer.com/artist/' + id + '/top?limit=100', {}, 7000),
       jsonFetch('https://api.deezer.com/artist/' + id + '/albums?limit=100', {}, 7000)
     ]);
     const artist = await readJson(a);
     const top = await readJson(t);
     const albums = await readJson(al);
+
+    const rawTracks = Array.isArray(top.data) ? top.data : [];
+    console.log('[artist]', id, 'raw top tracks:', rawTracks.length);
+
+    // Фильтр: убираем speed up, remix, slowed, чужих артистов
+    const filtered = rawTracks.filter(tr => !isNoiseDeezerTrack(tr, id));
+    console.log('[artist]', id, 'after filter:', filtered.length);
+
+    // Сортируем по популярности (rank в Deezer)
+    filtered.sort((a, b) => (b.rank || 0) - (a.rank || 0));
+
     const all = Array.isArray(albums.data) ? albums.data : [];
-    res.json({ artist, top_tracks: top.data || [], albums: all.filter(x => x.record_type !== 'single'), singles: all.filter(x => x.record_type === 'single') });
+    res.json({
+      artist,
+      top_tracks: filtered,
+      albums: all.filter(x => x.record_type !== 'single'),
+      singles: all.filter(x => x.record_type === 'single')
+    });
   } catch (e){ res.status(502).json({ error: e.message }); }
 });
 
