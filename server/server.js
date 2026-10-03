@@ -61,16 +61,22 @@ function isNoiseTrack(item){
   return false;
 }
 
+// ============================================================
+// ФИЛЬТР МУСОРНЫХ ТРЕКОВ Deezer — ОСЛАБЛЕН
+// ============================================================
+// Только самые очевидные "не-оригиналы"
 const NOISE_PATTERNS = [
-  /\bspeed\s*up\b/i, /\bsped\s*up\b/i, /\bslowed\b/i, /\bslow\s*\+\s*reverb\b/i,
-  /\bnightcore\b/i, /\bremix\b/i, /\bbootleg\b/i, /\bmash[\s-]?up\b/i,
-  /\bkaraoke\b/i, /\binstrumental\b/i, /\b8\s*d\s*audio\b/i, /\b8d\b/i,
-  /\breverb\b/i, /\bbass\s*boost(ed)?\b/i, /\bcover\s*by\b/i, /\bcover\s*version\b/i,
-  /\bnightcore\s*version\b/i, /\bradio\s*edit\b/i, /\bextended\s*(mix|version|edit)\b/i,
-  /\bvip\s*mix\b/i, /\bdj\s*mix\b/i, /\brework\b/i, /\brefix\b/i,
-  /\btype\s*beat\b/i, /\bmade\s*famous\s*by\b/i, /\bin\s*the\s*style\s*of\b/i,
-  /\btribute\s*to\b/i, /\bparody\b/i, /\bflip\b/i, /\btechno\s*remix\b/i,
-  /\bclub\s*mix\b/i, /\bdance\s*remix\b/i,
+  /\bspeed\s*up\b/i,
+  /\bsped\s*up\b/i,
+  /\bslowed\s*\+?\s*reverb\b/i,
+  /\bnightcore\s*version\b/i,
+  /\bkaraoke\s*version\b/i,
+  /\binstrumental\s*version\b/i,
+  /\b8\s*d\s*audio\b/i,
+  /\btype\s*beat\b/i,
+  /\bmade\s*famous\s*by\b/i,
+  /\bin\s*the\s*style\s*of\b/i,
+  /\btribute\s*to\b/i,
 ];
 
 function isNoiseDeezerTrack(t, artistId){
@@ -78,11 +84,50 @@ function isNoiseDeezerTrack(t, artistId){
   const title = String(t.title_short || t.title || '');
   const version = String(t.title_version || '');
   const combined = title + ' ' + version;
-  for (const p of NOISE_PATTERNS){ if (p.test(combined)) return true; }
-  if (artistId && t.artist && t.artist.id){
-    if (String(t.artist.id) !== String(artistId)) return true;
+
+  // Мусорные слова — только очевидные
+  for (const p of NOISE_PATTERNS){
+    if (p.test(combined)) return true;
   }
+
+  // Пустое название
   if (!title.trim()) return true;
+
+  // Проверку artist.id убираем — она слишком часто ложно срабатывает
+  // (у Deezer в треках из /top artist может быть без id или с другим id для feat.)
+
+  return false;
+}
+
+// ============================================================
+// ФИЛЬТР АЛЬБОМОВ Deezer
+// ============================================================
+function isOwnedAlbum(album, artistId, artistName){
+  if (!album) return false;
+
+  // Альбом должен принадлежать этому артисту (по id)
+  if (album.artist && album.artist.id){
+    if (String(album.artist.id) === String(artistId)) return true;
+  }
+
+  // Или по имени (если id нет)
+  if (album.artist && album.artist.name && artistName){
+    const a = String(album.artist.name).toLowerCase().trim();
+    const w = String(artistName).toLowerCase().trim();
+    if (a === w) return true;
+  }
+
+  return false;
+}
+
+const BAD_ALBUM_WORDS = [
+  'maple story', 'maplestory', 'ost', 'original soundtrack', 'game soundtrack',
+  'soundtrack', 'tribute', 'karaoke', 'various artists', 'compilation',
+];
+
+function isBadAlbumTitle(title){
+  const t = String(title || '').toLowerCase();
+  for (const w of BAD_ALBUM_WORDS) if (t.includes(w)) return true;
   return false;
 }
 
@@ -562,7 +607,9 @@ api.get('/api/artist-search', async (req, res) => {
   } catch (e){ res.status(502).json({ error: e.message }); }
 });
 
-// === ARTIST — фильтр альбомов по artist.id ===
+// ============================================================
+// ARTIST — ослабленный фильтр
+// ============================================================
 api.get('/api/artist/:id', async (req, res) => {
   const id = encodeURIComponent(req.params.id);
   try {
@@ -577,19 +624,15 @@ api.get('/api/artist/:id', async (req, res) => {
 
     const rawTracks = Array.isArray(top.data) ? top.data : [];
     const filtered = rawTracks.filter(tr => !isNoiseDeezerTrack(tr, id));
+    console.log('[artist]', id, '(' + (artist.name || '?') + ') raw tracks:', rawTracks.length, '→ filtered:', filtered.length);
     filtered.sort((a, b) => (b.rank || 0) - (a.rank || 0));
 
     const all = Array.isArray(albums.data) ? albums.data : [];
+    const artistName = artist.name || '';
 
-    // === Строгая проверка: альбом принадлежит именно этому артисту ===
-    const owned = all.filter(x => {
-      if (!x || !x.artist) return false;
-      if (String(x.artist.id) !== String(id)) return false;
-      const t = String(x.title || '').toLowerCase();
-      // Мусорные альбомы (саундтреки к играм и т.п.)
-      if (/\b(maple\s*story|ost|original\s*soundtrack|game\s*soundtrack)\b/i.test(t)) return false;
-      return true;
-    });
+    // Фильтр альбомов: владелец = артист по id ИЛИ по имени
+    const owned = all.filter(x => isOwnedAlbum(x, id, artistName) && !isBadAlbumTitle(x.title));
+    console.log('[artist]', id, 'raw albums:', all.length, '→ owned:', owned.length);
 
     res.json({
       artist,
@@ -600,7 +643,6 @@ api.get('/api/artist/:id', async (req, res) => {
   } catch (e){ res.status(502).json({ error: e.message }); }
 });
 
-// === ALBUM — тоже фильтруем треки, где артист не тот ===
 api.get('/api/album/:id', async (req, res) => {
   try {
     const r = await jsonFetch('https://api.deezer.com/album/' + encodeURIComponent(req.params.id), {}, 7000);
