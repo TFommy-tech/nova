@@ -19,6 +19,12 @@
   let authToken = store.get(API_TOKEN_KEY, '');
   document.documentElement.setAttribute('data-accent', store.get('nova_accent', 'purple'));
 
+  // === ГРОМКОСТЬ: корректное чтение (0 тоже валидное значение) ===
+  const _savedVolRaw = store.get('nova_volume', '100');
+  const _savedVolNum = Number(_savedVolRaw);
+  const initialVolume = Number.isFinite(_savedVolNum) && _savedVolNum >= 0 && _savedVolNum <= 100
+    ? Math.round(_savedVolNum) : 100;
+
   const localResolveCache = new Map();
   const LOCAL_RESOLVE_TTL = 30 * 60 * 1000;
 
@@ -26,16 +32,28 @@
     tracks: [], popularTracks: [], currentIndex: -1, currentTrack: null,
     sourceFilter: 'ALL', query: '', repeat: false, shuffle: false,
     favorites: savedFavorites, history: savedHistory,
-    volume: Number(store.get('nova_volume', '100')) || 100,
+    volume: initialVolume,
     view: 'home', playState: 'idle', searchRequest: 0,
     user: savedUser, background: { src: '' },
-    eq: JSON.parse(store.get('nova_eq', '{"on":false,"bands":[0,0,0,0,0]}'))
+    eq: (() => {
+      try {
+        const raw = JSON.parse(store.get('nova_eq', '{"on":false,"bands":[0,0,0,0,0]}'));
+        if (!raw || !Array.isArray(raw.bands) || raw.bands.length !== 5) return { on:false, bands:[0,0,0,0,0] };
+        // Если хоть одна полоса ненулевая — включаем эквалайзер
+        raw.on = raw.bands.some(x => Number(x) !== 0);
+        return raw;
+      } catch (_){ return { on:false, bands:[0,0,0,0,0] }; }
+    })()
   };
 
   let ytIframe = null;
   let ytCurrentVideo = '';
   let ytVideoDuration = 0;
   let ytVideoCurrentTime = 0;
+
+  // === RACE CONDITION: id текущего запроса на воспроизведение ===
+  let playRequestId = 0;
+  let playAbort = null;
 
   function $(id){ return document.getElementById(id); }
   function safeEl(id){
@@ -75,6 +93,9 @@
   let authMode = 'login';
   let audioCtx = null, sourceNode = null, eqFilters = null;
 
+  // ============================================================
+  // YOUTUBE
+  // ============================================================
   function ytSendCommand(func, args){
     if (!ytIframe || !ytIframe.contentWindow) return;
     try {
@@ -105,7 +126,7 @@
     }
   });
 
-  function playYouTube(videoId){
+  function playYouTube(videoId, myId){
     return new Promise((resolve, reject) => {
       const wrap = document.getElementById('youtubePlayerWrap');
       if (!wrap) return reject(new Error('no youtube wrap'));
@@ -117,6 +138,7 @@
       try { el.audio.pause(); } catch (_){}
       el.audio.removeAttribute('src');
       el.audio.load();
+
       const iframe = document.createElement('iframe');
       iframe.setAttribute('allow', 'autoplay; encrypted-media');
       iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:#000;';
@@ -124,8 +146,15 @@
         + '?autoplay=1&enablejsapi=1&controls=0&modestbranding=1&rel=0'
         + '&iv_load_policy=3&playsinline=1&fs=0&disablekb=1&cc_load_policy=0&hl=en'
         + '&origin=' + encodeURIComponent(location.origin);
+
       let resolved = false;
-      const finish = (err) => { if (resolved) return; resolved = true; if (err) reject(err); else resolve(); };
+      const finish = (err) => {
+        if (resolved) return;
+        resolved = true;
+        if (myId !== undefined && myId !== playRequestId){ reject(new Error('Aborted')); return; }
+        if (err) reject(err); else resolve();
+      };
+
       iframe.addEventListener('load', () => {
         setTimeout(() => {
           ytSendCommand('playVideo');
@@ -136,15 +165,28 @@
         setTimeout(() => finish(), 500);
       });
       iframe.addEventListener('error', () => finish(new Error('iframe load error')));
+
       wrap.appendChild(iframe);
       ytIframe = iframe;
       setTimeout(() => finish(), 3000);
       setTimeout(() => {
         try { iframe.contentWindow.postMessage(JSON.stringify({event:'listening', id:'nova'}), '*'); } catch (_){}
       }, 600);
+
+      // Проверка на отмену
+      const cancelTick = setInterval(() => {
+        if (myId !== undefined && myId !== playRequestId){
+          clearInterval(cancelTick);
+          finish(new Error('Aborted'));
+        }
+      }, 100);
+      setTimeout(() => clearInterval(cancelTick), 30000);
     });
   }
 
+  // ============================================================
+  // BACKGROUND
+  // ============================================================
   function openLocalAudioPicker(){ el.localAudioInput.click(); }
   function openBackgroundPicker(){ el.backgroundInput.click(); }
   function backgroundDb(){
@@ -177,20 +219,64 @@
   }
   function resetBackground(){ state.background.src = ''; saveBackgroundData('').catch(() => {}); applyBackground(''); notify('Фон сброшен'); }
 
+  // ============================================================
+  // EQUALIZER
+  // ============================================================
   const EQ_BANDS = [ {freq:60,type:'lowshelf',label:'60'}, {freq:230,type:'peaking',label:'230'}, {freq:910,type:'peaking',label:'910'}, {freq:3600,type:'peaking',label:'3.6k'}, {freq:14000,type:'highshelf',label:'14k'} ];
   const EQ_PRESETS = { 'Flat':[0,0,0,0,0], 'Bass Boost':[8,6,2,0,0], 'Vocal':[-2,0,3,5,3], 'Rock':[5,3,-1,3,5], 'Pop':[-1,2,4,3,-1], 'Jazz':[3,2,-2,2,4], 'Classical':[4,2,0,2,4], 'Loudness':[6,4,0,3,5] };
+
   function initAudioGraph(){
-    if (audioCtx) return;
+    if (audioCtx) {
+      // если контекст уже создан — просто resume
+      if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+      return;
+    }
     try {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       sourceNode = audioCtx.createMediaElementSource(el.audio);
-      eqFilters = EQ_BANDS.map(b => { const f = audioCtx.createBiquadFilter(); f.type = b.type; f.frequency.value = b.freq; if (b.type === 'peaking') f.Q.value = 1.0; f.gain.value = 0; return f; });
-      let prev = sourceNode; eqFilters.forEach(f => { prev.connect(f); prev = f; }); prev.connect(audioCtx.destination);
+      eqFilters = EQ_BANDS.map(b => {
+        const f = audioCtx.createBiquadFilter();
+        f.type = b.type;
+        f.frequency.value = b.freq;
+        if (b.type === 'peaking') f.Q.value = 1.0;
+        f.gain.value = 0;
+        return f;
+      });
+      let prev = sourceNode;
+      eqFilters.forEach(f => { prev.connect(f); prev = f; });
+      prev.connect(audioCtx.destination);
+      console.log('[eq] audio graph created');
     } catch (e){ console.warn('[eq]', e.message); audioCtx = null; }
   }
-  function applyEq(){ if (!eqFilters) return; const on = state.eq.on; state.eq.bands.forEach((g, i) => { if (eqFilters[i]) eqFilters[i].gain.value = on ? Number(g) : 0; }); }
-  function setEqBand(i, v){ state.eq.bands[i] = Number(v); store.set('nova_eq', JSON.stringify(state.eq)); applyEq(); }
-  function applyEqPreset(n){ const p = EQ_PRESETS[n]; if (!p) return; state.eq.bands = p.slice(); store.set('nova_eq', JSON.stringify(state.eq)); applyEq(); renderEqualizerBands(); }
+
+  function applyEq(){
+    if (!eqFilters) return;
+    const on = state.eq.on;
+    state.eq.bands.forEach((g, i) => {
+      if (eqFilters[i]) eqFilters[i].gain.value = on ? Number(g) : 0;
+    });
+  }
+
+  function setEqBand(i, v){
+    const numV = Number(v);
+    state.eq.bands[i] = numV;
+    // Авто-включение эквалайзера, если хоть одна полоса не нулевая
+    if (state.eq.bands.some(x => Number(x) !== 0)) state.eq.on = true;
+    else state.eq.on = false;
+    store.set('nova_eq', JSON.stringify(state.eq));
+    applyEq();
+  }
+
+  function applyEqPreset(n){
+    const p = EQ_PRESETS[n];
+    if (!p) return;
+    state.eq.bands = p.slice();
+    state.eq.on = p.some(x => Number(x) !== 0);
+    store.set('nova_eq', JSON.stringify(state.eq));
+    applyEq();
+    renderEqualizerBands();
+  }
+
   function renderEqualizerBands(){
     if (!el.equalizerBands) return;
     el.equalizerBands.innerHTML = '';
@@ -201,13 +287,40 @@
       el.equalizerBands.appendChild(w);
       const s = w.querySelector('input');
       s.style.setProperty('--progress', ((val + 12) / 24 * 100) + '%');
-      s.addEventListener('input', () => { const v = Number(s.value); w.querySelector('.eq-band-value').textContent = (v > 0 ? '+' : '') + v; s.style.setProperty('--progress', ((v + 12) / 24 * 100) + '%'); setEqBand(i, v); });
+      s.addEventListener('input', () => {
+        const v = Number(s.value);
+        w.querySelector('.eq-band-value').textContent = (v > 0 ? '+' : '') + v;
+        s.style.setProperty('--progress', ((v + 12) / 24 * 100) + '%');
+        setEqBand(i, v);
+      });
     });
   }
-  function renderEqualizerPresets(){ if (!el.equalizerPresets) return; el.equalizerPresets.innerHTML = ''; Object.keys(EQ_PRESETS).forEach(n => { const b = document.createElement('button'); b.className = 'eq-preset'; b.textContent = n; b.addEventListener('click', () => applyEqPreset(n)); el.equalizerPresets.appendChild(b); }); }
-  function openEqualizer(){ initAudioGraph(); if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {}); renderEqualizerBands(); renderEqualizerPresets(); el.equalizerModal.classList.add('open'); el.equalizerModal.setAttribute('aria-hidden', 'false'); }
+
+  function renderEqualizerPresets(){
+    if (!el.equalizerPresets) return;
+    el.equalizerPresets.innerHTML = '';
+    Object.keys(EQ_PRESETS).forEach(n => {
+      const b = document.createElement('button');
+      b.className = 'eq-preset';
+      b.textContent = n;
+      b.addEventListener('click', () => applyEqPreset(n));
+      el.equalizerPresets.appendChild(b);
+    });
+  }
+
+  function openEqualizer(){
+    initAudioGraph();
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+    renderEqualizerBands();
+    renderEqualizerPresets();
+    el.equalizerModal.classList.add('open');
+    el.equalizerModal.setAttribute('aria-hidden', 'false');
+  }
   function closeEqualizer(){ el.equalizerModal.classList.remove('open'); el.equalizerModal.setAttribute('aria-hidden', 'true'); }
 
+  // ============================================================
+  // USER
+  // ============================================================
   function avatarUrl(u){
     if (!u) return '';
     if (!u.avatar){ const idx = u.id && /^\d+$/.test(u.id) ? Number(BigInt(u.id) >> 22n) % 6 : 0; return 'https://cdn.discordapp.com/embed/avatars/' + idx + '.png'; }
@@ -286,6 +399,9 @@
     finally { el.authSubmit.disabled = false; if (el.authSubmitText) el.authSubmitText.textContent = authMode === 'login' ? 'Войти' : 'Создать аккаунт'; }
   }
 
+  // ============================================================
+  // HELPERS
+  // ============================================================
   function escapeHtml(v){ return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;'); }
   function formatTime(s){ if (!Number.isFinite(s) || s < 0) return '0:00'; const sec = Math.floor(s), m = Math.floor(sec / 60), r = String(sec % 60).padStart(2, '0'); return m + ':' + r; }
   function formatNumber(n){
@@ -301,7 +417,12 @@
   function isNoiseTrack(t){ const ti = normalizeSearch(t.title), ar = normalizeSearch(t.artist); if (!ti || isBadArtist(ar) || /^(unknown|без названия|null|undefined)$/i.test(ti)) return true; return /(^| )(karaoke|instrumental|reaction|parody|tribute|8d)( |$)/i.test(ti); }
   function normalizeSearch(v){ return String(v || '').toLowerCase().replace(/[’'`]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim(); }
   function notify(m){ el.toast.textContent = m; el.toast.classList.add('show'); clearTimeout(notify.timer); notify.timer = setTimeout(() => el.toast.classList.remove('show'), 2600); }
-  function persist(){ store.set('nova_favorites', JSON.stringify(state.favorites)); store.set('nova_history', JSON.stringify(state.history)); store.set('nova_volume', String(state.volume)); }
+  function persist(){
+    store.set('nova_favorites', JSON.stringify(state.favorites));
+    store.set('nova_history', JSON.stringify(state.history));
+    store.set('nova_volume', String(state.volume));
+    store.set('nova_eq', JSON.stringify(state.eq));
+  }
   function isFavorite(t){ const k = trackKey(t); return state.favorites.some(x => trackKey(x) === k); }
   function toggleFavorite(t){
     const k = trackKey(t);
@@ -545,74 +666,123 @@
   }
   function closeSongInfo(){ el.songInfoModal.classList.remove('open'); el.songInfoModal.setAttribute('aria-hidden', 'true'); }
 
-  async function playUrl(url){
-    el.audio.pause(); el.audio.removeAttribute('src'); el.audio.load();
-    el.audio.src = url; el.audio.volume = state.volume / 100; el.audio.load();
-    await new Promise((resolve, reject) => {
-      let done = false;
-      const cleanup = () => { el.audio.removeEventListener('playing', ok); el.audio.removeEventListener('error', bad); };
-      const ok = () => { if (done) return; done = true; cleanup(); resolve(); };
-      const bad = () => { if (done) return; done = true; cleanup(); reject(new Error('audio error ' + (el.audio.error?.code || ''))); };
-      el.audio.addEventListener('playing', ok, { once: true });
-      el.audio.addEventListener('error', bad, { once: true });
-      setTimeout(() => { if (done) return; done = true; cleanup(); reject(new Error('timeout')); }, 25000);
-      el.audio.play().catch(bad);
-    });
-  }
-  async function playStream(url){
-    if (!url) throw new Error('empty url');
-    const ytMatch = String(url).match(/\/api\/audio\/youtube\/([A-Za-z0-9_-]{6,20})/);
-    if (ytMatch){ console.log('[play] using YouTube for', ytMatch[1]); await playYouTube(ytMatch[1]); return; }
-    const wrap = document.getElementById('youtubePlayerWrap');
-    if (wrap) wrap.innerHTML = '';
-    ytIframe = null; ytCurrentVideo = '';
-    await playUrl(url);
-  }
-
-  async function playTrack(index, opts = {}){
-    if (!Number.isInteger(index) || index < 0 || index >= state.tracks.length) return;
-    const track = state.tracks[index];
-    const isSame = state.currentTrack && (trackKey(track) === trackKey(state.currentTrack));
-    const isPlayingOrPaused = (state.playState === 'playing' || state.playState === 'paused' || state.playState === 'buffering');
-    if (isSame && isPlayingOrPaused && !opts.force){ openSongInfo(state.currentTrack); return; }
-
-    state.currentIndex = index;
-    state.currentTrack = track;
-    state.playState = 'loading';
-
+  function resetProgressUI(){
     if (el.progress){ el.progress.value = 0; el.progress.style.setProperty('--progress', '0%'); }
     if (el.miniProgress){ el.miniProgress.value = 0; el.miniProgress.style.setProperty('--progress', '0%'); }
     if (el.currentTime) el.currentTime.textContent = '0:00';
     if (el.duration) el.duration.textContent = '0:00';
     if (el.miniTime) el.miniTime.textContent = '0:00 / 0:00';
+  }
 
+  async function playUrl(url, myId){
+    el.audio.pause(); el.audio.removeAttribute('src'); el.audio.load();
+    el.audio.src = url;
+    el.audio.volume = state.volume / 100;
+    el.audio.load();
+    await new Promise((resolve, reject) => {
+      let done = false;
+      const cleanup = () => { el.audio.removeEventListener('playing', ok); el.audio.removeEventListener('error', bad); clearInterval(cancelTick); };
+      const ok = () => { if (done) return; done = true; cleanup(); resolve(); };
+      const bad = () => { if (done) return; done = true; cleanup(); reject(new Error('audio error ' + (el.audio.error?.code || ''))); };
+      el.audio.addEventListener('playing', ok, { once: true });
+      el.audio.addEventListener('error', bad, { once: true });
+      setTimeout(() => { if (done) return; done = true; cleanup(); reject(new Error('timeout')); }, 25000);
+      // отмена если трек перебит другим
+      const cancelTick = setInterval(() => {
+        if (myId !== undefined && myId !== playRequestId){
+          if (done) return; done = true; cleanup();
+          try { el.audio.pause(); } catch(_){}
+          reject(new Error('Aborted'));
+        }
+      }, 100);
+      el.audio.play().catch(bad);
+    });
+  }
+
+  async function playStream(url, myId){
+    if (!url) throw new Error('empty url');
+    const ytMatch = String(url).match(/\/api\/audio\/youtube\/([A-Za-z0-9_-]{6,20})/);
+    if (ytMatch){ console.log('[play] using YouTube for', ytMatch[1]); await playYouTube(ytMatch[1], myId); return; }
+    const wrap = document.getElementById('youtubePlayerWrap');
+    if (wrap) wrap.innerHTML = '';
+    ytIframe = null; ytCurrentVideo = '';
+    await playUrl(url, myId);
+  }
+
+  async function playTrack(index, opts = {}){
+    if (!Number.isInteger(index) || index < 0 || index >= state.tracks.length) return;
+    const track = state.tracks[index];
+
+    // Клик по уже играющему треку → открываем инфо
+    const isSame = state.currentTrack && (trackKey(track) === trackKey(state.currentTrack));
+    const isPlayingOrPaused = (state.playState === 'playing' || state.playState === 'paused' || state.playState === 'buffering');
+    if (isSame && isPlayingOrPaused && !opts.force){ openSongInfo(state.currentTrack); return; }
+
+    // === RACE CONDITION FIX: новый запрос отменяет предыдущий ===
+    const myId = ++playRequestId;
+    if (playAbort){ try { playAbort.abort(); } catch (_){} }
+    const controller = new AbortController();
+    playAbort = controller;
+
+    // Останавливаем текущее воспроизведение
+    try { el.audio.pause(); } catch (_){}
+
+    state.currentIndex = index;
+    state.currentTrack = track;
+    state.playState = 'loading';
+
+    // Мгновенный сброс прогресс-баров и обновление UI
+    resetProgressUI();
     updateMiniPlayer(); updatePlayer(); updateInfoDrawer(); updatePlayButtons();
 
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
     const title = String(track.title || '').trim();
     const artist = String(track.artist || '').trim();
     if (!title && !artist){ state.playState = 'error'; updatePlayButtons(); return; }
+
     const ck = normalizeSearch(title + ' ' + artist);
     let streamUrl = '';
     const local = localResolveCache.get(ck);
     if (local && Date.now() - local.time < LOCAL_RESOLVE_TTL) streamUrl = local.streamUrl;
+
     if (!streamUrl){
       try {
         const params = new URLSearchParams({ title, artist });
-        const r = await fetch(apiBase() + '/api/audio/resolve?' + params.toString(), { headers: { Accept: 'application/json' } });
+        const r = await fetch(apiBase() + '/api/audio/resolve?' + params.toString(), {
+          headers: { Accept: 'application/json' },
+          signal: controller.signal
+        });
+        if (myId !== playRequestId) return; // перебит другим треком
         const d = await r.json();
-        if (r.ok && d.ok && d.streamUrl){ streamUrl = d.streamUrl; localResolveCache.set(ck, { time: Date.now(), streamUrl: d.streamUrl, provider: d.provider }); }
-      } catch (e){ console.warn('[resolve]', e.message); }
+        if (r.ok && d.ok && d.streamUrl){
+          streamUrl = d.streamUrl;
+          localResolveCache.set(ck, { time: Date.now(), streamUrl: d.streamUrl, provider: d.provider });
+        }
+      } catch (e){
+        if (e.name === 'AbortError') return;
+        console.warn('[resolve]', e.message);
+      }
     }
+
+    if (myId !== playRequestId) return;
     if (!streamUrl){ state.playState = 'error'; updatePlayButtons(); notify('Не удалось найти аудио'); return; }
+
     try {
-      await playStream(streamUrl);
-      state.playState = 'playing'; updatePlayButtons();
+      await playStream(streamUrl, myId);
+      if (myId !== playRequestId){
+        // Кто-то другой уже играет — не трогаем UI
+        return;
+      }
+      state.playState = 'playing';
+      updatePlayButtons();
       addHistory(track); renderHome(); updateInfoDrawer(); updatePlayer();
+      // Принудительная синхронизация времени
       setTimeout(updateProgress, 100);
-      setTimeout(updateProgress, 500);
-      setTimeout(updateProgress, 1500);
+      setTimeout(updateProgress, 400);
+      setTimeout(updateProgress, 1000);
     } catch (e){
+      if (myId !== playRequestId) return;
+      if (e.message === 'Aborted') return;
       console.warn('[play]', e.message);
       state.playState = 'error'; updatePlayButtons(); notify('Не удалось запустить трек');
     }
@@ -710,7 +880,8 @@
     if (el.volumeLarge) el.volumeLarge.value = state.volume;
     if (el.settingsVolumeValue) el.settingsVolumeValue.textContent = state.volume + '%';
     if (ytIframe && ytCurrentVideo){ ytSendCommand('setVolume', [state.volume]); }
-    persist();
+    // Сохраняем сразу, не полагаясь на beforeunload
+    try { store.set('nova_volume', String(state.volume)); } catch (_){}
   }
 
   function updateMiniPlayer(){
@@ -728,9 +899,12 @@
 
   function updatePlayer(){
     const t = state.currentTrack;
+    const placeholder = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 420"><rect width="420" height="420" fill="#070707"/><text x="210" y="230" fill="#333" font-size="80" text-anchor="middle">♪</text></svg>');
+
     if (!t){
       el.nowTitle.textContent = 'Ничего не играет'; el.nowArtist.textContent = 'Выбери трек в поиске';
-      el.bigCover.removeAttribute('src'); el.duration.textContent = '0:00'; el.currentTime.textContent = '0:00';
+      el.bigCover.src = placeholder;
+      el.duration.textContent = '0:00'; el.currentTime.textContent = '0:00';
       el.progress.value = 0; el.progress.style.setProperty('--progress', '0%');
       el.bigCover.style.display = '';
       return;
@@ -742,7 +916,19 @@
     el.nowTitle.classList.add('inline-link');
     el.nowTitle.onclick = () => openSongInfo(t);
     el.bigCover.style.display = '';
-    if (coverFor(t)) el.bigCover.src = coverFor(t); else el.bigCover.removeAttribute('src');
+    // Сначала показываем заглушку, потом грузим обложку — чтобы старая не мелькала
+    const newCover = coverFor(t);
+    if (newCover){
+      el.bigCover.src = placeholder;
+      el.bigCover.onload = null;
+      el.bigCover.onerror = null;
+      const img = new Image();
+      img.onload = () => { if (state.currentTrack === t) el.bigCover.src = newCover; };
+      img.onerror = () => { if (state.currentTrack === t) el.bigCover.src = placeholder; };
+      img.src = newCover;
+    } else {
+      el.bigCover.src = placeholder;
+    }
     updateQueue(); updatePlayButtons();
   }
   function updateQueue(){
@@ -1060,10 +1246,11 @@
   on(el.clearHistory, 'click', () => { state.history = []; persist(); renderLibrary(); notify('История очищена'); });
   on(el.clearFavorites, 'click', () => { state.favorites = []; persist(); renderFavorites(); notify('Избранное очищено'); });
   on(el.audio, 'loadedmetadata', updateProgress);
+  on(el.audio, 'durationchange', updateProgress);
   on(el.audio, 'timeupdate', updateProgress);
   on(el.audio, 'play', () => { state.playState = 'playing'; updatePlayButtons(); });
   on(el.audio, 'pause', () => { if (state.playState !== 'loading' && state.playState !== 'error') state.playState = 'paused'; updatePlayButtons(); });
-  on(el.audio, 'playing', () => { state.playState = 'playing'; updatePlayButtons(); });
+  on(el.audio, 'playing', () => { state.playState = 'playing'; updatePlayButtons(); updateProgress(); });
   on(el.audio, 'waiting', () => { if (state.currentTrack){ state.playState = 'buffering'; updatePlayButtons(); } });
   on(el.audio, 'ended', () => { state.playState = 'idle'; if (state.repeat){ el.audio.currentTime = 0; el.audio.play().catch(() => {}); return; } next(); });
   document.addEventListener('keydown', e => {
@@ -1084,11 +1271,18 @@
   });
   window.addEventListener('beforeunload', persist);
 
-  setInterval(() => { if (ytIframe && ytCurrentVideo){ updateProgress(); } }, 500);
+  // === Универсальный апдейт прогресса для audio + youtube ===
+  setInterval(() => {
+    if (ytIframe && ytCurrentVideo) { updateProgress(); return; }
+    if (state.currentTrack && state.playState === 'playing') updateProgress();
+  }, 500);
 
-  el.volumeLarge.value = state.volume; el.volumeMini.value = state.volume;
+  // Применяем сохранённую громкость
+  el.volumeLarge.value = state.volume;
+  el.volumeMini.value = state.volume;
   el.audio.volume = state.volume / 100;
   if (el.settingsVolumeValue) el.settingsVolumeValue.textContent = state.volume + '%';
+
   updateModeButtons(); updateMiniPlayer(); renderLibrary(); renderFavorites();
   checkApi(); setInterval(checkApi, 30000);
   el.searchInput.focus();
