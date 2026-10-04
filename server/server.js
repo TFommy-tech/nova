@@ -21,7 +21,20 @@ const WEB_DIR = path.join(__dirname, '..', 'web');
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'db.json');
 const WORKSHOP_PATH = path.join(DATA_DIR, 'workshop.json');
-const JWT_SECRET = process.env.JWT_SECRET || 'nova-dev-secret-change-me';
+// B2: статичного секрета по умолчанию больше нет — env либо случайный, сохранённый в data/jwt-secret
+const JWT_SECRET = (() => {
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+  const p = path.join(DATA_DIR, 'jwt-secret');
+  try { const s = fs.readFileSync(p, 'utf8').trim(); if (s) return s; } catch {}
+  const s = crypto.randomBytes(48).toString('hex');
+  try {
+    fs.writeFileSync(p, s, { mode: 0o600 });
+    console.warn('[auth] JWT_SECRET не задан — сгенерирован случайный (сохранён в data/jwt-secret)');
+  } catch (e) {
+    console.warn('[auth] JWT_SECRET не задан — случайный до перезапуска:', e.message);
+  }
+  return s;
+})();
 const PUBLIC_URL = (process.env.PUBLIC_URL || '').replace(/\/$/, '');
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '';
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
@@ -64,7 +77,18 @@ setInterval(() => {
 // ---------- EXPRESS ----------
 const api = express();
 api.disable('x-powered-by');
-api.use(cors({ origin: true, credentials: true }));
+// B5: не отражаем произвольные origin'ы — только loopback (Electron: 127.0.0.1:3000, dev) и CORS_ORIGINS из env.
+// Same-origin запросы (фронт с этого же сервера) CORS-заголовки не требуют — деплой не ломается.
+const EXTRA_ORIGINS = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
+api.use(cors({
+  origin(origin, cb) {
+    if (!origin) return cb(null, false);
+    let u; try { u = new URL(origin); } catch { return cb(null, false); }
+    const loopback = ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(u.hostname);
+    cb(null, loopback || EXTRA_ORIGINS.includes(origin));
+  },
+  credentials: true
+}));
 api.use(express.json({ limit: '4mb' }));
 api.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
@@ -112,6 +136,10 @@ function trackKey(t) {
   return [String(t.provider || ''), String(t.providerId || t.id || ''), String(t.title || ''), String(t.artist || '')].join('|');
 }
 function hashPassword(pw, salt) { return crypto.scryptSync(pw, salt, 64).toString('hex'); }
+function hashEquals(a, b) {
+  const ab = Buffer.from(String(a || ''), 'utf8'), bb = Buffer.from(String(b || ''), 'utf8');
+  return ab.length === bb.length && crypto.timingSafeEqual(ab, bb);
+}
 function makeErr(code, message) { const e = new Error(message); e.code = code; e.structured = true; return e; }
 function firstImage(o) {
   if (!o) return '';
@@ -135,7 +163,8 @@ async function readJson(res) {
 function authMiddleware(req, res, next) {
   const h = req.headers.authorization || '';
   if (!h.startsWith('Bearer ')) return res.status(401).json({ error: 'no token' });
-  try { req.user = jwt.verify(h.slice(7), JWT_SECRET); next(); }
+  // B3: срок действия обязателен (без ignoreExpiration), алгоритм закреплён
+  try { req.user = jwt.verify(h.slice(7), JWT_SECRET, { algorithms: ['HS256'], ignoreExpiration: false }); next(); }
   catch { res.status(401).json({ error: 'invalid token' }); }
 }
 function req_onclose(res, upstream) {
@@ -602,6 +631,21 @@ function pickBest(list, want) {
   return bestScore >= 0.55 ? best : null;
 }
 
+// B4: rate-limit на auth-ручки (in-memory, без новых зависимостей)
+const authAttempts = new Map();
+function authRateLimit(req, res, next) {
+  const ip = String(req.ip || req.socket?.remoteAddress || 'unknown');
+  const now = Date.now();
+  let e = authAttempts.get(ip);
+  if (!e || now >= e.resetAt) { e = { count: 0, resetAt: now + 15 * 60 * 1000 }; authAttempts.set(ip, e); }
+  if (++e.count > 10) return res.status(429).json({ error: 'Слишком много попыток. Повтори через 15 минут.' });
+  next();
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of authAttempts) if (now >= v.resetAt) authAttempts.delete(k);
+}, 60 * 1000);
+
 // ============================================================================
 // AUTH
 // ============================================================================
@@ -632,15 +676,15 @@ function loginHandler(req, res) {
   const user = Object.values(db.users).find(u => (u.username || '').toLowerCase() === lower);
   if (!user || user.provider !== 'local' || !user.passwordHash)
     return res.status(401).json({ error: 'Неверный логин или пароль' });
-  if (hashPassword(password, user.passwordSalt) !== user.passwordHash)
+  if (!user.passwordSalt || !hashEquals(hashPassword(password, user.passwordSalt), user.passwordHash))
     return res.status(401).json({ error: 'Неверный логин или пароль' });
   const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '30d' });
   res.json({ token, user: { id: user.id, username: user.username, avatar: user.avatar || '', provider: 'local' } });
 }
-api.post('/api/auth/register', registerHandler);
-api.post('/api/register', registerHandler);
-api.post('/api/auth/login', loginHandler);
-api.post('/api/login', loginHandler);
+api.post('/api/auth/register', authRateLimit, registerHandler);
+api.post('/api/register', authRateLimit, registerHandler);
+api.post('/api/auth/login', authRateLimit, loginHandler);
+api.post('/api/login', authRateLimit, loginHandler);
 
 api.get('/api/auth/discord', (req, res) => {
   if (!DISCORD_CLIENT_ID || !DISCORD_REDIRECT_URI)
