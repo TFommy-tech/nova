@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob: https: http:; connect-src 'self' https: http: https://www.youtube.com https://*.ytimg.com; img-src 'self' data: blob: https: http: https://*.ytimg.com https://e-cdns-images.dzcdn.net https://cdn-images.dzcdn.net https://*.audius.co; media-src 'self' data: blob: https: http:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; script-src 'self' 'unsafe-inline' https://www.youtube.com https://s.ytimg.com;">
 <title>NOVA</title>
-<link rel="icon" type="image/svg+xml" href="logo.svg">
+<link rel="icon" type="image/png" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -17,23 +17,21 @@
 <div id="backgroundShade"></div>
 <div id="ambientGlow" class="ambient-glow" aria-hidden="true"></div>
 
-<!-- ============ STARTUP ============ -->
 <div id="startupScreen" class="startup">
   <div class="startup-inner">
-    <div class="startup-mark"><img src="logo.svg" alt="" width="44" height="44"></div>
+    <div class="startup-mark"><img src="logo.png" alt="" width="44" height="44"></div>
     <div class="startup-name">NOVA</div>
     <div id="startupStatus" class="startup-status">Запускаем плеер…</div>
     <div class="startup-loader"></div>
   </div>
 </div>
 
-<!-- ============ LOGIN MODAL ============ -->
 <div id="loginModal" class="login-modal" aria-hidden="true">
   <div class="login-card">
     <button id="loginClose" class="login-close" aria-label="Закрыть">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
     </button>
-    <div class="login-logo-wrap"><img src="logo.svg" alt="NOVA" width="40" height="40"></div>
+    <div class="login-logo-wrap"><img src="logo.png" alt="NOVA" width="40" height="40"></div>
     <h2 class="login-title">Добро пожаловать</h2>
     <p class="login-sub">Войди или создай аккаунт, чтобы сохранять музыку между устройствами</p>
     <button id="loginDiscordBtn" class="login-discord" type="button">
@@ -61,11 +59,10 @@
   </div>
 </div>
 
-<!-- ============ APP ============ -->
 <div id="app">
   <aside class="sidebar" id="sidebar">
     <button class="logo" id="logoBtn" title="NOVA — главная" aria-label="NOVA">
-      <img src="logo.svg" alt="NOVA" width="26" height="26">
+      <img src="logo.png" alt="NOVA" width="26" height="26">
     </button>
 
     <nav class="nav">
@@ -145,7 +142,6 @@
     </header>
 
     <div id="viewRoot" class="view-root">
-      <!-- HOME -->
       <section id="homeView" class="view" data-view="home">
         <div class="home-view">
           <div class="home-hero">
@@ -179,7 +175,6 @@
         </div>
       </section>
 
-      <!-- SEARCH -->
       <section id="searchView" class="view hidden" data-view="search">
         <div class="search-view">
           <div class="search-filters" id="searchFilters">
@@ -199,7 +194,6 @@
         </div>
       </section>
 
-      <!-- ARTIST -->
       <section id="artistView" class="view hidden" data-view="artist">
         <div class="artist-page">
           <div class="artist-banner" id="artistBanner">
@@ -234,7 +228,6 @@
         </div>
       </section>
 
-      <!-- ALBUM -->
       <section id="albumView" class="view hidden" data-view="album">
         <div class="album-view">
           <div class="album-hero">
@@ -267,7 +260,6 @@
         </div>
       </section>
 
-      <!-- LIBRARY -->
       <section id="libraryView" class="view hidden" data-view="library">
         <div class="page-view">
           <div class="page-head">
@@ -301,7 +293,6 @@
         </div>
       </section>
 
-      <!-- FAVORITES -->
       <section id="favoritesView" class="view hidden" data-view="favorites">
         <div class="page-view">
           <div class="page-head">
@@ -322,7 +313,6 @@
         </div>
       </section>
 
-      <!-- PLAYLISTS -->
       <section id="playlistsView" class="view hidden" data-view="playlists">
         <div class="page-view">
           <div class="page-head">
@@ -338,7 +328,6 @@
         </div>
       </section>
 
-      <!-- PLAYLIST -->
       <section id="playlistView" class="view hidden" data-view="playlist">
         <div class="album-view">
           <div class="album-hero">
@@ -367,7 +356,6 @@
         </div>
       </section>
 
-      <!-- PLAYER -->
       <section id="playerView" class="view hidden" data-view="player">
         <div class="player-view">
           <div class="player-layout">
@@ -443,7 +431,6 @@
         </div>
       </section>
 
-      <!-- SETTINGS -->
       <section id="settingsView" class="view hidden" data-view="settings">
         <div class="settings-view">
           <div class="settings-shell">
@@ -586,7 +573,6 @@
     </div>
   </main>
 
-  <!-- QUEUE PANEL -->
   <aside id="queuePanel" class="queue-panel" aria-hidden="true">
     <div class="queue-panel-head">
       <div>
@@ -603,7 +589,6 @@
     <div id="queueContent" class="queue-list">Очередь пуста</div>
   </aside>
 
-  <!-- MINI PLAYER -->
   <div id="miniPlayer" class="mini-player">
     <input id="miniProgress" class="mini-progress" type="range" min="0" max="1000" value="0" aria-label="Прогресс">
     <div class="mini-track" id="miniTrackClick" title="Открыть полный плеер">
@@ -650,7 +635,6 @@
     </div>
   </div>
 
-  <!-- SONG INFO MODAL -->
   <div id="songInfoModal" class="song-info-modal" aria-hidden="true">
     <div class="song-info-card">
       <button id="songInfoClose" class="song-info-close">×</button>
@@ -671,7 +655,6 @@
     </div>
   </div>
 
-  <!-- EQUALIZER MODAL -->
   <div id="equalizerModal" class="eq-modal" aria-hidden="true">
     <div class="eq-card">
       <button id="equalizerClose" class="song-info-close">×</button>
@@ -683,7 +666,6 @@
     </div>
   </div>
 
-  <!-- PROFILE MODAL -->
   <div id="profileModal" class="profile-modal" aria-hidden="true">
     <div class="profile-card">
       <aside class="profile-side">
@@ -729,7 +711,6 @@
     </div>
   </div>
 
-  <!-- WORKSHOP MODAL -->
   <div id="workshopModal" class="workshop-modal" aria-hidden="true">
     <div class="workshop-card">
       <div class="workshop-hero">
@@ -773,7 +754,6 @@
     </div>
   </div>
 
-  <!-- WORKSHOP PUBLISH MODAL -->
   <div id="workshopPublishModal" class="song-info-modal" aria-hidden="true">
     <div class="song-info-card">
       <button id="workshopPublishClose" class="song-info-close">×</button>
@@ -793,7 +773,6 @@
     </div>
   </div>
 
-  <!-- PLAYLIST PICKER MODAL -->
   <div id="playlistPickerModal" class="song-info-modal" aria-hidden="true">
     <div class="song-info-card">
       <button id="playlistPickerClose" class="song-info-close">×</button>
@@ -803,7 +782,6 @@
     </div>
   </div>
 
-  <!-- PLAYLIST CREATE MODAL -->
   <div id="playlistCreateModal" class="song-info-modal" aria-hidden="true">
     <div class="song-info-card">
       <button id="playlistCreateClose" class="song-info-close">×</button>
