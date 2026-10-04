@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob: https: http:; connect-src 'self' https: http: https://www.youtube.com https://*.ytimg.com; img-src 'self' data: blob: https: http: https://*.ytimg.com https://i.ytimg.com https://e-cdns-images.dzcdn.net https://cdn-images.dzcdn.net; media-src 'self' data: blob: https: http:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; script-src 'self' 'unsafe-inline' https://www.youtube.com https://s.ytimg.com;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob: https: http:; connect-src 'self' https: http: https://www.youtube.com https://*.ytimg.com https://itunes.apple.com; img-src 'self' data: blob: https: http: https://*.ytimg.com https://i.ytimg.com https://e-cdns-images.dzcdn.net https://cdn-images.dzcdn.net https://is1-ssl.mzstatic.com https://is2-ssl.mzstatic.com https://is3-ssl.mzstatic.com https://is4-ssl.mzstatic.com https://is5-ssl.mzstatic.com; media-src 'self' data: blob: https: http:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; script-src 'self' 'unsafe-inline' https://www.youtube.com https://s.ytimg.com;">
 <title>NOVA</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -42,12 +42,14 @@
       <button class="nav-btn" data-view="library" title="Библиотека"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M8 7h8M8 11h8M8 15h5"/></svg></button>
       <button class="nav-btn" data-view="favorites" title="Избранное"><svg viewBox="0 0 24 24"><path d="M20.8 8.8c0 5.2-8.8 10.7-8.8 10.7S3.2 14 3.2 8.8A4.7 4.7 0 0 1 12 6.3a4.7 4.7 0 0 1 8.8 2.5z"/></svg></button>
       <button class="nav-btn" data-view="settings" title="Настройки"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z"/><path d="M19 13.6a7.8 7.8 0 0 0 0-3.2l2-1.2-2-3.4-2.1 1a8.2 8.2 0 0 0-2.8-1.6L13.8 3H10l-.3 2.2a8.2 8.2 0 0 0-2.8 1.6l-2.1-1-2 3.4 2 1.2a7.8 7.8 0 0 0 0 3.2l-2 1.2 2 3.4 2.1-1a8.2 8.2 0 0 0 2.8 1.6L10 21h3.8l.3-2.2a8.2 8.2 0 0 0 2.8-1.6l2.1 1 2-3.4z"/></svg></button>
+      <button class="nav-btn" id="openWorkshopBtn" title="Мастерская оформления"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H4z"/><path d="m4 14 5-5 4 4 3-2 4 4"/><circle cx="9" cy="8" r="1.5"/></svg></button>
       <button class="nav-btn" id="openLocalFileBtn" title="Открыть аудиофайл"><svg viewBox="0 0 24 24"><path d="M5 4h9l5 5v11H5z"/><path d="M14 4v6h5"/><path d="M12 13v4M9.5 15l2.5 2.5 2.5-2.5"/></svg></button>
     </nav>
     <div class="sidebar-spacer"></div>
     <div class="user-slot" id="userSlot">
       <button class="avatar-btn" id="avatarBtn" title="Профиль"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c.9-3.7 3.1-5.5 7-5.5s6.1 1.8 7 5.5"/></svg></button>
       <div class="user-menu" id="userMenu">
+        <button class="user-menu-action user-menu-profile" id="openProfileBtn"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.2-4 4-6 8-6s6.8 2 8 6"/></svg> Профиль</button>
         <div class="user-menu-head"><img id="userAvatar" class="user-menu-avatar" alt=""><div class="user-menu-info"><div id="userName" class="user-menu-name">Гость</div><div id="userTag" class="user-menu-tag">не авторизован</div></div></div>
         <button id="userLoginBtn" class="user-menu-action user-menu-login">Войти</button>
         <button id="userLogoutBtn" class="user-menu-action user-menu-logout" style="display:none">Выйти</button>
@@ -215,7 +217,119 @@
 
   <div id="songInfoModal" class="song-info-modal" aria-hidden="true"><div class="song-info-card"><button id="songInfoClose" class="song-info-close">×</button><img id="songInfoCover" class="song-info-cover" alt=""><div id="songInfoSource" class="song-source">CATALOG</div><h2 id="songInfoTitle" class="song-info-title">—</h2><div id="songInfoArtist" class="song-info-artist">—</div><div class="song-info-rows"><div class="song-info-row"><span>Альбом</span><div id="songInfoAlbum" class="song-info-value">—</div></div><div class="song-info-row"><span>Длительность</span><div id="songInfoMeta" class="song-info-value">—</div></div></div><div class="song-info-actions"><button id="songInfoPlay" class="song-info-btn primary">▶ Воспроизвести</button><button id="songInfoFavorite" class="song-info-btn">♡ В избранное</button><button id="songInfoQueue" class="song-info-btn">+ В очередь</button><button id="songInfoDownload" class="song-info-btn">↓ Скачать</button></div></div></div>
 
-  <div id="equalizerModal" class="eq-modal" aria-hidden="true"><div class="eq-card"><button id="equalizerClose" class="song-info-close">×</button><h2 class="eq-title">Эквалайзер</h2><p class="eq-sub">5-полосный · Web Audio API</p><div class="eq-presets" id="equalizerPresets"></div><div class="eq-bands" id="equalizerBands"></div></div></div>
+  <div id="equalizerModal" class="eq-modal" aria-hidden="true"><div class="eq-card"><button id="equalizerClose" class="song-info-close">×</button><h2 class="eq-title">Эквалайзер</h2><p class="eq-sub">5-полосный · Web Audio API</p><div id="eqNotice" class="eq-notice" style="display:none"></div><div class="eq-presets" id="equalizerPresets"></div><div class="eq-bands" id="equalizerBands"></div></div></div>
+
+  <!-- ============ МОДАЛКА: НАСТРОЙКИ ============ -->
+  <div id="settingsModal" class="settings-modal" aria-hidden="true">
+    <div class="settings-card">
+      <div class="settings-top">
+        <h2 class="settings-top-title">Настройки</h2>
+        <button id="settingsModalClose" class="settings-modal-close" aria-label="Закрыть">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div class="settings-body">
+        <aside class="settings-nav" id="settingsNav">
+          <button class="settings-tab active" data-tab="general"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/></svg><span>Общие</span></button>
+          <button class="settings-tab" data-tab="appearance"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3a9 9 0 1 0 9 9c0-1-1-2-2-2h-2a2 2 0 0 1-2-2 2 2 0 0 1 2-2h1c1 0 2-1 2-2a9 9 0 0 0-8-1z"/></svg><span>Интерфейс</span></button>
+          <button class="settings-tab" data-tab="playback"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 5v14l11-7z"/></svg><span>Воспроизведение</span></button>
+          <button class="settings-tab" data-tab="sources"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18"/></svg><span>Источники</span></button>
+          <button class="settings-tab" data-tab="privacy"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/></svg><span>Приватность</span></button>
+          <button class="settings-tab" data-tab="account"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.2-4 4-6 8-6s6.8 2 8 6"/></svg><span>Аккаунт</span></button>
+          <button class="settings-tab" data-tab="data"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span>Данные</span></button>
+        </aside>
+        <div class="settings-content" id="settingsContent"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ МОДАЛКА: ПРОФИЛЬ ============ -->
+  <div id="profileModal" class="profile-modal" aria-hidden="true">
+    <div class="profile-card">
+      <aside class="profile-side">
+        <div class="profile-avatar-big" id="profileAvatarBig">G</div>
+        <div class="profile-section-label">ПРОФИЛЬ</div>
+        <div class="profile-name" id="profileName">Гость</div>
+        <div class="profile-tag" id="profileTag">@guest</div>
+        <div class="profile-session"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18"/></svg> Сессия активна</div>
+
+        <div class="profile-premium">
+          <div class="profile-premium-title"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m3 8 4 3 5-6 5 6 4-3v10H3z"/></svg> NOVA Premium</div>
+          <div class="profile-premium-sub">Подписка и поддержка проекта</div>
+          <button class="profile-premium-btn" id="profilePremiumBtn">Купить Premium</button>
+        </div>
+
+        <div class="profile-actions">
+          <button class="profile-action" data-action="copy"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></svg> Скопировать ID</button>
+          <button class="profile-action" data-action="settings"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.5"/><path d="M19 13.6a7.8 7.8 0 0 0 0-3.2l2-1.2-2-3.4-2.1 1a8.2 8.2 0 0 0-2.8-1.6L13.8 3H10l-.3 2.2a8.2 8.2 0 0 0-2.8 1.6l-2.1-1-2 3.4 2 1.2a7.8 7.8 0 0 0 0 3.2l-2 1.2 2 3.4 2.1-1a8.2 8.2 0 0 0 2.8 1.6L10 21h3.8l.3-2.2a8.2 8.2 0 0 0 2.8-1.6l2.1 1 2-3.4z"/></svg> Настройки</button>
+          <button class="profile-action" data-action="avatar"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg> Сменить аватарку</button>
+          <button class="profile-action" data-action="password"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Сменить пароль</button>
+          <button class="profile-action danger" data-action="logout"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 4h4v16h-4"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/></svg> Выйти</button>
+        </div>
+      </aside>
+
+      <main class="profile-main">
+        <div class="profile-main-head">
+          <div class="profile-main-label">СВОДКА МЕДИАТЕКИ</div>
+          <button id="profileModalClose" class="profile-modal-close" aria-label="Закрыть">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+        <h2 class="profile-main-title" id="profileSummaryTitle">Пока чистая история</h2>
+
+        <div class="profile-stats">
+          <div class="profile-stat"><div class="profile-stat-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg></div><div class="profile-stat-num" id="statTracks">0</div><div class="profile-stat-label">Треки</div></div>
+          <div class="profile-stat"><div class="profile-stat-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div><div class="profile-stat-num" id="statArtists">0</div><div class="profile-stat-label">Артисты</div></div>
+          <div class="profile-stat"><div class="profile-stat-icon"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M3 12h18M3 18h12"/></svg></div><div class="profile-stat-num" id="statPlaylists">0</div><div class="profile-stat-label">Плейлисты</div></div>
+        </div>
+
+        <div class="profile-panels">
+          <div class="profile-panel">
+            <div class="profile-panel-head"><span>Топ артистов</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17 9 11l4 4 8-8"/></svg></div>
+            <div class="profile-panel-body" id="profileTopArtists"><div class="profile-panel-empty">Нет данных</div></div>
+          </div>
+          <div class="profile-panel">
+            <div class="profile-panel-head"><span>Топ треков</span><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 18V6l10-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg></div>
+            <div class="profile-panel-body" id="profileTopTracks"><div class="profile-panel-empty">Нет данных</div></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ============ МОДАЛКА: МАСТЕРСКАЯ ============ -->
+  <div id="workshopModal" class="workshop-modal" aria-hidden="true">
+    <div class="workshop-card">
+      <div class="workshop-hero">
+        <div class="workshop-hero-icon"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 4h16v12H4z"/><path d="m4 14 5-5 4 4 3-2 4 4"/><circle cx="9" cy="8" r="1.5"/></svg></div>
+        <div class="workshop-hero-text">
+          <div class="workshop-hero-label">NOVA PRESETS</div>
+          <h2 class="workshop-hero-title">Мастерская оформления</h2>
+          <p class="workshop-hero-sub">Публичные наборы оформления от сообщества: фоны, градиенты, обои. Скачивай и применяй одним кликом.</p>
+        </div>
+        <div class="workshop-hero-actions">
+          <button class="workshop-action" id="workshopPublish"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg> Опубликовать</button>
+          <button id="workshopModalClose" class="workshop-modal-close" aria-label="Закрыть">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="workshop-toolbar">
+        <div class="workshop-search">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="workshopSearch" type="text" placeholder="Поиск по названию, автору или тегу...">
+        </div>
+        <div class="workshop-sort">
+          <button class="workshop-sort-btn active" data-sort="popular">Популярные</button>
+          <button class="workshop-sort-btn" data-sort="new">Новые</button>
+          <button class="workshop-sort-btn" data-sort="az">А-Я</button>
+        </div>
+      </div>
+
+      <div class="workshop-grid" id="workshopGrid"></div>
+    </div>
+  </div>
 
   <div id="toast" class="toast"></div>
   <input id="backgroundInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
