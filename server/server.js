@@ -1,6 +1,5 @@
 // ============================================================
-// server/server.js — бэкенд NOVA
-// Fix: resolve теперь корректно выбирает трек нужного артиста
+// server/server.js — бэкенд NOVA (full)
 // ============================================================
 const express = require('express');
 const cors = require('cors');
@@ -76,7 +75,7 @@ function rateLimit(req, res, next){
 const api = express();
 api.disable('x-powered-by');
 api.use(cors());
-api.use(express.json({ limit: '2mb' }));
+api.use(express.json({ limit: '3mb' }));
 api.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
   const start = Date.now();
@@ -276,6 +275,151 @@ api.get('/api/recently-played', authMiddleware, (req, res) => {
 });
 
 // ============================================================
+// STATS — сводка медиатеки для профиля
+// ============================================================
+api.get('/api/stats', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const hist = db.history[userId] || [];
+  const favs = db.favorites[userId] || [];
+  const plays = db.plays[userId] || {};
+
+  const uniqueArtists = new Set();
+  const uniqueTracks = new Set();
+  for (const t of [...hist, ...favs]){
+    if (!t) continue;
+    uniqueTracks.add(trackKey(t));
+    const a = String(t.artist || '').split(/\s*(?:,|&|\bfeat\.?\b|\bft\.?\b)\s*/i)[0].trim();
+    if (a) uniqueArtists.add(a.toLowerCase());
+  }
+  for (const p of Object.values(plays)){
+    if (p && p.track){
+      uniqueTracks.add(trackKey(p.track));
+      const a = String(p.track.artist || '').split(/\s*(?:,|&|\bfeat\.?\b|\bft\.?\b)\s*/i)[0].trim();
+      if (a) uniqueArtists.add(a.toLowerCase());
+    }
+  }
+
+  const artistPlay = new Map();
+  for (const p of Object.values(plays)){
+    if (!p || !p.track) continue;
+    const a = String(p.track.artist || '').split(/\s*(?:,|&|\bfeat\.?\b|\bft\.?\b)\s*/i)[0].trim();
+    if (!a) continue;
+    artistPlay.set(a, (artistPlay.get(a) || 0) + (p.count || 1));
+  }
+  const topArtists = [...artistPlay.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([name, count]) => ({ name, count }));
+
+  const topTracksMap = new Map();
+  for (const p of Object.values(plays)){
+    if (!p || !p.track) continue;
+    const k = trackKey(p.track);
+    const cur = topTracksMap.get(k) || { track: p.track, count: 0 };
+    cur.count += (p.count || 1);
+    topTracksMap.set(k, cur);
+  }
+  const topTracks = [...topTracksMap.values()].sort((a, b) => b.count - a.count).slice(0, 8);
+
+  res.json({
+    tracks: uniqueTracks.size,
+    artists: uniqueArtists.size,
+    playlists: 0,
+    favorites: favs.length,
+    history: hist.length,
+    totalPlays: Object.values(plays).reduce((s, p) => s + (p.count || 0), 0),
+    topArtists,
+    topTracks
+  });
+});
+
+// ============================================================
+// WORKSHOP — мастерская оформления
+// ============================================================
+const WORKSHOP_FILE = path.join(DATA_DIR, 'workshop.json');
+function loadWorkshop(){
+  try { return JSON.parse(fs.readFileSync(WORKSHOP_FILE, 'utf8')); }
+  catch (_) { return { items: [] }; }
+}
+function saveWorkshop(w){
+  try { fs.writeFileSync(WORKSHOP_FILE, JSON.stringify(w, null, 2)); }
+  catch (e) { console.error('[workshop]', e.message); }
+}
+let workshop = loadWorkshop();
+if (!workshop.items) workshop.items = [];
+
+if (!workshop.items.length){
+  const now = Date.now();
+  const presets = [
+    { name: 'Midnight Rain', author: 'NovaTeam', value: 'linear-gradient(135deg,#0a0e27 0%,#1a1a3e 50%,#000 100%)', tag: 'gradient' },
+    { name: 'Sunset Drive', author: 'NovaTeam', value: 'linear-gradient(135deg,#3a0d1f 0%,#1a0a14 50%,#000 100%)', tag: 'gradient' },
+    { name: 'Deep Ocean', author: 'NovaTeam', value: 'linear-gradient(180deg,#001a2e 0%,#000 100%)', tag: 'gradient' },
+    { name: 'Forest Path', author: 'NovaTeam', value: 'linear-gradient(180deg,#0a1a0a 0%,#000 100%)', tag: 'gradient' },
+    { name: 'Purple Haze', author: 'NovaTeam', value: 'radial-gradient(circle at bottom right,#3a0a3a 0%,#000 60%)', tag: 'gradient' },
+    { name: 'Graphite', author: 'NovaTeam', value: 'linear-gradient(180deg,#101010 0%,#000 100%)', tag: 'gradient' },
+    { name: 'Cosmic Dust', author: 'NovaTeam', value: 'radial-gradient(ellipse at top,#1a1a3e 0%,#000 60%)', tag: 'gradient' },
+    { name: 'Rose Noir', author: 'NovaTeam', value: 'linear-gradient(135deg,#1a0410 0%,#3a0a1f 100%)', tag: 'gradient' }
+  ];
+  workshop.items = presets.map((p, i) => ({
+    id: 'wp_' + crypto.randomBytes(6).toString('hex'),
+    name: p.name,
+    author: p.author,
+    tag: p.tag,
+    kind: 'css',
+    value: p.value,
+    downloads: Math.floor(Math.random() * 400) + 50,
+    createdAt: now - i * 86400000
+  }));
+  saveWorkshop(workshop);
+}
+
+api.get('/api/workshop/items', (req, res) => {
+  const sort = String(req.query.sort || 'popular');
+  const q = String(req.query.q || '').trim().toLowerCase();
+  let items = workshop.items.slice();
+  if (q) items = items.filter(x =>
+    String(x.name || '').toLowerCase().includes(q) ||
+    String(x.author || '').toLowerCase().includes(q) ||
+    String(x.tag || '').toLowerCase().includes(q)
+  );
+  if (sort === 'new') items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  else if (sort === 'az') items.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+  else items.sort((a, b) => (b.downloads || 0) - (a.downloads || 0));
+  res.json({ items: items.slice(0, 60) });
+});
+
+api.post('/api/workshop/publish', authMiddleware, (req, res) => {
+  const { name, value, kind } = req.body || {};
+  if (!name || !value) return res.status(400).json({ error: 'name and value required' });
+  if (String(name).length > 60) return res.status(400).json({ error: 'name too long' });
+  if (String(value).length > 200000) return res.status(400).json({ error: 'value too large (max 200 KB)' });
+  const user = db.users[req.user.id];
+  const item = {
+    id: 'wp_' + crypto.randomBytes(6).toString('hex'),
+    name: String(name),
+    author: (user && user.username) || 'Anonymous',
+    authorId: req.user.id,
+    tag: kind === 'image' ? 'image' : 'gradient',
+    kind: kind === 'image' ? 'image' : 'css',
+    value: String(value),
+    downloads: 0,
+    createdAt: Date.now()
+  };
+  workshop.items.unshift(item);
+  if (workshop.items.length > 500) workshop.items = workshop.items.slice(0, 500);
+  saveWorkshop(workshop);
+  res.json({ ok: true, item });
+});
+
+api.post('/api/workshop/:id/download', (req, res) => {
+  const it = workshop.items.find(x => x.id === req.params.id);
+  if (!it) return res.status(404).json({ error: 'not found' });
+  it.downloads = (it.downloads || 0) + 1;
+  saveWorkshop(workshop);
+  res.json({ ok: true, downloads: it.downloads });
+});
+
+// ============================================================
 // HELPERS
 // ============================================================
 function jsonFetch(url, options = {}, timeoutMs = 12000){
@@ -310,7 +454,6 @@ function cleanTitleForSearch(title){
   t = t.replace(/\s+/g, ' ').trim();
   return t;
 }
-// Разбивает строку артистов на массив: "A, B & C" → ["A","B","C"]
 function splitArtists(raw){
   if (!raw) return [];
   return String(raw)
@@ -511,10 +654,11 @@ api.get('/api/health', async (req, res) => {
   ]);
   const allOk = Object.values(checks).every(c => c.ok);
   res.status(allOk ? 200 : 207).json({
-    ok: allOk, service: 'NOVA', version: '3.6.0',
+    ok: allOk, service: 'NOVA', version: '3.7.0',
     uptime: Math.round(process.uptime()),
     users: Object.keys(db.users).length,
     caches: { search: searchCache.size, resolve: resolveCache.size, lyrics: lyricsCache.size, artist: artistCache.size },
+    workshop: workshop.items.length,
     upstream: checks
   });
 });
@@ -802,7 +946,7 @@ api.get('/api/download/audius/:id', async (req, res) => {
 });
 
 // ============================================================
-// iTunes ARTIST LOOKUP (жёстко по artistId)
+// iTunes ARTIST LOOKUP
 // ============================================================
 async function findItunesArtistId(name){
   try {
@@ -1138,9 +1282,6 @@ function artistSimilarity(wantArtist, gotArtist){
   for (const ww of wWords){ if (g.includes(ww)) best = Math.max(best, 0.7); }
   return best;
 }
-
-// Жёсткий checkMatch: Audius требует обязательного совпадения артиста,
-// YouTube — проверяет канал/название.
 function checkMatch(candidate, wantTitle, wantArtist, wantDuration, { strict = true } = {}){
   const aSim = artistSimilarity(wantArtist, candidate.artist);
   const tSim = titleSimilarity(wantTitle, candidate.title);
@@ -1148,7 +1289,6 @@ function checkMatch(candidate, wantTitle, wantArtist, wantDuration, { strict = t
 
   if (tSim < 0.6) return 0;
 
-  // ===== YOUTUBE =====
   if (candidate.provider === 'youtube'){
     if (isBadYoutubeTitle(candidate.title)) return 0;
     const dur = Number(candidate.duration || 0);
@@ -1171,7 +1311,6 @@ function checkMatch(candidate, wantTitle, wantArtist, wantDuration, { strict = t
     return (wantArtistStr ? aSim * 0.4 : 0.4) + tSim * 0.6;
   }
 
-  // ===== AUDIUS — жёсткие пороги =====
   if (candidate.provider === 'audius'){
     if (!wantArtistStr) return 0;
     if (aSim < 0.65) return 0;
@@ -1187,10 +1326,6 @@ function checkMatch(candidate, wantTitle, wantArtist, wantDuration, { strict = t
   return aSim * 0.4 + tSim * 0.6;
 }
 
-// ============================================================
-// Поиск воспроизводимого аудио
-// Порядок: YouTube (по каналу можно сверить) → Audius (с жёстким фильтром)
-// ============================================================
 async function findPlayableAudio({ title, artist, duration, full }){
   const cleanTitle = cleanTitleForSearch(title);
   const cleanArtist = cleanTitleForSearch(artist);
@@ -1216,7 +1351,6 @@ async function findPlayableAudio({ title, artist, duration, full }){
   const uniqueQueries = [...new Set(queries.map(q => q.trim()).filter(Boolean))];
   console.log('[resolve] queries:', uniqueQueries);
 
-  // === 1. YouTube (strict → soft) ===
   for (const strict of [true, false]){
     for (const q of uniqueQueries){
       try {
@@ -1244,7 +1378,6 @@ async function findPlayableAudio({ title, artist, duration, full }){
     }
   }
 
-  // === 2. Audius (жёстко, только с артистом) ===
   if (primaryArtist){
     for (const q of uniqueQueries){
       try {
@@ -1294,6 +1427,7 @@ function startServer(options = {}){
       console.log('[NOVA] listening on http://' + host + ':' + port);
       console.log('[NOVA] DB at ' + DB_PATH);
       console.log('[NOVA] users: ' + Object.keys(db.users).length);
+      console.log('[NOVA] workshop items: ' + workshop.items.length);
       if (IS_PROD && !process.env.DATA_DIR) console.warn('[NOVA] WARNING: DATA_DIR not set — DB reset on restart!');
       console.log('============================================================');
       resolve(server);
