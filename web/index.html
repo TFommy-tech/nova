@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="ru" data-accent="purple" data-theme="dark">
+<html lang="ru" data-accent="purple" data-theme="dark" data-cursor="ring">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob: https: http:; connect-src 'self' https: http: https://www.youtube.com https://*.ytimg.com; img-src 'self' data: blob: https: http: https://*.ytimg.com https://e-cdns-images.dzcdn.net https://cdn-images.dzcdn.net https://*.audius.co https://*.mzstatic.com; media-src 'self' data: blob: https: http:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; script-src 'self' 'unsafe-inline' https://www.youtube.com https://s.ytimg.com;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob: https: http:; connect-src 'self' https: http: https://www.youtube.com https://*.ytimg.com; img-src 'self' data: blob: https: http: https://*.ytimg.com https://e-cdns-images.dzcdn.net https://cdn-images.dzcdn.net https://*.audius.co; media-src 'self' data: blob: https: http:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com; script-src 'self' 'unsafe-inline' https://www.youtube.com https://s.ytimg.com;">
 <title>NOVA</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23000'/%3E%3Cpath d='M9 23V9l7 10 7-10v14' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -12,7 +13,6 @@
 </head>
 <body>
 
-<!-- ============ LAYERS ============ -->
 <div id="backgroundLayer"></div>
 <div id="backgroundShade"></div>
 <div id="ambientGlow" class="ambient-glow" aria-hidden="true"></div>
@@ -21,7 +21,7 @@
 <div id="startupScreen" class="startup">
   <div class="startup-inner">
     <div class="startup-mark" aria-hidden="true">
-      <svg viewBox="0 0 32 32" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <svg viewBox="0 0 32 32" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M6 24 L6 8 L14 20 L22 8 L22 24"/>
       </svg>
     </div>
@@ -38,7 +38,7 @@
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
     </button>
     <div class="login-logo-wrap">
-      <svg viewBox="0 0 32 32" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <svg viewBox="0 0 32 32" width="34" height="34" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M6 24 L6 8 L14 20 L22 8 L22 24"/>
       </svg>
     </div>
@@ -71,8 +71,6 @@
 
 <!-- ============ APP ============ -->
 <div id="app">
-
-  <!-- ===== SIDEBAR ===== -->
   <aside class="sidebar" id="sidebar">
     <button class="logo" id="logoBtn" title="NOVA — главная" aria-label="NOVA">
       <svg viewBox="0 0 32 32" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -134,10 +132,7 @@
     </div>
   </aside>
 
-  <!-- ===== WORKSPACE ===== -->
   <main class="workspace">
-
-    <!-- ===== TOPBAR ===== -->
     <header class="topbar">
       <button class="topbar-back hidden" id="topbarBack" title="Назад" aria-label="Назад">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg>
@@ -150,10 +145,8 @@
       </div>
     </header>
 
-    <!-- ===== VIEWS ===== -->
     <div id="viewRoot" class="view-root">
-
-      <!-- ========== HOME ========== -->
+      <!-- HOME -->
       <section id="homeView" class="view" data-view="home">
         <div class="home-view">
           <div class="home-hero">
@@ -164,27 +157,22 @@
               <div class="home-sub">Музыка, которую хочется включать</div>
             </div>
           </div>
-
           <div class="home-section" id="homeContinueSection">
             <div class="home-section-head"><h2>Продолжить слушать</h2><span>Недавнее</span></div>
             <div id="homeContinue" class="home-row"></div>
           </div>
-
           <div class="home-section" id="recommendationsSection" style="display:none">
             <div class="home-section-head"><h2>Для тебя</h2><span id="recommendationsSub">На основе твоих прослушиваний</span></div>
             <div id="homeRecommendations" class="home-row"></div>
           </div>
-
           <div class="home-section" id="homePopularSection">
             <div class="home-section-head"><h2>Популярное сейчас</h2><span>Топ</span></div>
             <div id="homePopular" class="home-row"></div>
           </div>
-
           <div class="home-section" id="artistsSection" style="display:none">
             <div class="home-section-head"><h2>Исполнители</h2><span>По поиску</span></div>
             <div id="homeArtists" class="home-row artist-row"></div>
           </div>
-
           <div class="home-section" id="homeAlbumsSection" style="display:none">
             <div class="home-section-head"><h2>Альбомы</h2><span>Из поиска</span></div>
             <div id="homeAlbums" class="home-row"></div>
@@ -192,22 +180,19 @@
         </div>
       </section>
 
-      <!-- ========== SEARCH ========== -->
+      <!-- SEARCH -->
       <section id="searchView" class="view hidden" data-view="search">
         <div class="search-view">
           <div class="search-filters" id="searchFilters">
             <button class="search-filter active" data-filter="all">Всё</button>
             <button class="search-filter" data-filter="tracks">Треки</button>
             <button class="search-filter" data-filter="artists">Исполнители</button>
-            <button class="search-filter" data-filter="albums">Альбомы</button>
           </div>
           <div class="meta-row"><span id="resultsInfo" class="results-info">Ожидание</span></div>
-
           <div class="search-block" id="searchArtistsBlock" style="display:none">
             <h3 class="search-block-title">Исполнители</h3>
             <div id="searchArtists" class="home-row artist-row"></div>
           </div>
-
           <div class="search-block" id="searchTracksBlock">
             <h3 class="search-block-title" id="searchTracksTitle">Треки</h3>
             <div id="trackGrid" class="track-grid"></div>
@@ -215,7 +200,7 @@
         </div>
       </section>
 
-      <!-- ========== ARTIST ========== -->
+      <!-- ARTIST -->
       <section id="artistView" class="view hidden" data-view="artist">
         <div class="artist-page">
           <div class="artist-banner" id="artistBanner">
@@ -250,7 +235,7 @@
         </div>
       </section>
 
-      <!-- ========== ALBUM ========== -->
+      <!-- ALBUM -->
       <section id="albumView" class="view hidden" data-view="album">
         <div class="album-view">
           <div class="album-hero">
@@ -283,7 +268,7 @@
         </div>
       </section>
 
-      <!-- ========== LIBRARY ========== -->
+      <!-- LIBRARY -->
       <section id="libraryView" class="view hidden" data-view="library">
         <div class="page-view">
           <div class="page-head">
@@ -293,7 +278,6 @@
               <button class="page-tab" data-tab="local">Локальная музыка</button>
             </div>
           </div>
-
           <div class="page-panel" data-panel="history">
             <div class="page-panel-actions">
               <button id="clearHistory" class="action-secondary">
@@ -303,7 +287,6 @@
             </div>
             <div id="historyList" class="list"></div>
           </div>
-
           <div class="page-panel hidden" data-panel="local">
             <div class="local-drop" id="localDrop">
               <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
@@ -319,7 +302,7 @@
         </div>
       </section>
 
-      <!-- ========== FAVORITES ========== -->
+      <!-- FAVORITES -->
       <section id="favoritesView" class="view hidden" data-view="favorites">
         <div class="page-view">
           <div class="page-head">
@@ -340,7 +323,7 @@
         </div>
       </section>
 
-      <!-- ========== PLAYLISTS ========== -->
+      <!-- PLAYLISTS -->
       <section id="playlistsView" class="view hidden" data-view="playlists">
         <div class="page-view">
           <div class="page-head">
@@ -356,7 +339,7 @@
         </div>
       </section>
 
-      <!-- ========== PLAYLIST (single) ========== -->
+      <!-- PLAYLIST (single) -->
       <section id="playlistView" class="view hidden" data-view="playlist">
         <div class="album-view">
           <div class="album-hero">
@@ -385,7 +368,7 @@
         </div>
       </section>
 
-      <!-- ========== PLAYER ========== -->
+      <!-- PLAYER -->
       <section id="playerView" class="view hidden" data-view="player">
         <div class="player-view">
           <div class="player-layout">
@@ -459,24 +442,20 @@
                 </div>
                 <button id="equalizerBtn" class="inline-control">Эквалайзер</button>
                 <button id="similarBtn" class="inline-control">Похожие</button>
-                <button id="lyricsBtn" class="inline-control">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M6 4h12v16H6z"/><path d="M9 8h6M9 12h6M9 16h4"/></svg>
-                  Текст
-                </button>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- ========== SETTINGS ========== -->
+      <!-- SETTINGS -->
       <section id="settingsView" class="view hidden" data-view="settings">
         <div class="settings-view">
           <div class="settings-shell">
             <div class="settings-head">
               <div>
                 <h1 class="section-title">Настройки</h1>
-                <div class="section-subtitle">Плеер, источники и локальные данные NOVA.</div>
+                <div class="section-subtitle">Плеер, интерфейс и локальные данные NOVA.</div>
               </div>
             </div>
 
@@ -489,6 +468,13 @@
                     <div class="setting-hint">Тёмная или светлая.</div>
                   </div>
                   <div class="setting-value"><button id="themeToggle" class="settings-action">Тёмная</button></div>
+                </div>
+                <div class="setting">
+                  <div class="setting-copy">
+                    <div class="setting-label">Курсор</div>
+                    <div class="setting-hint">Стиль указателя мыши.</div>
+                  </div>
+                  <div class="setting-value"><button id="cursorToggle" class="settings-action">Кольцо</button></div>
                 </div>
               </div>
               <div class="settings-subsection">
@@ -516,6 +502,19 @@
                 </div>
               </div>
               <div class="bg-presets" id="bgPresets"></div>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-section-title">Мастерская оформления</div>
+              <div class="settings-grid">
+                <div class="setting">
+                  <div class="setting-copy">
+                    <div class="setting-label">Пресеты от сообщества</div>
+                    <div class="setting-hint">Фоны и градиенты, которые можно применить одним кликом.</div>
+                  </div>
+                  <div class="setting-value"><button id="openWorkshopBtn" class="settings-action primary">Открыть</button></div>
+                </div>
+              </div>
             </div>
 
             <div class="settings-section">
@@ -602,11 +601,10 @@
           </div>
         </div>
       </section>
-
     </div>
   </main>
 
-  <!-- ===== QUEUE PANEL ===== -->
+  <!-- QUEUE PANEL -->
   <aside id="queuePanel" class="queue-panel" aria-hidden="true">
     <div class="queue-panel-head">
       <div>
@@ -623,7 +621,7 @@
     <div id="queueContent" class="queue-list">Очередь пуста</div>
   </aside>
 
-  <!-- ===== MINI PLAYER ===== -->
+  <!-- MINI PLAYER -->
   <div id="miniPlayer" class="mini-player">
     <input id="miniProgress" class="mini-progress" type="range" min="0" max="1000" value="0" aria-label="Прогресс">
     <div class="mini-track" id="miniTrackClick" title="Открыть полный плеер">
@@ -670,7 +668,7 @@
     </div>
   </div>
 
-  <!-- ===== SONG INFO MODAL ===== -->
+  <!-- SONG INFO MODAL -->
   <div id="songInfoModal" class="song-info-modal" aria-hidden="true">
     <div class="song-info-card">
       <button id="songInfoClose" class="song-info-close">×</button>
@@ -691,7 +689,7 @@
     </div>
   </div>
 
-  <!-- ===== EQUALIZER MODAL ===== -->
+  <!-- EQUALIZER MODAL -->
   <div id="equalizerModal" class="eq-modal" aria-hidden="true">
     <div class="eq-card">
       <button id="equalizerClose" class="song-info-close">×</button>
@@ -703,7 +701,7 @@
     </div>
   </div>
 
-  <!-- ===== PROFILE MODAL ===== -->
+  <!-- PROFILE MODAL -->
   <div id="profileModal" class="profile-modal" aria-hidden="true">
     <div class="profile-card">
       <aside class="profile-side">
@@ -731,18 +729,9 @@
         </div>
         <h2 class="profile-main-title" id="profileSummaryTitle">Пока чистая история</h2>
         <div class="profile-stats">
-          <div class="profile-stat">
-            <div class="profile-stat-num" id="statTracks">0</div>
-            <div class="profile-stat-label">Треки</div>
-          </div>
-          <div class="profile-stat">
-            <div class="profile-stat-num" id="statArtists">0</div>
-            <div class="profile-stat-label">Артисты</div>
-          </div>
-          <div class="profile-stat">
-            <div class="profile-stat-num" id="statPlaylists">0</div>
-            <div class="profile-stat-label">Плейлисты</div>
-          </div>
+          <div class="profile-stat"><div class="profile-stat-num" id="statTracks">0</div><div class="profile-stat-label">Треки</div></div>
+          <div class="profile-stat"><div class="profile-stat-num" id="statArtists">0</div><div class="profile-stat-label">Артисты</div></div>
+          <div class="profile-stat"><div class="profile-stat-num" id="statPlaylists">0</div><div class="profile-stat-label">Плейлисты</div></div>
         </div>
         <div class="profile-panels">
           <div class="profile-panel">
@@ -758,7 +747,41 @@
     </div>
   </div>
 
-  <!-- ===== PLAYLIST PICKER MODAL ===== -->
+  <!-- WORKSHOP MODAL -->
+  <div id="workshopModal" class="workshop-modal" aria-hidden="true">
+    <div class="workshop-card">
+      <div class="workshop-hero">
+        <div class="workshop-hero-text">
+          <div class="workshop-hero-label">NOVA PRESETS</div>
+          <h2 class="workshop-hero-title">Мастерская оформления</h2>
+          <p class="workshop-hero-sub">Публичные наборы оформления от сообщества: фоны и градиенты.</p>
+        </div>
+        <div class="workshop-hero-actions">
+          <button class="workshop-action" id="workshopPublish">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg>
+            Опубликовать
+          </button>
+          <button id="workshopModalClose" class="workshop-modal-close" aria-label="Закрыть">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="workshop-toolbar">
+        <div class="workshop-search">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="workshopSearch" type="text" placeholder="Поиск по названию, автору или тегу...">
+        </div>
+        <div class="workshop-sort">
+          <button class="workshop-sort-btn active" data-sort="popular">Популярные</button>
+          <button class="workshop-sort-btn" data-sort="new">Новые</button>
+          <button class="workshop-sort-btn" data-sort="az">А-Я</button>
+        </div>
+      </div>
+      <div class="workshop-grid" id="workshopGrid"></div>
+    </div>
+  </div>
+
+  <!-- PLAYLIST PICKER MODAL -->
   <div id="playlistPickerModal" class="song-info-modal" aria-hidden="true">
     <div class="song-info-card">
       <button id="playlistPickerClose" class="song-info-close">×</button>
@@ -768,7 +791,7 @@
     </div>
   </div>
 
-  <!-- ===== PLAYLIST CREATE MODAL ===== -->
+  <!-- PLAYLIST CREATE MODAL -->
   <div id="playlistCreateModal" class="song-info-modal" aria-hidden="true">
     <div class="song-info-card">
       <button id="playlistCreateClose" class="song-info-close">×</button>
@@ -781,20 +804,14 @@
     </div>
   </div>
 
-  <!-- ===== CONTEXT MENU ===== -->
   <div id="contextMenu" class="context-menu hidden" aria-hidden="true"></div>
-
-  <!-- ===== TOAST ===== -->
   <div id="toast" class="toast"></div>
 
-  <!-- ===== HIDDEN INPUTS ===== -->
   <input id="backgroundInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
   <input id="localAudioInput" type="file" accept="audio/*,.mp3,.wav,.ogg,.m4a,.flac,.webm" multiple hidden>
   <audio id="audio" preload="metadata" crossorigin="anonymous"></audio>
 
-  <!-- ===== YOUTUBE HIDDEN WRAP ===== -->
   <div id="youtubePlayerWrap" class="youtube-player-wrap"><div id="youtubePlayer"></div></div>
-
 </div>
 
 <script src="app.js"></script>
