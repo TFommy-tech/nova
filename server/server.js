@@ -1,5 +1,6 @@
 // ============================================================
 // server/server.js — бэкенд NOVA
+// Fix: resolve теперь корректно выбирает трек нужного артиста
 // ============================================================
 const express = require('express');
 const cors = require('cors');
@@ -39,7 +40,6 @@ const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID || '';
 const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
 const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI || '';
 
-// Кэши
 const resolveCache = new Map();
 const searchCache = new Map();
 const lyricsCache = new Map();
@@ -48,7 +48,7 @@ const RESOLVE_TTL = 30 * 60 * 1000;
 const SEARCH_TTL = 2 * 60 * 1000;
 const LYRICS_TTL = 24 * 60 * 60 * 1000;
 const ARTIST_TTL = 10 * 60 * 1000;
-const ARTIST_EMPTY_TTL = 60 * 1000;   // пустой ответ кэшируем всего минуту
+const ARTIST_EMPTY_TTL = 60 * 1000;
 
 setInterval(() => {
   const now = Date.now();
@@ -300,6 +300,23 @@ function firstImage(o){
 function normalizeSearchText(v){
   return String(v || '').toLowerCase().replace(/[’'`]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
+function cleanTitleForSearch(title){
+  if (!title) return '';
+  let t = String(title);
+  t = t.replace(/\([^)]*\)/g, ' ');
+  t = t.replace(/\[[^\]]*\]/g, ' ');
+  t = t.replace(/#\S+/g, ' ');
+  t = t.replace(/\b(official|lyric|lyrics|video|audio|visualizer|hd|hq|4k|prod\.?|explicit|clean|mv|m\/v)\b/gi, ' ');
+  t = t.replace(/\s+/g, ' ').trim();
+  return t;
+}
+// Разбивает строку артистов на массив: "A, B & C" → ["A","B","C"]
+function splitArtists(raw){
+  if (!raw) return [];
+  return String(raw)
+    .split(/\s*(?:,|&|\bfeat\.?\b|\bft\.?\b|\bwith\b|\bvs\.?\b|\bx\b)\s*/i)
+    .map(s => s.trim()).filter(Boolean);
+}
 
 // ============================================================
 // ПОИСКИ
@@ -494,7 +511,7 @@ api.get('/api/health', async (req, res) => {
   ]);
   const allOk = Object.values(checks).every(c => c.ok);
   res.status(allOk ? 200 : 207).json({
-    ok: allOk, service: 'NOVA', version: '3.5.0',
+    ok: allOk, service: 'NOVA', version: '3.6.0',
     uptime: Math.round(process.uptime()),
     users: Object.keys(db.users).length,
     caches: { search: searchCache.size, resolve: resolveCache.size, lyrics: lyricsCache.size, artist: artistCache.size },
@@ -785,7 +802,7 @@ api.get('/api/download/audius/:id', async (req, res) => {
 });
 
 // ============================================================
-// iTunes ARTIST LOOKUP — ЖЁСТКО ПО ARTISTID, ЧУЖИХ НЕ ВОЗЬМЁТ
+// iTunes ARTIST LOOKUP (жёстко по artistId)
 // ============================================================
 async function findItunesArtistId(name){
   try {
@@ -883,7 +900,6 @@ api.get('/api/artist/:id', rateLimit, async (req, res) => {
   if (cached && Date.now() - cached.time < (cached.ttl || ARTIST_TTL)) return res.json(cached.data);
 
   try {
-    // 1. Профиль из Deezer
     const a = await jsonFetch('https://api.deezer.com/artist/' + id, {}, 8000);
     const artist = await readJson(a);
     if (!artist || !artist.id) return res.status(404).json({ error: 'not found' });
@@ -909,7 +925,6 @@ api.get('/api/artist/:id', rateLimit, async (req, res) => {
       return added;
     };
 
-    // === Стратегия 1: /artist/{id}/top ===
     try {
       const t = await jsonFetch('https://api.deezer.com/artist/' + id + '/top?limit=100', {}, 8000);
       const top = await readJson(t);
@@ -918,7 +933,6 @@ api.get('/api/artist/:id', rateLimit, async (req, res) => {
       console.log('[artist]', id, 'strat1 top raw=' + raw.length + ' added=' + added);
     } catch (e){ console.log('[artist]', id, 'strat1 fail:', e.message); }
 
-    // === Стратегия 2: /search/track ===
     if (!top_tracks.length && artistName){
       try {
         const params = new URLSearchParams({ q: 'artist:"' + artistName + '"', limit: '100' });
@@ -930,7 +944,6 @@ api.get('/api/artist/:id', rateLimit, async (req, res) => {
       } catch (e){ console.log('[artist]', id, 'strat2 fail:', e.message); }
     }
 
-    // === Стратегия 3: треки из альбомов Deezer ===
     if (!top_tracks.length){
       try {
         const al = await jsonFetch('https://api.deezer.com/artist/' + id + '/albums?limit=100', {}, 9000);
@@ -950,9 +963,6 @@ api.get('/api/artist/:id', rateLimit, async (req, res) => {
       } catch (e){ console.log('[artist]', id, 'strat3 fail:', e.message); }
     }
 
-    // === Стратегия 4: iTunes через lookup по artistId (жёстко) ===
-    // Используется ТОЛЬКО если Deezer вернул 0. iTunes lookup даёт треки,
-    // привязанные к конкретному iTunes artistId — не может вернуть чужого.
     if (!top_tracks.length && artistName){
       try {
         const itunesArtistId = await findItunesArtistId(artistName);
@@ -967,10 +977,8 @@ api.get('/api/artist/:id', rateLimit, async (req, res) => {
       } catch (e){ console.log('[artist]', id, 'strat4 fail:', e.message); }
     }
 
-    // Сортировка и обрезка
     top_tracks = top_tracks.sort((a, b) => (b.rank || b.popularity || 0) - (a.rank || a.popularity || 0)).slice(0, 60);
 
-    // === АЛЬБОМЫ ===
     let owned = [];
     try {
       const al = await jsonFetch('https://api.deezer.com/artist/' + id + '/albums?limit=200', {}, 8000);
@@ -979,7 +987,6 @@ api.get('/api/artist/:id', rateLimit, async (req, res) => {
       owned = all.filter(x => isOwnedAlbum(x, artistIdStr, artistName) && !isBadAlbumTitle(x.title));
     } catch (e){ console.log('[artist]', id, 'albums fetch fail:', e.message); }
 
-    // Если Deezer-альбомов нет — берём iTunes
     if (!owned.length && artistName){
       try {
         const itunesArtistId = await findItunesArtistId(artistName);
@@ -999,7 +1006,6 @@ api.get('/api/artist/:id', rateLimit, async (req, res) => {
       singles: owned.filter(x => x.record_type === 'single')
     };
 
-    // Пустой результат кэшируем на минуту, не на 10
     const isEmpty = top_tracks.length === 0 && owned.length === 0;
     artistCache.set(cacheKey, { time: Date.now(), data: payload, ttl: isEmpty ? ARTIST_EMPTY_TTL : ARTIST_TTL });
 
@@ -1105,16 +1111,6 @@ api.get('/api/lyrics', async (req, res) => {
 // ============================================================
 // МАТЧИНГ
 // ============================================================
-function cleanTitleForSearch(title){
-  if (!title) return '';
-  let t = String(title);
-  t = t.replace(/\([^)]*\)/g, ' ');
-  t = t.replace(/\[[^\]]*\]/g, ' ');
-  t = t.replace(/#\S+/g, ' ');
-  t = t.replace(/\b(official|lyric|lyrics|video|audio|visualizer|hd|hq|4k|prod\.?|explicit|clean|mv|m\/v)\b/gi, ' ');
-  t = t.replace(/\s+/g, ' ').trim();
-  return t;
-}
 function titleSimilarity(wantTitle, gotTitle){
   const w = normalizeSearchText(wantTitle), g = normalizeSearchText(gotTitle);
   if (!w) return 1; if (!g) return 0;
@@ -1142,10 +1138,17 @@ function artistSimilarity(wantArtist, gotArtist){
   for (const ww of wWords){ if (g.includes(ww)) best = Math.max(best, 0.7); }
   return best;
 }
+
+// Жёсткий checkMatch: Audius требует обязательного совпадения артиста,
+// YouTube — проверяет канал/название.
 function checkMatch(candidate, wantTitle, wantArtist, wantDuration, { strict = true } = {}){
   const aSim = artistSimilarity(wantArtist, candidate.artist);
   const tSim = titleSimilarity(wantTitle, candidate.title);
-  if (tSim < 0.55) return 0;
+  const wantArtistStr = String(wantArtist || '').trim();
+
+  if (tSim < 0.6) return 0;
+
+  // ===== YOUTUBE =====
   if (candidate.provider === 'youtube'){
     if (isBadYoutubeTitle(candidate.title)) return 0;
     const dur = Number(candidate.duration || 0);
@@ -1154,18 +1157,40 @@ function checkMatch(candidate, wantTitle, wantArtist, wantDuration, { strict = t
       if (wantDuration > 30){ const ratio = dur / wantDuration; if (ratio < 0.5 || ratio > 1.8) return 0; }
       else if (dur < 30) return 0;
     }
-    if (!strict){
-      const t = String(candidate.title || '').toLowerCase();
-      const c = String(candidate.channel || '').toLowerCase();
-      const a = String(wantArtist || '').toLowerCase();
-      if (a && !t.includes(a) && !c.includes(a) && aSim < 0.5) return 0;
-      return 0.5 + tSim * 0.5;
+    if (strict){
+      if (wantArtistStr){
+        const ch = String(candidate.channel || '').toLowerCase();
+        const ti = String(candidate.title || '').toLowerCase();
+        const ar = wantArtistStr.toLowerCase();
+        const artistInChannel = ch.includes(ar) || ar.includes(ch.split(' - ')[0]);
+        const artistInTitle = ti.includes(ar);
+        if (aSim < 0.4 && !artistInChannel && !artistInTitle) return 0;
+      }
+      if (tSim < 0.65) return 0;
     }
-    if (aSim < 0.45) return 0;
-    if (tSim < 0.6) return 0;
+    return (wantArtistStr ? aSim * 0.4 : 0.4) + tSim * 0.6;
   }
+
+  // ===== AUDIUS — жёсткие пороги =====
+  if (candidate.provider === 'audius'){
+    if (!wantArtistStr) return 0;
+    if (aSim < 0.65) return 0;
+    if (tSim < 0.75) return 0;
+    const dur = Number(candidate.duration || 0);
+    if (dur > 0 && wantDuration > 30){
+      const ratio = dur / wantDuration;
+      if (ratio < 0.55 || ratio > 1.7) return 0;
+    }
+    return aSim * 0.5 + tSim * 0.5;
+  }
+
   return aSim * 0.4 + tSim * 0.6;
 }
+
+// ============================================================
+// Поиск воспроизводимого аудио
+// Порядок: YouTube (по каналу можно сверить) → Audius (с жёстким фильтром)
+// ============================================================
 async function findPlayableAudio({ title, artist, duration, full }){
   const cleanTitle = cleanTitleForSearch(title);
   const cleanArtist = cleanTitleForSearch(artist);
@@ -1174,34 +1199,24 @@ async function findPlayableAudio({ title, artist, duration, full }){
   const wantDuration = Number(duration || 0);
   const fullQuery = String(full || '').trim();
 
+  const artistParts = splitArtists(wantArtist);
+  const primaryArtist = artistParts[0] || wantArtist;
+
   const queries = [];
-  if (wantTitle && wantArtist){
-    const tl = wantTitle.toLowerCase(), al = wantArtist.toLowerCase();
+  if (wantTitle && primaryArtist){
+    const tl = wantTitle.toLowerCase(), al = primaryArtist.toLowerCase();
     if (tl.includes(al)) queries.push(wantTitle);
-    else queries.push(wantTitle + ' ' + wantArtist);
+    else queries.push(wantTitle + ' ' + primaryArtist);
   }
   if (wantTitle) queries.push(wantTitle);
-  if (wantTitle && wantArtist) queries.push(wantArtist + ' ' + wantTitle);
+  if (wantTitle && artistParts.length > 1){
+    queries.push(wantTitle + ' ' + artistParts.slice(0, 2).join(' '));
+  }
   if (fullQuery) queries.push(fullQuery);
   const uniqueQueries = [...new Set(queries.map(q => q.trim()).filter(Boolean))];
   console.log('[resolve] queries:', uniqueQueries);
 
-  for (const q of uniqueQueries){
-    try {
-      const r = await searchAudius(q);
-      const list = (r.results || []).filter(x => x.source === 'FULL' && x.id);
-      if (!list.length) continue;
-      const scored = list
-        .map(c => ({ c, s: checkMatch(c, wantTitle, wantArtist, 0, { strict: false }) + scoreProviderTrack(c, q) * 0.00001 }))
-        .filter(x => x.s > 0)
-        .sort((a, b) => b.s - a.s);
-      if (scored.length){
-        const best = scored[0].c;
-        return { provider: 'audius', streamUrl: '/api/audio/audius/' + encodeURIComponent(best.id), title: best.title, artist: best.artist };
-      }
-    } catch (e){}
-  }
-
+  // === 1. YouTube (strict → soft) ===
   for (const strict of [true, false]){
     for (const q of uniqueQueries){
       try {
@@ -1209,18 +1224,51 @@ async function findPlayableAudio({ title, artist, duration, full }){
         const list = meta.results || [];
         if (!list.length) continue;
         const scored = list
-          .map(c => ({ c, s: checkMatch(c, wantTitle, wantArtist, wantDuration, { strict }) + scoreProviderTrack(c, q) * 0.00001 }))
+          .map(c => ({ c, s: checkMatch(c, wantTitle, primaryArtist, wantDuration, { strict }) + scoreProviderTrack(c, q) * 0.00001 }))
           .filter(x => x.s > 0)
           .sort((a, b) => b.s - a.s);
         if (scored.length){
           const best = scored[0].c;
           const vid = String(best.id).replace('yt_', '');
           if (!/^[A-Za-z0-9_-]{6,20}$/.test(vid)) continue;
-          return { provider: 'youtube', streamUrl: '/api/audio/youtube/' + encodeURIComponent(vid), videoId: vid, title: best.title, duration: best.duration };
+          console.log('[resolve] hit YouTube', strict ? '(strict)' : '(soft)', ':', best.title, '| ch:', best.channel, '| s:', scored[0].s.toFixed(2));
+          return {
+            provider: 'youtube',
+            streamUrl: '/api/audio/youtube/' + encodeURIComponent(vid),
+            videoId: vid,
+            title: best.title,
+            duration: best.duration
+          };
         }
       } catch (e){}
     }
   }
+
+  // === 2. Audius (жёстко, только с артистом) ===
+  if (primaryArtist){
+    for (const q of uniqueQueries){
+      try {
+        const r = await searchAudius(q);
+        const list = (r.results || []).filter(x => x.source === 'FULL' && x.id);
+        if (!list.length) continue;
+        const scored = list
+          .map(c => ({ c, s: checkMatch(c, wantTitle, primaryArtist, wantDuration, { strict: true }) }))
+          .filter(x => x.s > 0)
+          .sort((a, b) => b.s - a.s);
+        if (scored.length){
+          const best = scored[0].c;
+          console.log('[resolve] hit Audius:', best.title, '|', best.artist, '| s:', scored[0].s.toFixed(2));
+          return {
+            provider: 'audius',
+            streamUrl: '/api/audio/audius/' + encodeURIComponent(best.id),
+            title: best.title,
+            artist: best.artist
+          };
+        }
+      } catch (e){}
+    }
+  }
+
   throw new Error('no matching track');
 }
 
