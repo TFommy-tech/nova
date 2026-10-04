@@ -1,5 +1,5 @@
 // ============================================================
-// web/app.js — клиент NOVA (full)
+// web/app.js — клиент NOVA (full, v3.8.0)
 // ============================================================
 (function(){
   'use strict';
@@ -107,7 +107,7 @@
   let authMode = 'login';
 
   // ============================================================
-  // CUSTOM CURSOR
+  // CUSTOM CURSOR — точка + кольцо + мягкое свечение
   // ============================================================
   (function initCustomCursor(){
     if (window.matchMedia && !window.matchMedia('(pointer: fine)').matches) return;
@@ -116,18 +116,31 @@
     dot.className = 'nova-cursor-dot';
     const ring = document.createElement('div');
     ring.className = 'nova-cursor-ring';
+    const glow = document.createElement('div');
+    glow.className = 'nova-cursor-glow';
+    document.body.appendChild(glow);
     document.body.appendChild(ring);
     document.body.appendChild(dot);
 
     let visible = false;
-    function show(){ if (visible) return; visible = true; dot.classList.add('visible'); ring.classList.add('visible'); }
-    function hide(){ visible = false; dot.classList.remove('visible'); ring.classList.remove('visible'); }
+    function show(){ if (visible) return; visible = true; dot.classList.add('visible'); ring.classList.add('visible'); glow.classList.add('visible'); }
+    function hide(){ visible = false; dot.classList.remove('visible'); ring.classList.remove('visible'); glow.classList.remove('visible'); }
+
+    let gx = 0, gy = 0, gtx = 0, gty = 0;
+    function tickGlow(){
+      gx += (gtx - gx) * 0.10;
+      gy += (gty - gy) * 0.10;
+      glow.style.transform = 'translate3d(' + (gx - 90) + 'px,' + (gy - 90) + 'px,0)';
+      requestAnimationFrame(tickGlow);
+    }
+    requestAnimationFrame(tickGlow);
 
     window.addEventListener('mousemove', (e) => {
       const x = e.clientX, y = e.clientY;
+      gtx = x; gty = y;
       dot.style.transform = 'translate3d(' + (x - 3) + 'px,' + (y - 3) + 'px,0)';
-      ring.style.transform = 'translate3d(' + (x - 18) + 'px,' + (y - 18) + 'px,0)';
-      if (!visible) show();
+      ring.style.transform = 'translate3d(' + (x - 16) + 'px,' + (y - 16) + 'px,0)';
+      if (!visible){ gx = x; gy = y; show(); }
     }, { passive: true });
 
     window.addEventListener('mouseleave', hide);
@@ -137,7 +150,7 @@
 
     function isInteractive(target){
       if (!target || !target.closest) return false;
-      return !!target.closest('button, a, input, textarea, select, .card, .home-mini-card, .list-row, .nav-btn, .queue-row, .suggestion, .eq-preset, .accent-preset, .bg-preset, .song-info-btn, .settings-action, .login-tab, .artist-link, .settings-tab, .profile-action, .workshop-item-btn, .workshop-sort-btn');
+      return !!target.closest('button, a, input, textarea, select, .card, .home-mini-card, .list-row, .nav-btn, .queue-row, .suggestion, .eq-preset, .accent-preset, .bg-preset, .song-info-btn, .settings-action, .login-tab, .artist-link, .settings-tab, .profile-action, .workshop-item-btn, .workshop-sort-btn, .lyrics-line');
     }
     function isTextInput(target){
       if (!target || !target.closest) return false;
@@ -147,16 +160,16 @@
     document.addEventListener('mouseover', (e) => {
       const t = e.target;
       if (isTextInput(t)){
-        ring.classList.add('typing'); ring.classList.remove('hover'); dot.classList.remove('hover');
+        ring.classList.add('typing'); ring.classList.remove('hover'); dot.classList.remove('hover'); glow.classList.remove('hover');
       } else if (isInteractive(t)){
-        ring.classList.add('hover'); ring.classList.remove('typing'); dot.classList.add('hover');
+        ring.classList.add('hover'); ring.classList.remove('typing'); dot.classList.add('hover'); glow.classList.add('hover');
       } else {
-        ring.classList.remove('hover', 'typing'); dot.classList.remove('hover');
+        ring.classList.remove('hover', 'typing'); dot.classList.remove('hover'); glow.classList.remove('hover');
       }
     });
 
-    document.addEventListener('mousedown', () => { dot.classList.add('click'); ring.classList.add('click'); });
-    document.addEventListener('mouseup', () => { dot.classList.remove('click'); ring.classList.remove('click'); });
+    document.addEventListener('mousedown', () => { dot.classList.add('click'); ring.classList.add('click'); glow.classList.add('click'); });
+    document.addEventListener('mouseup', () => { dot.classList.remove('click'); ring.classList.remove('click'); glow.classList.remove('click'); });
 
     document.documentElement.classList.add('nova-custom-cursor');
   })();
@@ -613,6 +626,122 @@
     }).join(', ');
   }
 
+  // ============================================================
+  // LRC ПАРСЕР — для синхронизированных текстов
+  // ============================================================
+  function parseLrc(lrc){
+    if (!lrc) return [];
+    const out = [];
+    const re = /\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\](.*)$/;
+    const lines = String(lrc).split(/\r?\n/);
+    for (const raw of lines){
+      const m = raw.match(re);
+      if (!m) continue;
+      const min = Number(m[1]);
+      const sec = Number(m[2]);
+      const msPart = (m[3] || '0').padEnd(3, '0').slice(0, 3);
+      const t = min * 60 + sec + Number(msPart) / 1000;
+      const text = String(m[4] || '').trim();
+      if (text) out.push({ t, text });
+    }
+    out.sort((a, b) => a.t - b.t);
+    return out;
+  }
+
+  let lyricsTimer = null;
+  let lyricsLines = [];
+  let lyricsActiveIndex = -1;
+
+  function clearLyricsSync(){
+    if (lyricsTimer){ clearInterval(lyricsTimer); lyricsTimer = null; }
+    lyricsLines = [];
+    lyricsActiveIndex = -1;
+  }
+
+  function highlightLyricsLine(){
+    if (!lyricsLines.length) return;
+    let t;
+    if (ytIframe && ytCurrentVideo) t = ytVideoCurrentTime || 0;
+    else t = el.audio.currentTime || 0;
+    let idx = -1;
+    for (let i = 0; i < lyricsLines.length; i++){
+      if (lyricsLines[i].t <= t) idx = i; else break;
+    }
+    if (idx === lyricsActiveIndex) return;
+    lyricsActiveIndex = idx;
+    const rows = el.lyricsBody.querySelectorAll('.lyrics-line');
+    rows.forEach((r, i) => r.classList.toggle('active', i === idx));
+    if (idx >= 0 && rows[idx]){
+      const row = rows[idx];
+      const body = el.lyricsBody;
+      const targetTop = row.offsetTop - body.clientHeight / 2 + row.clientHeight / 2;
+      try { body.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' }); } catch (_){}
+    }
+  }
+
+  async function showLyrics(){
+    const track = state.currentTrack;
+    if (!track){ notify('Сначала включи трек'); return; }
+    el.lyricsTrackTitle.textContent = track.title || 'Текст';
+    el.lyricsTrackArtist.textContent = track.artist || '—';
+    el.lyricsBody.innerHTML = '<div class="lyrics-loading">Ищу текст…</div>';
+    el.lyricsModal.classList.add('open'); el.lyricsModal.setAttribute('aria-hidden', 'false');
+    clearLyricsSync();
+    try {
+      const params = new URLSearchParams({ track_name: track.title || '', artist_name: track.artist || '' });
+      if (track.album) params.set('album_name', track.album);
+      if (track.duration > 0) params.set('duration', String(Math.round(track.duration)));
+      const r = await fetch(apiBase() + '/api/lyrics?' + params.toString());
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d || !d.found) throw new Error('Текст не найден');
+
+      const synced = d.syncedLyrics || '';
+      const plain = d.plainLyrics || '';
+      let lines = [];
+      if (synced) lines = parseLrc(synced);
+
+      if (lines.length){
+        lyricsLines = lines;
+        el.lyricsBody.innerHTML = '';
+        lines.forEach((l, i) => {
+          const div = document.createElement('div');
+          div.className = 'lyrics-line';
+          div.dataset.time = String(l.t);
+          div.dataset.index = String(i);
+          div.textContent = l.text;
+          div.addEventListener('click', () => {
+            if (ytIframe && ytCurrentVideo){
+              ytSendCommand('seekTo', [l.t, true]);
+              ytVideoCurrentTime = l.t;
+            } else if (Number.isFinite(el.audio.duration)){
+              el.audio.currentTime = l.t;
+            }
+            highlightLyricsLine();
+          });
+          el.lyricsBody.appendChild(div);
+        });
+        highlightLyricsLine();
+        lyricsTimer = setInterval(highlightLyricsLine, 150);
+        return;
+      }
+
+      if (plain && plain.trim()){
+        el.lyricsBody.textContent = plain;
+        return;
+      }
+
+      throw new Error('Текст не найден');
+    } catch (e){
+      clearLyricsSync();
+      el.lyricsBody.innerHTML = '<div class="lyrics-loading">' + escapeHtml(e.message || 'Текст не найден') + '</div>';
+    }
+  }
+  function closeLyrics(){
+    el.lyricsModal.classList.remove('open');
+    el.lyricsModal.setAttribute('aria-hidden', 'true');
+    clearLyricsSync();
+  }
+
   function notify(m){
     if (!settings.notifications) return;
     el.toast.textContent = m;
@@ -982,6 +1111,7 @@
     playAbort = controller;
 
     ytStopPauseWatchdog();
+    clearLyricsSync();
 
     if (audioGraphReady && state.currentTrack && userIntent === 'playing'){ await fadeOutAndWait(350); }
     try { el.audio.pause(); } catch (_){}
@@ -1393,26 +1523,6 @@
       notify('Загрузка началась');
     } catch (e){ notify('Не удалось скачать'); }
   }
-  async function showLyrics(){
-    const track = state.currentTrack;
-    if (!track){ notify('Сначала включи трек'); return; }
-    el.lyricsTrackTitle.textContent = track.title || 'Текст';
-    el.lyricsTrackArtist.textContent = track.artist || '—';
-    el.lyricsBody.innerHTML = '<div class="lyrics-loading">Ищу текст…</div>';
-    el.lyricsModal.classList.add('open'); el.lyricsModal.setAttribute('aria-hidden', 'false');
-    try {
-      const params = new URLSearchParams({ track_name: track.title || '', artist_name: track.artist || '' });
-      if (track.album) params.set('album_name', track.album);
-      if (track.duration > 0) params.set('duration', String(Math.round(track.duration)));
-      const r = await fetch(apiBase() + '/api/lyrics?' + params.toString());
-      const d = await r.json().catch(() => ({}));
-      if (!r.ok || !d || !d.found) throw new Error('Текст не найден');
-      const lyr = d.syncedLyrics || d.plainLyrics || '';
-      if (!lyr.trim()) throw new Error('Текст не найден');
-      el.lyricsBody.textContent = lyr;
-    } catch (e){ el.lyricsBody.innerHTML = '<div class="lyrics-loading">' + escapeHtml(e.message || 'Текст не найден') + '</div>'; }
-  }
-  function closeLyrics(){ el.lyricsModal.classList.remove('open'); el.lyricsModal.setAttribute('aria-hidden', 'true'); }
   function findSimilar(){ if (!state.currentTrack){ notify('Сначала включи трек'); return; } const a = String(state.currentTrack.artist || '').trim(); if (!a) return; el.searchInput.value = a; showView('search'); search(a); }
 
   // ============================================================
@@ -1513,6 +1623,7 @@
   });
   on(el.audio, 'play', () => { preEndFadeTriggered = false; });
   on(el.audio, 'ended', () => {
+    clearLyricsSync();
     userIntent = 'idle'; preEndFadeTriggered = false;
     if (state.repeat){ el.audio.currentTime = 0; rampFadeTo(1, 200); el.audio.play().catch(() => {}); return; }
     next();
@@ -1837,7 +1948,7 @@
   }
   function renderWorkshop(){
     if (!workshopItems.length){
-      el.workshopGrid.innerHTML = '<div class="workshop-empty">Ничего не найдено</div>';
+      el.workshopGrid.innerHTML = '<div class="workshop-empty">Пока никто не публиковал оформления.<br>Стань первым — нажми «Опубликовать»!</div>';
       return;
     }
     el.workshopGrid.innerHTML = '';
@@ -1920,7 +2031,6 @@
     } catch (e){ notify('Не удалось опубликовать'); }
   });
 
-  // Кнопки открытия модалок
   on(el.openWorkshopBtn, 'click', openWorkshop);
   on(el.openProfileBtn, 'click', () => { toggleUserMenu(false); openProfile(); });
 
