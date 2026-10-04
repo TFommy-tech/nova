@@ -1,5 +1,5 @@
 // ============================================================
-// web/app.js — клиент NOVA (full, v3.8.0)
+// web/app.js — клиент NOVA (full, v3.8.1 — fixed YouTube autoplay)
 // ============================================================
 (function(){
   'use strict';
@@ -107,7 +107,7 @@
   let authMode = 'login';
 
   // ============================================================
-  // CUSTOM CURSOR — точка + кольцо + мягкое свечение
+  // CUSTOM CURSOR
   // ============================================================
   (function initCustomCursor(){
     if (window.matchMedia && !window.matchMedia('(pointer: fine)').matches) return;
@@ -190,7 +190,7 @@
   }
 
   // ============================================================
-  // YOUTUBE
+  // YOUTUBE — исправленный
   // ============================================================
   function ytSendCommand(func, args){
     if (!ytIframe || !ytIframe.contentWindow) return false;
@@ -228,22 +228,38 @@
     let data;
     try { data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch (_){ return; }
     if (!data || !data.event) return;
+
+    if (data.event === 'onReady'){
+      console.log('[yt] onReady');
+      // Как только API готов — сразу пытаемся играть, если хотим
+      if (userIntent === 'playing' || userIntent === 'loading'){
+        ytSendCommand('playVideo');
+        ytSendCommand('setVolume', [state.volume]);
+      }
+    }
+
     if (data.event === 'onStateChange'){
       const s = data.info;
       if (s === 1){
         if (userIntent === 'paused'){ ytSendCommand('pauseVideo'); return; }
-        if (userIntent === 'loading') return;
         if (userIntent !== 'playing'){ userIntent = 'playing'; updatePlayButtons(); }
+        console.log('[yt] playing');
       } else if (s === 2){
         if (userIntent === 'paused') return;
         if (userIntent === 'playing') ytSendCommand('playVideo');
+      } else if (s === 3){
+        // buffering
+        if (userIntent === 'loading') return;
       } else if (s === 0){
         if (userIntent === 'playing'){
           if (state.repeat){ ytSendCommand('seekTo', [0, true]); ytPlay(); }
           else { next(); }
         }
+      } else if (s === -1){
+        if (userIntent === 'playing') ytSendCommand('playVideo');
       }
     }
+
     if (data.event === 'infoDelivery' && data.info){
       if (typeof data.info.currentTime === 'number') ytVideoCurrentTime = data.info.currentTime;
       if (typeof data.info.duration === 'number' && data.info.duration > 0) ytVideoDuration = data.info.duration;
@@ -279,9 +295,11 @@
 
       const iframe = document.createElement('iframe');
       iframe.setAttribute('allow', 'autoplay; encrypted-media');
+      iframe.setAttribute('allowfullscreen', 'false');
       iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:#000;';
+      // autoplay=1 — YouTube сам стартует при загрузке (жест пользователя уже был кликом)
       iframe.src = 'https://www.youtube.com/embed/' + encodeURIComponent(videoId) +
-        '?autoplay=0&enablejsapi=1&controls=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&fs=0&disablekb=1&cc_load_policy=0&hl=en&origin=' +
+        '?autoplay=1&enablejsapi=1&controls=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&fs=0&disablekb=1&cc_load_policy=0&hl=en&origin=' +
         encodeURIComponent(location.origin);
 
       let resolved = false;
@@ -291,27 +309,44 @@
         if (myId !== undefined && myId !== playRequestId){ reject(new Error('Aborted')); return; }
         if (err) reject(err); else resolve();
       };
+
+      const handshake = () => {
+        try {
+          if (myId !== undefined && myId !== playRequestId) return;
+          iframe.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 'nova' }), '*');
+          iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'addEventListener', args: ['onReady'] }), '*');
+          iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'addEventListener', args: ['onStateChange'] }), '*');
+          iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'addEventListener', args: ['infoDelivery'] }), '*');
+        } catch (_){}
+      };
+
       const tryPlay = () => {
         if (myId !== undefined && myId !== playRequestId) return;
         if (userIntent === 'paused'){ ytSendCommand('pauseVideo'); return; }
         ytSendCommand('playVideo');
         ytSendCommand('setVolume', [state.volume]);
+        ytSendCommand('unMute');
       };
+
       iframe.addEventListener('load', () => {
-        setTimeout(() => {
-          try { iframe.contentWindow.postMessage(JSON.stringify({event:'listening', id:'nova'}), '*'); } catch (_){}
-          ytSendCommand('addEventListener', ['onStateChange']);
-          ytSendCommand('addEventListener', ['infoDelivery']);
-        }, 100);
-        setTimeout(tryPlay, 400);
-        setTimeout(tryPlay, 1000);
+        console.log('[yt] iframe loaded, videoId=', videoId);
+        // Многократный handshake — на случай медленного API
+        setTimeout(handshake, 50);
+        setTimeout(handshake, 200);
+        setTimeout(handshake, 600);
+        setTimeout(tryPlay, 300);
+        setTimeout(tryPlay, 700);
+        setTimeout(tryPlay, 1200);
         setTimeout(tryPlay, 2000);
+        setTimeout(tryPlay, 3000);
         setTimeout(() => finish(), 900);
       });
+
       iframe.addEventListener('error', () => finish(new Error('iframe load error')));
       wrap.appendChild(iframe);
       ytIframe = iframe;
       setTimeout(() => finish(), 12000);
+
       const cancelTick = setInterval(() => {
         if (myId !== undefined && myId !== playRequestId){ clearInterval(cancelTick); finish(new Error('Aborted')); }
       }, 100);
@@ -627,7 +662,7 @@
   }
 
   // ============================================================
-  // LRC ПАРСЕР — для синхронизированных текстов
+  // LRC ПАРСЕР
   // ============================================================
   function parseLrc(lrc){
     if (!lrc) return [];
@@ -1682,7 +1717,7 @@
         { label: 'Восстанавливать позицию воспроизведения', hint: 'Продолжать трек с того же места после перезагрузки.', kind: 'pill', get: () => store.get('nova_resume', '1') === '1', set: (v) => store.set('nova_resume', v ? '1' : '0') },
         { label: 'Анимации интерфейса', hint: 'Плавные переходы и hover-эффекты.', kind: 'pill', get: () => store.get('nova_anim', '1') === '1', set: (v) => store.set('nova_anim', v ? '1' : '0') }
       ]},
-      { title: 'Экспериментальные каталоги', sub: 'Дополнительные источники метаданных для поиска. Воспроизведение всё равно через AudioProxy.', rows: [
+      { title: 'Экспериментальные каталоги', sub: 'Дополнительные источники метаданных для поиска.', rows: [
         { label: 'iTunes Music', hint: 'Большой каталог, быстрый отклик.', kind: 'pill', get: () => store.get('nova_cat_itunes', '1') === '1', set: (v) => store.set('nova_cat_itunes', v ? '1' : '0') },
         { label: 'Deezer Catalog', hint: 'Иногда точнее по артистам.', kind: 'pill', get: () => store.get('nova_cat_deezer', '1') === '1', set: (v) => store.set('nova_cat_deezer', v ? '1' : '0') },
         { label: 'Audius Network', hint: 'Независимые артисты, полные треки.', kind: 'pill', get: () => store.get('nova_cat_audius', '1') === '1', set: (v) => store.set('nova_cat_audius', v ? '1' : '0') }
