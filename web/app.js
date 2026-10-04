@@ -1,9 +1,6 @@
 (function () {
   'use strict';
 
-  // ============================================================
-  // PRECONNECT
-  // ============================================================
   [['preconnect', 'https://www.youtube-nocookie.com'],
    ['preconnect', 'https://www.youtube.com'],
    ['dns-prefetch', 'https://i.ytimg.com'],
@@ -14,9 +11,6 @@
     document.head.appendChild(l);
   });
 
-  // ============================================================
-  // STORE
-  // ============================================================
   const memStore = Object.create(null);
   const store = {
     get(k, f) { try { const v = localStorage.getItem(k); return v === null ? f : v; } catch { return memStore[k] ?? f; } },
@@ -24,9 +18,6 @@
     remove(k) { try { localStorage.removeItem(k); } catch { delete memStore[k]; } }
   };
 
-  // ============================================================
-  // STATE
-  // ============================================================
   const API_TOKEN_KEY = 'nova_token';
   let authToken = store.get(API_TOKEN_KEY, '');
 
@@ -87,9 +78,6 @@
   const LOCAL_RESOLVE_TTL = 25 * 60 * 1000;
   const pendingPrefetches = new Set();
 
-  // ============================================================
-  // EL
-  // ============================================================
   function $(id) { return document.getElementById(id); }
   function safeEl(id) {
     let n = $(id);
@@ -122,7 +110,8 @@
     'autoplayToggle','notificationsToggle','hotkeysToggle','settingsOpenFileBtn',
     'settingsAccountName','settingsAccountHint','settingsAccountBtn',
     'clearHistory2','clearFavorites2','clearCacheBtn','diagnostics',
-    'openWorkshopBtn','workshopModal','workshopModalClose','workshopGrid','workshopSearch','workshopPublish',
+    'workshopModal','workshopModalClose','workshopGrid','workshopSearch','workshopPublish','workshopCategories',
+    'workshopPublishModal','workshopPublishClose','workshopNameInput','workshopCategorySelect','workshopPublishSubmit',
     'queuePanel','queueClear','queueClose','queueContent',
     'miniPlayer','miniProgress','miniTrackClick','miniCover','miniTitle','miniArtist',
     'miniShuffle','miniPrev','miniPlay','miniPlayIcon','miniNext','miniRepeat',
@@ -141,9 +130,6 @@
   function on(node, ev, fn) { if (node && typeof node.addEventListener === 'function') node.addEventListener(ev, fn); }
   function apiBase() { return window.location.origin; }
 
-  // ============================================================
-  // CUSTOM CURSOR — без лага
-  // ============================================================
   let cursorController = null;
 
   function initCustomCursor() {
@@ -167,7 +153,6 @@
     function onMove(e) {
       const x = e.clientX, y = e.clientY;
       gtx = x; gty = y;
-      // Прямое присваивание, БЕЗ transition на transform — нет лага
       dot.style.transform = `translate3d(${x - 3}px,${y - 3}px,0)`;
       ring.style.transform = `translate3d(${x - 14}px,${y - 14}px,0)`;
       if (!visible) { gx = x; gy = y; show(); }
@@ -178,7 +163,7 @@
     window.addEventListener('mouseenter', show);
     window.addEventListener('blur', hide);
 
-    function isInteractive(t) { return t?.closest && !!t.closest('button, a, input, textarea, select, .card, .home-mini-card, .list-row, .nav-btn, .queue-row, .suggestion, .eq-preset, .accent-preset, .bg-preset, .artist-link, .player-tab, .small-btn, .inline-control, .context-item, .playlist-card, .playlist-picker-item, .search-filter, .page-tab, .workshop-item, .workshop-item-btn'); }
+    function isInteractive(t) { return t?.closest && !!t.closest('button, a, input, textarea, select, .card, .home-mini-card, .list-row, .nav-btn, .queue-row, .suggestion, .eq-preset, .accent-preset, .bg-preset, .artist-link, .player-tab, .small-btn, .inline-control, .context-item, .playlist-card, .playlist-picker-item, .search-filter, .page-tab, .workshop-item, .workshop-item-btn, .workshop-cat-btn'); }
     function isTextInput(t) { return t?.closest && !!t.closest('input, textarea, [contenteditable="true"]'); }
 
     document.addEventListener('mouseover', e => {
@@ -204,7 +189,6 @@
     store.set('nova_cursor', state.cursor);
     if (cursorController) { cursorController.destroy(); cursorController = null; }
     if (state.cursor === 'system') {
-      document.documentElement.removeAttribute('data-cursor');
       document.documentElement.setAttribute('data-cursor', 'system');
     } else {
       document.documentElement.setAttribute('data-cursor', state.cursor);
@@ -213,9 +197,6 @@
     if (el.cursorToggle) el.cursorToggle.textContent = CURSOR_LABELS[state.cursor] || 'Кольцо';
   }
 
-  // ============================================================
-  // AUDIO GRAPH
-  // ============================================================
   let audioCtx = null, sourceNode = null, fadeGain = null, volumeGain = null, eqFilters = null, audioGraphReady = false;
   const EQ_BANDS = [
     { freq: 60, type: 'lowshelf', label: '60' },
@@ -295,9 +276,6 @@
     applyEq(); renderEqBands();
   }
 
-  // ============================================================
-  // HELPERS
-  // ============================================================
   function escapeHtml(v) {
     return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
@@ -330,7 +308,6 @@
     return String(raw).split(/\s*(?:,|&|\bfeat\.?\b|\bft\.?\b|\bwith\b|\bvs\.?\b|\bx\b)\s*/i)
       .map(s => s.trim()).filter(Boolean);
   }
-  // Рендер артистов с учётом фитов — каждый отдельный ссылкой
   function artistsHtml(s) {
     const parts = splitArtistsList(s);
     if (!parts.length) return '—';
@@ -356,9 +333,6 @@
     notify._t = setTimeout(() => { el.toast.className = 'toast'; }, 2600);
   }
 
-  // ============================================================
-  // API
-  // ============================================================
   async function apiAuth(path, opts = {}) {
     const headers = { ...(opts.headers || {}), Authorization: 'Bearer ' + authToken };
     const r = await fetch(apiBase() + path, { ...opts, headers });
@@ -366,9 +340,6 @@
     return r.json();
   }
 
-  // ============================================================
-  // NORMALIZE
-  // ============================================================
   function normalizeTrack(t) {
     if (!t) return null;
     const artistObj = (t.artist && typeof t.artist === 'object') ? t.artist : null;
@@ -405,9 +376,6 @@
     return 't_' + Math.abs(h);
   }
 
-  // ============================================================
-  // AMBIENT
-  // ============================================================
   const ambientCache = new Map();
   function updateAmbientFromCover(url) {
     if (!url) { document.body.classList.remove('has-ambient'); return; }
@@ -442,9 +410,6 @@
     img.src = url;
   }
 
-  // ============================================================
-  // USER
-  // ============================================================
   function avatarUrl(u) {
     if (!u) return '';
     if (!u.avatar) {
@@ -565,9 +530,6 @@
     }
   }
 
-  // ============================================================
-  // BACKGROUND
-  // ============================================================
   let backgroundDbPromise = null;
   function backgroundDb() {
     if (backgroundDbPromise) return backgroundDbPromise;
@@ -609,9 +571,9 @@
       return;
     }
     document.body.classList.add('has-background');
-    if (src.startsWith('data:') || src.startsWith('http') || src.startsWith('/')) {
+    if (src.startsWith('data:') || src.startsWith('http') || src.startsWith('/') || src.startsWith('url(')) {
       el.backgroundLayer.style.background = '#000 center/cover no-repeat';
-      el.backgroundLayer.style.backgroundImage = `url("${src.replace(/"/g, '\\"')}")`;
+      el.backgroundLayer.style.backgroundImage = src.startsWith('url(') ? src : `url("${src.replace(/"/g, '\\"')}")`;
     } else {
       el.backgroundLayer.style.backgroundImage = 'none';
       el.backgroundLayer.style.background = src;
@@ -641,9 +603,6 @@
     notify('Фон сброшен');
   }
 
-  // ============================================================
-  // YOUTUBE
-  // ============================================================
   function ytSendCommand(func, args) {
     if (!ytIframe || !ytIframe.contentWindow) return false;
     try { ytIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args: args || [] }), '*'); return true; }
@@ -730,9 +689,6 @@
     });
   }
 
-  // ============================================================
-  // PLAYBACK RESOLVE
-  // ============================================================
   async function resolvePlaybackServer(track, signal) {
     if (track.provider === 'audius' && track.providerId)
       return { provider: 'audius', kind: 'audius', url: '/api/audio/audius/' + encodeURIComponent(track.providerId) };
@@ -772,9 +728,6 @@
     throw new Error('Не удалось найти источник воспроизведения');
   }
 
-  // ============================================================
-  // HOME
-  // ============================================================
   function isBadArtist(n) {
     const x = normalizeSearch(n);
     return !x || /^(unknown( artist)?|various artists|no name|без названия|null|undefined)$/i.test(x);
@@ -856,14 +809,7 @@
     else { state.tracks = [track]; playTrack(0); }
   }
 
-  // ============================================================
-  // SEARCH
-  // ============================================================
   let searchAbort = null, searchDebounceTimer = null;
-  function sortSearchResults(list, q) {
-    return list.map((t, i) => ({ t, i, s: searchScore(t, q) }))
-      .sort((a, b) => b.s !== a.s ? b.s - a.s : a.i - b.i).map(x => x.t);
-  }
   function searchScore(track, query) {
     const q = normalizeSearch(query), ti = normalizeSearch(track.title), ar = normalizeSearch(track.artist);
     if (!q) return 0;
@@ -1022,12 +968,11 @@
     el.searchTracksBlock.style.display = (f === 'all' || f === 'tracks') ? '' : 'none';
   }
 
-  // ============================================================
-  // PREFETCH
-  // ============================================================
   function prefetchTracks(tracks) { tracks.forEach(prefetchTrack); }
   function prefetchTrack(t) {
     if (!t) return;
+    if (t.provider === 'audius' && t.providerId) return;
+    if (t.provider === 'youtube' && t.videoId) return;
     const title = cleanTitleLocal(String(t.title || '').trim()) || String(t.title || '').trim();
     const primaryArtist = splitArtistsList(t.artist)[0] || t.artist || '';
     if (!title && !primaryArtist) return;
@@ -1055,9 +1000,6 @@
       .finally(() => pendingPrefetches.delete(ck));
   }
 
-  // ============================================================
-  // PLAY TRACK
-  // ============================================================
   async function playTrack(index, opts = {}) {
     if (!Number.isInteger(index) || index < 0 || index >= state.tracks.length) return;
     const track = state.tracks[index];
@@ -1130,7 +1072,6 @@
     updatePlayerView(); updateMiniPlayer();
     setTimeout(() => { updatePlayButtons(); applyEq(); }, 300);
     setTimeout(loadRecommendations, 8000);
-    // Если открыта вкладка lyrics — перезагрузим
     const lyrBtn = document.querySelector('.player-tab[data-tab="lyrics"]');
     if (lyrBtn?.classList.contains('active') && state.currentTrack) loadLyrics(state.currentTrack);
     const nextIdx = state.currentIndex + 1;
@@ -1269,13 +1210,8 @@
     el.miniShuffle?.classList.toggle('active', state.shuffle);
   }
 
-  // ============================================================
-  // PROGRESS / SEEK / VOLUME
-  // ============================================================
   function resetProgressUI() {
-    [el.progress, el.miniProgress].forEach(p => {
-      if (!p) return; p.value = 0; p.style.setProperty('--progress', '0%');
-    });
+    [el.progress, el.miniProgress].forEach(p => { if (!p) return; p.value = 0; p.style.setProperty('--progress', '0%'); });
     if (el.currentTime) el.currentTime.textContent = '0:00';
     if (el.duration) el.duration.textContent = '0:00';
     if (el.miniTime) el.miniTime.textContent = '0:00 / 0:00';
@@ -1402,9 +1338,6 @@
     updateQueue(); updatePlayButtons();
   }
 
-  // ============================================================
-  // QUEUE
-  // ============================================================
   function addToQueue(track) {
     if (!track) return;
     const k = trackKey(track);
@@ -1472,9 +1405,6 @@
     });
   }
 
-  // ============================================================
-  // FAVORITES / HISTORY
-  // ============================================================
   function toggleFavorite(t) {
     if (!t) return;
     const k = trackKey(t);
@@ -1585,9 +1515,6 @@
     });
   }
 
-  // ============================================================
-  // ARTIST / ALBUM
-  // ============================================================
   async function showArtist(id, name) {
     showView('artist');
     el.artistHeroName.textContent = name || 'Исполнитель';
@@ -1714,9 +1641,6 @@
     }
   }
 
-  // ============================================================
-  // PLAYLISTS
-  // ============================================================
   async function loadPlaylists() {
     if (!state.user || !authToken) { state.playlists = []; renderPlaylists(); return; }
     try {
@@ -1843,9 +1767,6 @@
     el.playlistPickerModal.setAttribute('aria-hidden', 'true');
   }
 
-  // ============================================================
-  // LOCAL MUSIC
-  // ============================================================
   function localAudioPicker() { el.localAudioInput.click(); }
   async function handleLocalFiles(files) {
     const arr = Array.from(files || []);
@@ -1884,9 +1805,6 @@
     renderList(box, state.localTracks, { context: 'local' });
   }
 
-  // ============================================================
-  // CONTEXT MENU
-  // ============================================================
   function showContextMenu(e, track) {
     const menu = el.contextMenu; menu.innerHTML = '';
     const items = [
@@ -1929,9 +1847,6 @@
   }
   function hideContextMenu() { el.contextMenu.classList.add('hidden'); }
 
-  // ============================================================
-  // SONG INFO
-  // ============================================================
   let songInfoCurrent = null;
   function openSongInfo(track) {
     if (!track) return;
@@ -1954,9 +1869,6 @@
     el.songInfoModal.setAttribute('aria-hidden', 'true');
   }
 
-  // ============================================================
-  // LYRICS
-  // ============================================================
   let lyricsTimer = null, lyricsLines = [], lyricsActiveIndex = -1, lyricsRetried = false;
 
   function parseLrc(lrc) {
@@ -2017,7 +1929,6 @@
       if (!r.ok || !d?.found) {
         if (!lyricsRetried) {
           lyricsRetried = true;
-          // Retry — иногда LRCLIB отвечает не сразу
           setTimeout(() => {
             if (state.currentTrack && trackKey(state.currentTrack) === trackKey(track) && box.dataset.loaded === '0') {
               loadLyrics(track, true);
@@ -2083,9 +1994,6 @@
     setTimeout(() => setPlayerTab('lyrics'), 60);
   }
 
-  // ============================================================
-  // VIEWS
-  // ============================================================
   function showView(view) {
     if (state.view === view) return;
     if (state.view !== 'player') state.lastNonPlayerView = state.view;
@@ -2115,9 +2023,6 @@
     showView(state.lastNonPlayerView || 'home');
   }
 
-  // ============================================================
-  // SETTINGS
-  // ============================================================
   function applyTheme() {
     document.documentElement.setAttribute('data-theme', settings.theme);
     if (el.themeToggle) el.themeToggle.textContent = settings.theme === 'dark' ? 'Тёмная' : 'Светлая';
@@ -2224,9 +2129,6 @@
     el.equalizerModal.setAttribute('aria-hidden', 'true');
   }
 
-  // ============================================================
-  // PROFILE
-  // ============================================================
   async function openProfile() {
     el.profileModal.classList.add('open');
     el.profileModal.setAttribute('aria-hidden', 'false');
@@ -2279,9 +2181,6 @@
     el.profileModal.setAttribute('aria-hidden', 'true');
   }
 
-  // ============================================================
-  // HISTORY / REPORTING
-  // ============================================================
   function addHistory(track) {
     const k = trackKey(track);
     state.history = state.history.filter(x => trackKey(x) !== k);
@@ -2312,9 +2211,6 @@
     } catch { state.recommendations = []; }
   }
 
-  // ============================================================
-  // DIAGNOSTICS
-  // ============================================================
   function refreshDiagnostics() {
     const box = el.diagnostics; if (!box) return;
     const t = state.currentTrack;
@@ -2338,37 +2234,68 @@
       `<div class="diag-row"><span class="diag-key">${escapeHtml(k)}</span><span class="diag-val">${escapeHtml(String(v))}</span></div>`).join('');
   }
 
-  // ============================================================
-  // WORKSHOP
-  // ============================================================
-  let workshopSort = 'popular', workshopQuery = '', workshopItems = [];
+  let workshopSort = 'popular';
+  let workshopCategory = 'all';
+  let workshopQuery = '';
+  let workshopItems = [];
 
   async function loadWorkshop() {
     el.workshopGrid.innerHTML = '<div class="workshop-empty">Загрузка…</div>';
     try {
       const params = new URLSearchParams({ sort: workshopSort });
       if (workshopQuery) params.set('q', workshopQuery);
+      if (workshopCategory && workshopCategory !== 'all') params.set('category', workshopCategory);
       const r = await fetch(apiBase() + '/api/workshop/items?' + params);
       const d = await r.json();
       workshopItems = Array.isArray(d.items) ? d.items : [];
       renderWorkshop();
     } catch { el.workshopGrid.innerHTML = '<div class="workshop-empty">Не удалось загрузить</div>'; }
   }
+
+  function renderWorkshopPreview(item) {
+    const kind = item.kind || 'css';
+    const value = String(item.value || '');
+    if (kind === 'svg') {
+      return `<div class="workshop-item-preview icon-preview">${value}</div>`;
+    }
+    if (kind === 'image' || kind === 'url' || /^data:image/.test(value) || /^https?:/.test(value)) {
+      const safe = value.replace(/"/g, '\\"');
+      return `<div class="workshop-item-preview" style="background-image:url('${safe}')"></div>`;
+    }
+    const safe = value.replace(/"/g, '\\"');
+    return `<div class="workshop-item-preview" style="background:${safe}"></div>`;
+  }
+
   function renderWorkshop() {
     if (!workshopItems.length) {
-      el.workshopGrid.innerHTML = '<div class="workshop-empty">Пока никто не публиковал оформления.<br><br><button class="workshop-item-btn primary" id="workshopEmptyPublish" style="max-width:240px;margin:0 auto;display:block;height:40px;font-size:12.5px">Опубликовать свой фон</button></div>';
-      const b = document.getElementById('workshopEmptyPublish');
-      if (b) b.addEventListener('click', () => el.workshopPublish.click());
+      el.workshopGrid.innerHTML = '<div class="workshop-empty">Ничего не найдено в этой категории.<br><br>Попробуй другую категорию или опубликуй свой фон.</div>';
       return;
     }
     el.workshopGrid.innerHTML = '';
     workshopItems.forEach(item => {
       const card = document.createElement('div');
       card.className = 'workshop-item';
-      const previewStyle = item.kind === 'image'
-        ? 'background-image:url("' + String(item.value).replace(/"/g, '\\"') + '")'
-        : 'background:' + String(item.value);
-      card.innerHTML = `<div class="workshop-item-preview" style="${previewStyle}"><span class="workshop-item-tag">${escapeHtml(item.tag || 'theme')}</span><span class="workshop-item-dl">${item.downloads || 0}</span></div><div class="workshop-item-body"><div class="workshop-item-name">${escapeHtml(item.name || 'Untitled')}</div><div class="workshop-item-author">от ${escapeHtml(item.author || 'Unknown')}</div><div class="workshop-item-actions"><button class="workshop-item-btn primary" data-act="apply">Применить</button><button class="workshop-item-btn" data-act="preview">Просмотр</button></div></div>`;
+      card.innerHTML = `
+        ${renderWorkshopPreview(item)}
+        <div class="workshop-item-body">
+          <div class="workshop-item-name">${escapeHtml(item.name || 'Untitled')}</div>
+          <div class="workshop-item-author">от ${escapeHtml(item.author || 'Unknown')}</div>
+          <div class="workshop-item-actions">
+            <button class="workshop-item-btn primary" data-act="apply">Применить</button>
+            <button class="workshop-item-btn" data-act="preview">Просмотр</button>
+          </div>
+        </div>`;
+      const preview = card.querySelector('.workshop-item-preview');
+      if (preview) {
+        const tag = document.createElement('span');
+        tag.className = 'workshop-item-tag';
+        tag.textContent = item.tag || item.category || 'theme';
+        preview.appendChild(tag);
+        const dl = document.createElement('span');
+        dl.className = 'workshop-item-dl';
+        dl.textContent = String(item.downloads || 0);
+        preview.appendChild(dl);
+      }
       card.addEventListener('click', e => {
         const btn = e.target.closest('.workshop-item-btn');
         const act = btn ? btn.dataset.act : 'apply';
@@ -2389,6 +2316,7 @@
       el.workshopGrid.appendChild(card);
     });
   }
+
   function openWorkshop() {
     el.workshopModal.classList.add('open');
     el.workshopModal.setAttribute('aria-hidden', 'false');
@@ -2398,26 +2326,41 @@
     el.workshopModal.classList.remove('open');
     el.workshopModal.setAttribute('aria-hidden', 'true');
   }
-  async function publishWorkshop() {
+  function openWorkshopPublish() {
     if (!state.user || !authToken) return notify('Войди, чтобы публиковать');
+    if (!state.background.src) return notify('Сначала выбери фон в настройках');
+    el.workshopNameInput.value = '';
+    el.workshopCategorySelect.value = 'background';
+    el.workshopPublishModal.classList.add('open');
+    el.workshopPublishModal.setAttribute('aria-hidden', 'false');
+    setTimeout(() => el.workshopNameInput.focus(), 80);
+  }
+  function closeWorkshopPublish() {
+    el.workshopPublishModal.classList.remove('open');
+    el.workshopPublishModal.setAttribute('aria-hidden', 'true');
+  }
+  async function submitWorkshopPublish() {
+    const name = el.workshopNameInput.value.trim();
+    const category = el.workshopCategorySelect.value || 'background';
+    if (!name) return notify('Введи название');
     const current = state.background.src || '';
-    if (!current) return notify('Сначала выбери фон в настройках');
-    const name = prompt('Название темы:'); if (!name) return;
-    const kind = current.startsWith('data:') ? 'image' : 'css';
-    if (kind === 'image' && current.length > 500000) return notify('Файл слишком большой (max ~350KB)');
+    if (!current) return notify('Нет фона для публикации');
+    let kind = 'css';
+    if (current.startsWith('data:image')) kind = 'image';
+    else if (current.startsWith('http')) kind = 'url';
+    else if (current.startsWith('url(')) kind = 'url';
+    if (kind === 'image' && current.length > 800000) return notify('Файл слишком большой (max ~600KB)');
     try {
       await apiAuth('/api/workshop/publish', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, value: current, kind })
+        body: JSON.stringify({ name, value: current, kind, category })
       });
       notify('Опубликовано');
+      closeWorkshopPublish();
       loadWorkshop();
     } catch { notify('Не удалось опубликовать', 'error'); }
   }
 
-  // ============================================================
-  // WAVES
-  // ============================================================
   (function initWaves() {
     const canvas = el.waveCanvas; if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -2452,12 +2395,10 @@
     start();
   })();
 
-  // ============================================================
-  // WIRE
-  // ============================================================
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const v = btn.dataset.view;
+      if (v === 'workshop') { openWorkshop(); return; }
       if (v === 'settings') { showView('settings'); return; }
       if (v === 'search') { showView('search'); el.searchInput.focus(); return; }
       showView(v);
@@ -2670,8 +2611,6 @@
     });
   });
 
-  // workshop
-  on(el.openWorkshopBtn, 'click', openWorkshop);
   on(el.workshopModalClose, 'click', closeWorkshop);
   on(el.workshopModal, 'click', e => { if (e.target === el.workshopModal) closeWorkshop(); });
   on(el.workshopSearch, 'input', e => {
@@ -2679,6 +2618,16 @@
     clearTimeout(workshopQuery._t);
     workshopQuery._t = setTimeout(loadWorkshop, 250);
   });
+  if (el.workshopCategories) {
+    el.workshopCategories.querySelectorAll('.workshop-cat-btn').forEach(b => {
+      b.addEventListener('click', () => {
+        el.workshopCategories.querySelectorAll('.workshop-cat-btn').forEach(x => x.classList.remove('active'));
+        b.classList.add('active');
+        workshopCategory = b.dataset.cat || 'all';
+        loadWorkshop();
+      });
+    });
+  }
   document.querySelectorAll('.workshop-sort-btn').forEach(b => {
     b.addEventListener('click', () => {
       document.querySelectorAll('.workshop-sort-btn').forEach(x => x.classList.remove('active'));
@@ -2687,9 +2636,12 @@
       loadWorkshop();
     });
   });
-  on(el.workshopPublish, 'click', publishWorkshop);
+  on(el.workshopPublish, 'click', openWorkshopPublish);
+  on(el.workshopPublishClose, 'click', closeWorkshopPublish);
+  on(el.workshopPublishModal, 'click', e => { if (e.target === el.workshopPublishModal) closeWorkshopPublish(); });
+  on(el.workshopPublishSubmit, 'click', submitWorkshopPublish);
+  on(el.workshopNameInput, 'keydown', e => { if (e.key === 'Enter') submitWorkshopPublish(); });
 
-  // audio events
   on(el.audio, 'loadedmetadata', updateProgress);
   on(el.audio, 'durationchange', updateProgress);
   on(el.audio, 'timeupdate', updateProgress);
@@ -2723,9 +2675,10 @@
       if (el.songInfoModal.classList.contains('open')) closeSongInfo();
       else if (el.equalizerModal.classList.contains('open')) closeEqualizer();
       else if (el.profileModal.classList.contains('open')) closeProfile();
+      else if (el.workshopPublishModal.classList.contains('open')) closeWorkshopPublish();
+      else if (el.workshopModal.classList.contains('open')) closeWorkshop();
       else if (el.playlistPickerModal.classList.contains('open')) closePlaylistPicker();
       else if (el.playlistCreateModal.classList.contains('open')) closePlaylistCreate();
-      else if (el.workshopModal.classList.contains('open')) closeWorkshop();
       else if (el.queuePanel.classList.contains('open')) { el.queuePanel.classList.remove('open'); el.queuePanel.setAttribute('aria-hidden', 'true'); }
       hideContextMenu();
       return;
@@ -2763,7 +2716,6 @@
 
   window.addEventListener('beforeunload', persist);
 
-  // suggestions
   (function initSuggestions() {
     const input = el.searchInput, box = el.searchSuggestions;
     if (!input || !box) return;
@@ -2838,9 +2790,6 @@
     } catch { notify('Не удалось скачать', 'error'); }
   }
 
-  // ============================================================
-  // START
-  // ============================================================
   applyTheme();
   applyCursor(initialCursor);
   setVolume(state.volume);
@@ -2883,6 +2832,6 @@
   }
   startup();
 
-  window.NOVA = { state, settings, playTrack, doSearch, showView, applyCursor };
+  window.NOVA = { state, settings, playTrack, doSearch, showView, applyCursor, openWorkshop };
 
 })();
