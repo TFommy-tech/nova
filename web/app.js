@@ -1,13 +1,10 @@
 (function () {
   'use strict';
 
-  [['preconnect', 'https://www.youtube-nocookie.com'],
-   ['preconnect', 'https://www.youtube.com'],
-   ['dns-prefetch', 'https://i.ytimg.com'],
+  [['dns-prefetch', 'https://i.ytimg.com'],
    ['dns-prefetch', 'https://e-cdns-images.dzcdn.net']].forEach(([rel, href]) => {
     const l = document.createElement('link');
     l.rel = rel; l.href = href;
-    if (rel === 'preconnect') l.crossOrigin = 'anonymous';
     document.head.appendChild(l);
   });
 
@@ -70,9 +67,8 @@
     autoplay: store.get('nova_autoplay', '1') === '1'
   };
 
-  let ytIframe = null, ytCurrentVideo = '', ytVideoDuration = 0, ytVideoCurrentTime = 0;
   let playRequestId = 0, playAbort = null, userIntent = 'idle';
-  let ytPauseWatchdog = null, mutedBefore = 100, lastPlaybackError = '';
+  let mutedBefore = 100, lastPlaybackError = '';
 
   const localResolveCache = new Map();
   const LOCAL_RESOLVE_TTL = 25 * 60 * 1000;
@@ -124,7 +120,7 @@
     'playlistPickerModal','playlistPickerClose','playlistPickerList','playlistPickerNew',
     'playlistCreateModal','playlistCreateClose','playlistNameInput','playlistDescInput','playlistCreateSubmit',
     'contextMenu','toast',
-    'audio','youtubePlayerWrap'
+    'audio'
   ].forEach(id => { el[id] = safeEl(id); });
 
   function on(node, ev, fn) { if (node && typeof node.addEventListener === 'function') node.addEventListener(ev, fn); }
@@ -603,92 +599,6 @@
     notify('Фон сброшен');
   }
 
-  function ytSendCommand(func, args) {
-    if (!ytIframe || !ytIframe.contentWindow) return false;
-    try { ytIframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func, args: args || [] }), '*'); return true; }
-    catch { return false; }
-  }
-  function ytPlay() { userIntent = 'playing'; ytStopPauseWatchdog(); ytSendCommand('playVideo'); }
-  function ytStartPauseWatchdog() {
-    if (ytPauseWatchdog) return;
-    ytPauseWatchdog = setInterval(() => {
-      if (!ytIframe || !ytCurrentVideo) { ytStopPauseWatchdog(); return; }
-      if (userIntent !== 'paused') { ytStopPauseWatchdog(); return; }
-      ytSendCommand('pauseVideo');
-    }, 200);
-  }
-  function ytStopPauseWatchdog() { if (ytPauseWatchdog) { clearInterval(ytPauseWatchdog); ytPauseWatchdog = null; } }
-
-  window.addEventListener('message', e => {
-    if (!/^https:\/\/(www\.)?youtube(-nocookie)?\.com$/.test(e.origin || '')) return;
-    let data;
-    try { data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch { return; }
-    if (!data || !data.event) return;
-    if (data.event === 'onReady') {
-      if (userIntent === 'playing' || userIntent === 'loading') { ytSendCommand('playVideo'); ytSendCommand('setVolume', [state.volume]); }
-    }
-    if (data.event === 'onStateChange') {
-      const s = data.info;
-      if (s === 1) { if (userIntent === 'paused') { ytSendCommand('pauseVideo'); return; } if (userIntent !== 'playing') { userIntent = 'playing'; updatePlayButtons(); } }
-      else if (s === 2) { if (userIntent === 'paused') return; if (userIntent === 'playing') ytSendCommand('playVideo'); }
-      else if (s === 0) { if (userIntent === 'playing') { state.repeat ? (ytSendCommand('seekTo', [0, true]), ytPlay()) : next(); } }
-      else if (s === -1) { if (userIntent === 'playing') ytSendCommand('playVideo'); }
-    }
-    if (data.event === 'infoDelivery' && data.info) {
-      if (typeof data.info.currentTime === 'number') ytVideoCurrentTime = data.info.currentTime;
-      if (typeof data.info.duration === 'number' && data.info.duration > 0) ytVideoDuration = data.info.duration;
-      updateProgress();
-    }
-  });
-
-  function playYouTube(videoId, myId) {
-    return new Promise((resolve, reject) => {
-      const wrap = el.youtubePlayerWrap;
-      if (!wrap) return reject(new Error('no youtube wrap'));
-      wrap.innerHTML = '';
-      ytIframe = null; ytCurrentVideo = videoId; ytVideoDuration = 0; ytVideoCurrentTime = 0;
-      ytStopPauseWatchdog();
-      try { el.audio.pause(); } catch {}
-      el.audio.removeAttribute('src'); el.audio.load();
-
-      const iframe = document.createElement('iframe');
-      iframe.setAttribute('allow', 'autoplay; encrypted-media');
-      iframe.style.cssText = 'width:100%;height:100%;border:0;display:block;background:#000;';
-      iframe.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?autoplay=1&enablejsapi=1&controls=0&modestbranding=1&rel=0&iv_load_policy=3&playsinline=1&fs=0&disablekb=1&hl=en&origin=${encodeURIComponent(location.origin)}`;
-
-      let resolved = false;
-      const finish = (err) => {
-        if (resolved) return; resolved = true;
-        if (myId !== undefined && myId !== playRequestId) { reject(new Error('Aborted')); return; }
-        err ? reject(err) : resolve();
-      };
-      const handshake = () => {
-        try {
-          if (myId !== undefined && myId !== playRequestId) return;
-          iframe.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 'nova' }), '*');
-          ['onReady', 'onStateChange', 'infoDelivery'].forEach(ev =>
-            iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'addEventListener', args: [ev] }), '*'));
-        } catch {}
-      };
-      const tryPlay = () => {
-        if (myId !== undefined && myId !== playRequestId) return;
-        if (userIntent === 'paused') { ytSendCommand('pauseVideo'); return; }
-        ytSendCommand('playVideo');
-        ytSendCommand('setVolume', [state.volume]);
-        ytSendCommand('unMute');
-      };
-      iframe.addEventListener('load', () => {
-        handshake(); tryPlay();
-        [60, 200, 600, 1200].forEach(t => setTimeout(() => { handshake(); tryPlay(); }, t));
-        setTimeout(() => finish(), 500);
-      });
-      iframe.addEventListener('error', () => finish(new Error('iframe load error')));
-      wrap.appendChild(iframe);
-      ytIframe = iframe;
-      setTimeout(() => finish(), 8000);
-    });
-  }
-
   function resolveCacheParts(t) {
     const title = cleanTitleLocal(String(t.title || '').trim()) || String(t.title || '').trim();
     const primaryArtist = splitArtistsList(t.artist)[0] || t.artist || '';
@@ -1057,7 +967,6 @@
     const controller = new AbortController();
     playAbort = controller;
 
-    ytStopPauseWatchdog();
     clearLyricsSync();
 
     const shouldFade = audioGraphReady && state.currentTrack && (userIntent === 'playing');
@@ -1134,7 +1043,6 @@
   }
   async function playUrl(url, myId) {
     userIntent = 'playing';
-    ytStopPauseWatchdog();
     el.audio.pause();
     el.audio.removeAttribute('src'); el.audio.load();
     el.audio.src = url;
@@ -1161,22 +1069,11 @@
   }
   async function playStream(stream, myId) {
     if (!stream || !stream.url) throw new Error('empty stream url');
-    el.youtubePlayerWrap.innerHTML = '';
-    ytIframe = null; ytCurrentVideo = '';
     await playUrl(stream.url, myId);
   }
   function playCurrentOrFirst() {
     initAudioGraph();
     if (audioCtx?.state === 'suspended') audioCtx.resume().then(applyEq).catch(() => {});
-    if (ytIframe && ytCurrentVideo) {
-      const isPlaying = userIntent === 'playing' || userIntent === 'loading';
-      if (isPlaying) {
-        userIntent = 'paused'; updatePlayButtons();
-        for (let i = 0; i < 8; i++) setTimeout(() => { if (userIntent === 'paused') ytSendCommand('pauseVideo'); }, i * 60);
-        ytStartPauseWatchdog();
-      } else { ytPlay(); updatePlayButtons(); }
-      return;
-    }
     if (state.currentTrack) {
       if (userIntent === 'loading') return;
       if (el.audio.paused) {
@@ -1197,7 +1094,7 @@
   }
   function previous() {
     if (!state.queue.length) return;
-    if (!ytIframe && el.audio.currentTime > 4) { el.audio.currentTime = 0; return; }
+    if (el.audio.currentTime > 4) { el.audio.currentTime = 0; return; }
     let i = queueIndexOf(state.currentTrack);
     if (i < 0) i = state.currentIndex;
     i -= 1;
@@ -1265,9 +1162,8 @@
     if (el.miniTime) el.miniTime.textContent = '0:00 / 0:00';
   }
   function updateProgress() {
-    let c = 0, d = 0;
-    if (ytIframe && ytCurrentVideo) { c = ytVideoCurrentTime; d = ytVideoDuration; }
-    else { d = el.audio.duration; c = el.audio.currentTime || 0; }
+    const d = el.audio.duration;
+    const c = el.audio.currentTime || 0;
     if (!Number.isFinite(d) || d <= 0) {
       if (el.currentTime) el.currentTime.textContent = formatTime(c);
       if (el.duration) el.duration.textContent = '0:00';
@@ -1283,24 +1179,10 @@
   }
   function seekToValue(v) {
     const pct = Number(v) / 1000;
-    if (ytIframe && ytCurrentVideo && ytVideoDuration > 0) {
-      const t = ytVideoDuration * pct;
-      ytSendCommand('seekTo', [t, true]); ytVideoCurrentTime = t;
-      updateProgress();
-      if (userIntent === 'paused') ytSendCommand('pauseVideo'); else ytSendCommand('playVideo');
-      return;
-    }
     if (!Number.isFinite(el.audio.duration) || el.audio.duration <= 0) return;
     el.audio.currentTime = el.audio.duration * pct;
   }
   function seekDelta(d) {
-    if (ytIframe && ytCurrentVideo) {
-      const t = Math.max(0, ytVideoCurrentTime + d);
-      ytSendCommand('seekTo', [t, true]); ytVideoCurrentTime = t;
-      updateProgress();
-      if (userIntent === 'paused') ytSendCommand('pauseVideo');
-      return;
-    }
     if (!Number.isFinite(el.audio.duration) || el.audio.duration <= 0) return;
     el.audio.currentTime = Math.max(0, Math.min(el.audio.duration, (el.audio.currentTime || 0) + d));
   }
@@ -1312,7 +1194,6 @@
     if (el.volumeMini) el.volumeMini.value = state.volume;
     if (el.volumeLarge) el.volumeLarge.value = state.volume;
     if (el.settingsVolumeValue) el.settingsVolumeValue.textContent = state.volume + '%';
-    if (ytIframe && ytCurrentVideo) ytSendCommand('setVolume', [state.volume]);
     try { store.set('nova_volume', String(state.volume)); } catch {}
   }
   function updatePlayButtons() {
@@ -1951,9 +1832,7 @@
   function highlightLyrics() {
     if (!lyricsLines.length) return;
     const box = el.lyricsInlineContent; if (!box) return;
-    let t = 0;
-    if (ytIframe && ytCurrentVideo) t = ytVideoCurrentTime || 0;
-    else t = el.audio.currentTime || 0;
+    const t = el.audio.currentTime || 0;
     let idx = -1;
     for (let i = 0; i < lyricsLines.length; i++) { if (lyricsLines[i].t <= t) idx = i; else break; }
     if (idx === lyricsActiveIndex) return;
@@ -2010,8 +1889,7 @@
           div.dataset.time = String(l.t); div.dataset.index = String(i);
           div.textContent = l.text;
           div.addEventListener('click', () => {
-            if (ytIframe && ytCurrentVideo) { ytSendCommand('seekTo', [l.t, true]); ytVideoCurrentTime = l.t; }
-            else if (Number.isFinite(el.audio.duration)) el.audio.currentTime = l.t;
+            if (Number.isFinite(el.audio.duration)) el.audio.currentTime = l.t;
             highlightLyrics();
           });
           box.appendChild(div);
@@ -2175,9 +2053,7 @@
     initAudioGraph();
     if (audioCtx?.state === 'suspended') audioCtx.resume().then(applyEq).catch(() => {});
     renderEqBands(); renderEqPresets();
-    const isYt = !!(ytIframe && ytCurrentVideo);
-    if (isYt) { el.eqNotice.textContent = 'Эквалайзер не применяется к YouTube-трекам.'; el.eqNotice.style.display = 'block'; }
-    else if (!state.currentTrack) { el.eqNotice.textContent = 'Сначала включи трек.'; el.eqNotice.style.display = 'block'; }
+    if (!state.currentTrack) { el.eqNotice.textContent = 'Сначала включи трек.'; el.eqNotice.style.display = 'block'; }
     else el.eqNotice.style.display = 'none';
     el.equalizerModal.classList.add('open');
     el.equalizerModal.setAttribute('aria-hidden', 'false');
@@ -2786,10 +2662,6 @@
   });
 
   setInterval(() => {
-    if (ytIframe && ytCurrentVideo) {
-      if (userIntent === 'paused') ytSendCommand('pauseVideo');
-      updateProgress(); updatePlayButtons(); return;
-    }
     if (state.currentTrack && userIntent === 'playing') updateProgress();
   }, 1000);
   setInterval(refreshDiagnostics, 3000);
