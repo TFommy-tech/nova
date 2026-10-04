@@ -689,6 +689,13 @@
     });
   }
 
+  function resolveCacheParts(t) {
+    const title = cleanTitleLocal(String(t.title || '').trim()) || String(t.title || '').trim();
+    const primaryArtist = splitArtistsList(t.artist)[0] || t.artist || '';
+    const key = (title || primaryArtist) ? normalizeSearch(title + ' ' + primaryArtist) : '';
+    return { key, title, primaryArtist };
+  }
+
   async function resolvePlaybackServer(track, signal) {
     if (track.provider === 'audius' && track.providerId)
       return { provider: 'audius', kind: 'audius', url: '/api/audio/audius/' + encodeURIComponent(track.providerId) };
@@ -696,6 +703,19 @@
       return { provider: 'youtube', kind: 'youtube', videoId: track.videoId, url: '/api/audio/youtube/' + encodeURIComponent(track.videoId) };
     if (track.source === 'LOCAL' && track.localUrl)
       return { provider: 'local', kind: 'local', url: track.localUrl };
+
+    const ck = resolveCacheParts(track).key;
+    if (ck) {
+      const c = localResolveCache.get(ck);
+      if (c && c.url && Date.now() - c.time < LOCAL_RESOLVE_TTL) {
+        return {
+          provider: c.provider || 'youtube',
+          kind: c.provider === 'audius' ? 'audius' : 'youtube',
+          url: c.url, videoId: c.videoId || '',
+          videoTitle: c.videoTitle || '', videoChannel: c.videoChannel || ''
+        };
+      }
+    }
 
     try {
       const r = await fetch(apiBase() + '/api/playback/resolve', {
@@ -721,7 +741,8 @@
       const r = await fetch(apiBase() + '/api/audio/resolve?' + params, { signal });
       if (r.ok) {
         const d = await r.json();
-        if (d.ok && d.streamUrl) return { ...d, url: d.streamUrl, kind: d.provider === 'audius' ? 'audius' : 'youtube', videoId: d.videoId };
+        const su = d.ok ? (d.url || d.streamUrl) : '';
+        if (su) return { ...d, url: su, kind: d.provider === 'audius' ? 'audius' : 'youtube', videoId: d.videoId };
       }
     } catch (e) { if (e.name === 'AbortError') throw e; }
 
@@ -805,8 +826,8 @@
   }
   function playByTrackObject(track) {
     const i = state.tracks.findIndex(x => trackKey(x) === trackKey(track));
-    if (i >= 0) playTrack(i);
-    else { state.tracks = [track]; playTrack(0); }
+    if (i >= 0) playFromList(state.tracks, i);
+    else playFromList([track], 0);
   }
 
   let searchAbort = null, searchDebounceTimer = null;
@@ -934,7 +955,7 @@
       ar.innerHTML = artistsHtml(track.artist);
       copy.append(ti, ar);
       card.append(coverBox, copy);
-      card.addEventListener('click', () => { state.albumContext = null; playTrack(index); });
+      card.addEventListener('click', () => { state.albumContext = null; playFromList(state.tracks, index); });
       card.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e, track); });
       card.addEventListener('mouseenter', () => prefetchTrack(track), { once: true });
       grid.appendChild(card);
@@ -973,12 +994,10 @@
     if (!t) return;
     if (t.provider === 'audius' && t.providerId) return;
     if (t.provider === 'youtube' && t.videoId) return;
-    const title = cleanTitleLocal(String(t.title || '').trim()) || String(t.title || '').trim();
-    const primaryArtist = splitArtistsList(t.artist)[0] || t.artist || '';
-    if (!title && !primaryArtist) return;
-    const ck = normalizeSearch(title + ' ' + primaryArtist);
+    const { key: ck, title, primaryArtist } = resolveCacheParts(t);
+    if (!ck) return;
     const c = localResolveCache.get(ck);
-    if (c && Date.now() - c.time < LOCAL_RESOLVE_TTL) return;
+    if (c && c.url && Date.now() - c.time < LOCAL_RESOLVE_TTL) return;
     if (pendingPrefetches.has(ck)) return;
     pendingPrefetches.add(ck);
     const params = new URLSearchParams({
@@ -989,9 +1008,10 @@
     fetch(apiBase() + '/api/audio/resolve?' + params, { headers: { Accept: 'application/json' } })
       .then(r => r.json())
       .then(d => {
-        if (d.ok && d.streamUrl) {
+        const su = d.ok ? (d.url || d.streamUrl) : '';
+        if (su) {
           localResolveCache.set(ck, {
-            time: Date.now(), streamUrl: d.streamUrl, provider: d.provider,
+            time: Date.now(), url: su, provider: d.provider,
             videoId: d.videoId || '', videoTitle: d.videoTitle || '', videoChannel: d.videoChannel || ''
           });
         }
@@ -1000,9 +1020,34 @@
       .finally(() => pendingPrefetches.delete(ck));
   }
 
+  function queueIndexOf(track) {
+    if (!track) return -1;
+    const k = trackKey(track);
+    return state.queue.findIndex(x => trackKey(x) === k);
+  }
+  function setPlaybackQueue(list, index) {
+    const arr = Array.isArray(list) ? list.filter(Boolean) : [];
+    if (!arr.length) return -1;
+    state.tracks = arr.slice();
+    state.queue = arr.slice();
+    const i = Number.isInteger(index) && index >= 0 && index < arr.length ? index : 0;
+    state.currentIndex = i;
+    return i;
+  }
+  function playFromList(list, index, opts) {
+    const arr = Array.isArray(list) ? list.filter(Boolean) : [];
+    if (!arr.length) return;
+    const i = Number.isInteger(index) && index >= 0 && index < arr.length ? index : 0;
+    const isSame = state.currentTrack && trackKey(arr[i]) === trackKey(state.currentTrack);
+    const isActive = userIntent === 'playing' || userIntent === 'paused' || userIntent === 'loading';
+    if (isSame && isActive && !(opts && opts.force)) { openSongInfo(state.currentTrack); return; }
+    if (setPlaybackQueue(arr, i) < 0) return;
+    playTrack(i, opts || {});
+  }
+
   async function playTrack(index, opts = {}) {
-    if (!Number.isInteger(index) || index < 0 || index >= state.tracks.length) return;
-    const track = state.tracks[index];
+    if (!Number.isInteger(index) || index < 0 || index >= state.queue.length) return;
+    const track = state.queue[index];
     const isSame = state.currentTrack && trackKey(track) === trackKey(state.currentTrack);
     const isActive = userIntent === 'playing' || userIntent === 'paused' || userIntent === 'loading';
     if (isSame && isActive && !opts.force) { openSongInfo(state.currentTrack); return; }
@@ -1067,15 +1112,17 @@
     updatePlayButtons();
     addHistory(track);
     reportTrackPlay(track);
-    if (!state.queue.some(x => trackKey(x) === trackKey(track))) state.queue.push(track);
+    const qi = queueIndexOf(track);
+    if (qi < 0) { state.queue.push(track); state.currentIndex = state.queue.length - 1; }
+    else state.currentIndex = qi;
     updateQueue(); renderHome();
     updatePlayerView(); updateMiniPlayer();
     setTimeout(() => { updatePlayButtons(); applyEq(); }, 300);
     setTimeout(loadRecommendations, 8000);
     const lyrBtn = document.querySelector('.player-tab[data-tab="lyrics"]');
     if (lyrBtn?.classList.contains('active') && state.currentTrack) loadLyrics(state.currentTrack);
-    const nextIdx = state.currentIndex + 1;
-    if (nextIdx < state.tracks.length) setTimeout(() => prefetchTrack(state.tracks[nextIdx]), 1200);
+    const nextTrack = state.queue[state.currentIndex + 1];
+    if (nextTrack) setTimeout(() => prefetchTrack(nextTrack), 1200);
     refreshDiagnostics();
   }
   function onPlaybackError(e) {
@@ -1114,12 +1161,6 @@
   }
   async function playStream(stream, myId) {
     if (!stream || !stream.url) throw new Error('empty stream url');
-    if (stream.kind === 'youtube' || /\/api\/audio\/youtube\//.test(stream.url)) {
-      const vid = stream.videoId || String(stream.url).match(/\/api\/audio\/youtube\/([A-Za-z0-9_-]{6,20})/)?.[1];
-      if (!vid) throw new Error('no videoId');
-      await playYouTube(vid, myId);
-      return;
-    }
     el.youtubePlayerWrap.innerHTML = '';
     ytIframe = null; ytCurrentVideo = '';
     await playUrl(stream.url, myId);
@@ -1145,24 +1186,31 @@
           fadeGain.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 0.15);
         }
         userIntent = 'playing';
-        el.audio.play().then(updatePlayButtons).catch(() => playTrack(state.currentIndex, { force: true }));
+        el.audio.play().then(updatePlayButtons).catch(() => {
+          const i = queueIndexOf(state.currentTrack);
+          if (i >= 0) playTrack(i, { force: true });
+        });
       } else { el.audio.pause(); userIntent = 'paused'; updatePlayButtons(); }
       return;
     }
-    if (state.tracks.length) playTrack(0);
+    if (state.tracks.length) playFromList(state.tracks, 0);
   }
   function previous() {
-    if (!state.tracks.length) return;
+    if (!state.queue.length) return;
     if (!ytIframe && el.audio.currentTime > 4) { el.audio.currentTime = 0; return; }
-    let i = state.currentIndex - 1;
-    if (i < 0) i = state.tracks.length - 1;
+    let i = queueIndexOf(state.currentTrack);
+    if (i < 0) i = state.currentIndex;
+    i -= 1;
+    if (i < 0) i = state.queue.length - 1;
     playTrack(i, { force: true });
   }
   function next() {
-    if (!state.tracks.length) return;
+    if (!state.queue.length) return;
     if (state.shuffle) { playTrack(smartShuffleNext(), { force: true }); return; }
-    let ni = state.currentIndex + 1;
-    if (ni >= state.tracks.length) ni = 0;
+    let i = queueIndexOf(state.currentTrack);
+    if (i < 0) i = state.currentIndex;
+    let ni = i + 1;
+    if (ni >= state.queue.length || ni < 0) ni = 0;
     playTrack(ni, { force: true });
   }
   function addRecentToShuffleHistory(track) {
@@ -1172,14 +1220,14 @@
     state.smartShuffleHistory = state.smartShuffleHistory.slice(0, 30);
   }
   function smartShuffleNext() {
-    const total = state.tracks.length;
+    const total = state.queue.length;
     if (total <= 1) return 0;
     const currentKey = state.currentTrack ? trackKey(state.currentTrack) : '';
     const currentArtist = normalizeSearch(splitArtistsList(state.currentTrack?.artist)[0] || '');
     const recent = new Set(state.smartShuffleHistory.slice(0, 12));
     const candidates = [];
     for (let i = 0; i < total; i++) {
-      const t = state.tracks[i];
+      const t = state.queue[i];
       const k = trackKey(t);
       if (k === currentKey) continue;
       const a = normalizeSearch(splitArtistsList(t.artist)[0] || '');
@@ -1342,20 +1390,30 @@
     if (!track) return;
     const k = trackKey(track);
     if (state.queue.some(x => trackKey(x) === k)) return notify('Уже в очереди');
+    if (state.currentTrack && queueIndexOf(state.currentTrack) < 0) {
+      state.queue.unshift(state.currentTrack);
+      state.currentIndex = 0;
+    }
     state.queue.push(track); updateQueue(); notify('Добавлено в очередь');
   }
   function playNext(track) {
     if (!track) return;
     const k = trackKey(track);
+    if (state.currentTrack && k === trackKey(state.currentTrack)) return notify('Этот трек уже играет');
     const filtered = state.queue.filter(x => trackKey(x) !== k);
-    filtered.unshift(track);
-    state.queue = filtered; updateQueue(); notify('Играет следующим');
+    const curIdx = state.currentTrack ? filtered.findIndex(x => trackKey(x) === trackKey(state.currentTrack)) : -1;
+    filtered.splice(curIdx + 1, 0, track);
+    state.queue = filtered;
+    state.currentIndex = curIdx;
+    updateQueue(); notify('Играет следующим');
   }
   function removeFromQueue(index) {
     if (index < 0 || index >= state.queue.length) return;
-    state.queue.splice(index, 1); updateQueue();
+    state.queue.splice(index, 1);
+    state.currentIndex = queueIndexOf(state.currentTrack);
+    updateQueue();
   }
-  function clearQueue() { state.queue = []; updateQueue(); notify('Очередь очищена'); }
+  function clearQueue() { state.queue = []; state.currentIndex = -1; updateQueue(); notify('Очередь очищена'); }
   function updateQueue() {
     const box = el.queueContent; if (!box) return;
     if (!state.queue.length) {
@@ -1381,9 +1439,7 @@
       rm.addEventListener('click', e => { e.stopPropagation(); removeFromQueue(i); });
       row.append(drag, cover, main, rm);
       row.addEventListener('click', () => {
-        const idx = state.tracks.findIndex(x => trackKey(x) === trackKey(t));
-        if (idx >= 0) playTrack(idx, { force: true });
-        else { state.tracks.push(t); playTrack(state.tracks.length - 1, { force: true }); }
+        playTrack(i, { force: true });
       });
       row.addEventListener('dragstart', e => {
         row.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move';
@@ -1398,7 +1454,9 @@
         const to = Number(row.dataset.index);
         if (Number.isInteger(from) && Number.isInteger(to) && from !== to) {
           const [m] = state.queue.splice(from, 1);
-          state.queue.splice(to, 0, m); updateQueue();
+          state.queue.splice(to, 0, m);
+          state.currentIndex = queueIndexOf(state.currentTrack);
+          updateQueue();
         }
       });
       box.appendChild(row);
@@ -1495,9 +1553,9 @@
       play.className = 'small-btn'; play.title = 'Играть'; play.textContent = '▶';
       play.addEventListener('click', e => {
         e.stopPropagation();
-        const i = state.tracks.findIndex(x => trackKey(x) === trackKey(track));
-        if (i >= 0) playTrack(i, { force: true });
-        else { state.tracks = [track]; playTrack(0, { force: true }); }
+        const i = list.findIndex(x => trackKey(x) === trackKey(track));
+        if (i >= 0) playFromList(list, i, { force: true });
+        else playFromList([track], 0, { force: true });
       });
       const fav = document.createElement('button');
       fav.className = 'small-btn'; fav.title = 'Избранное';
@@ -1506,8 +1564,8 @@
       actions.append(play, fav);
       row.append(cover, main, actions);
       row.addEventListener('click', () => {
-        const i = state.tracks.findIndex(x => trackKey(x) === trackKey(track));
-        if (i >= 0) playTrack(i); else { state.tracks = [track]; playTrack(0); }
+        const i = list.findIndex(x => trackKey(x) === trackKey(track));
+        if (i >= 0) playFromList(list, i); else playFromList([track], 0);
       });
       row.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e, track); });
       row.addEventListener('mouseenter', () => prefetchTrack(track), { once: true });
@@ -1624,16 +1682,16 @@
         actions.className = 'row-actions';
         const play = document.createElement('button');
         play.className = 'small-btn'; play.textContent = '▶';
-        play.addEventListener('click', e => { e.stopPropagation(); state.tracks = tracks.slice(); playTrack(i, { force: true }); });
+        play.addEventListener('click', e => { e.stopPropagation(); playFromList(tracks, i, { force: true }); });
         actions.appendChild(play);
         row.append(idx, main, actions);
-        row.addEventListener('click', () => { state.tracks = tracks.slice(); playTrack(i); });
+        row.addEventListener('click', () => { playFromList(tracks, i); });
         row.addEventListener('contextmenu', e => { e.preventDefault(); showContextMenu(e, t); });
         row.addEventListener('mouseenter', () => prefetchTrack(t), { once: true });
         el.albumTracks.appendChild(row);
       });
-      el.albumPlay.onclick = () => { state.tracks = tracks.slice(); playTrack(0, { force: true }); };
-      el.albumShuffle.onclick = () => { state.tracks = tracks.slice().sort(() => Math.random() - 0.5); state.shuffle = true; updateModeButtons(); playTrack(0, { force: true }); };
+      el.albumPlay.onclick = () => { playFromList(tracks, 0, { force: true }); };
+      el.albumShuffle.onclick = () => { state.shuffle = true; updateModeButtons(); playFromList(tracks.slice().sort(() => Math.random() - 0.5), 0, { force: true }); };
       el.albumAddToPlaylist.onclick = () => openPlaylistPicker(tracks);
       setTimeout(() => prefetchTracks(tracks.slice(0, 4)), 200);
     } catch {
@@ -1685,8 +1743,8 @@
     box.innerHTML = '';
     if (!pl.tracks?.length) box.innerHTML = '<div class="empty">Плейлист пуст</div>';
     else renderList(box, pl.tracks, { context: 'playlist' });
-    el.playlistPlay.onclick = () => { if (!pl.tracks?.length) return; state.tracks = pl.tracks.slice(); playTrack(0, { force: true }); };
-    el.playlistShuffle.onclick = () => { if (!pl.tracks?.length) return; state.tracks = pl.tracks.slice().sort(() => Math.random() - 0.5); state.shuffle = true; updateModeButtons(); playTrack(0, { force: true }); };
+    el.playlistPlay.onclick = () => { if (!pl.tracks?.length) return; playFromList(pl.tracks, 0, { force: true }); };
+    el.playlistShuffle.onclick = () => { if (!pl.tracks?.length) return; state.shuffle = true; updateModeButtons(); playFromList(pl.tracks.slice().sort(() => Math.random() - 0.5), 0, { force: true }); };
     el.playlistDelete.onclick = async () => {
       if (!confirm('Удалить плейлист?')) return;
       try {
@@ -1810,8 +1868,8 @@
     const items = [
       { label: 'Играть', icon: '▶', action: () => {
         const i = state.tracks.findIndex(x => trackKey(x) === trackKey(track));
-        if (i >= 0) playTrack(i, { force: true });
-        else { state.tracks = [track]; playTrack(0, { force: true }); }
+        if (i >= 0) playFromList(state.tracks, i, { force: true });
+        else playFromList([track], 0, { force: true });
       }},
       { label: 'Играть следующим', icon: '→', action: () => playNext(track) },
       { label: 'Добавить в очередь', icon: '+', action: () => addToQueue(track) },
@@ -2170,8 +2228,7 @@
         el.profileTopTracks.querySelectorAll('.profile-panel-item').forEach(it => it.addEventListener('click', () => {
           const tr = s.topTracks[Number(it.dataset.idx)].track;
           closeProfile();
-          state.tracks = [normalizeTrack(tr)].filter(Boolean);
-          if (state.tracks.length) playTrack(0, { force: true });
+          playFromList([normalizeTrack(tr)], 0, { force: true });
         }));
       } else el.profileTopTracks.innerHTML = '<div class="profile-panel-empty">Нет данных</div>';
     } catch { el.profileSummaryTitle.textContent = 'Не удалось загрузить'; }
@@ -2237,6 +2294,7 @@
   let workshopSort = 'popular';
   let workshopCategory = 'all';
   let workshopQuery = '';
+  let workshopSearchTimer = null;
   let workshopItems = [];
 
   async function loadWorkshop() {
@@ -2252,18 +2310,41 @@
     } catch { el.workshopGrid.innerHTML = '<div class="workshop-empty">Не удалось загрузить</div>'; }
   }
 
+  function sanitizeSvgMarkup(html) {
+    try {
+      const doc = new DOMParser().parseFromString(String(html), 'image/svg+xml');
+      const svg = doc.documentElement;
+      if (!svg || svg.nodeName.toLowerCase() !== 'svg' || doc.getElementsByTagName('parsererror').length) return '';
+      const banned = /^(script|foreignobject|iframe|embed|object|animate|set|use|handler|style)$/i;
+      Array.from(svg.querySelectorAll('*')).forEach(n => {
+        if (banned.test(n.nodeName)) { n.remove(); return; }
+        Array.from(n.attributes || []).forEach(a => {
+          if (/^on/i.test(a.name) || /javascript\s*:/i.test(a.value)) n.removeAttribute(a.name);
+        });
+      });
+      return new XMLSerializer().serializeToString(svg);
+    } catch { return ''; }
+  }
+
   function renderWorkshopPreview(item) {
     const kind = item.kind || 'css';
     const value = String(item.value || '');
+    const box = document.createElement('div');
+    box.className = 'workshop-item-preview';
     if (kind === 'svg') {
-      return `<div class="workshop-item-preview icon-preview">${value}</div>`;
+      const svg = sanitizeSvgMarkup(value);
+      if (!svg) return '';
+      box.classList.add('icon-preview');
+      box.innerHTML = svg;
+      return box.outerHTML;
     }
     if (kind === 'image' || kind === 'url' || /^data:image/.test(value) || /^https?:/.test(value)) {
-      const safe = value.replace(/"/g, '\\"');
-      return `<div class="workshop-item-preview" style="background-image:url('${safe}')"></div>`;
+      if (!/^(https?:\/\/|data:image\/)/i.test(value)) return '';
+      box.style.backgroundImage = 'url("' + value.replace(/["\\\r\n\f]/g, '') + '")';
+      return box.outerHTML;
     }
-    const safe = value.replace(/"/g, '\\"');
-    return `<div class="workshop-item-preview" style="background:${safe}"></div>`;
+    box.style.background = value;
+    return box.outerHTML;
   }
 
   function renderWorkshop() {
@@ -2480,7 +2561,11 @@
     if (state.user && authToken) apiAuth('/api/history', { method: 'DELETE' }).catch(() => {});
     notify('История очищена');
   });
-  on(el.clearFavorites2, 'click', () => { state.favorites = []; persist(); renderFavorites(); notify('Избранное очищено'); });
+  on(el.clearFavorites2, 'click', () => {
+    state.favorites = []; persist(); renderFavorites();
+    if (state.user && authToken) apiAuth('/api/favorites', { method: 'DELETE' }).catch(() => {});
+    notify('Избранное очищено');
+  });
   on(el.clearCacheBtn, 'click', () => { localResolveCache.clear(); notify('Кэш резолва очищен'); });
 
   document.querySelectorAll('#libraryTabs .page-tab').forEach(b => {
@@ -2512,14 +2597,17 @@
     }
   });
 
-  on(el.favoritesPlay, 'click', () => { if (!state.favorites.length) return; state.tracks = state.favorites.slice(); playTrack(0, { force: true }); });
+  on(el.favoritesPlay, 'click', () => { if (!state.favorites.length) return; playFromList(state.favorites, 0, { force: true }); });
   on(el.favoritesShuffle, 'click', () => {
     if (!state.favorites.length) return;
-    state.tracks = state.favorites.slice().sort(() => Math.random() - 0.5);
     state.shuffle = true; updateModeButtons();
-    playTrack(0, { force: true });
+    playFromList(state.favorites.slice().sort(() => Math.random() - 0.5), 0, { force: true });
   });
-  on(el.clearFavorites, 'click', () => { state.favorites = []; persist(); renderFavorites(); notify('Избранное очищено'); });
+  on(el.clearFavorites, 'click', () => {
+    state.favorites = []; persist(); renderFavorites();
+    if (state.user && authToken) apiAuth('/api/favorites', { method: 'DELETE' }).catch(() => {});
+    notify('Избранное очищено');
+  });
 
   on(el.createPlaylistBtn, 'click', () => openPlaylistCreate());
   on(el.playlistCreateClose, 'click', closePlaylistCreate);
@@ -2580,8 +2668,8 @@
   on(el.songInfoPlay, 'click', () => {
     if (!songInfoCurrent) return;
     const i = state.tracks.findIndex(x => trackKey(x) === trackKey(songInfoCurrent));
-    if (i >= 0) playTrack(i, { force: true });
-    else { state.tracks.unshift(songInfoCurrent); playTrack(0, { force: true }); }
+    if (i >= 0) playFromList(state.tracks, i, { force: true });
+    else playFromList([songInfoCurrent, ...state.tracks], 0, { force: true });
     closeSongInfo();
   });
   on(el.songInfoFavorite, 'click', () => {
@@ -2615,8 +2703,8 @@
   on(el.workshopModal, 'click', e => { if (e.target === el.workshopModal) closeWorkshop(); });
   on(el.workshopSearch, 'input', e => {
     workshopQuery = e.target.value.trim();
-    clearTimeout(workshopQuery._t);
-    workshopQuery._t = setTimeout(loadWorkshop, 250);
+    clearTimeout(workshopSearchTimer);
+    workshopSearchTimer = setTimeout(loadWorkshop, 250);
   });
   if (el.workshopCategories) {
     el.workshopCategories.querySelectorAll('.workshop-cat-btn').forEach(b => {

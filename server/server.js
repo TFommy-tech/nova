@@ -698,10 +698,13 @@ api.post('/api/favorites', authMiddleware, (req, res) => {
   res.json({ ok: true });
 });
 api.delete('/api/favorites/:key', authMiddleware, (req, res) => {
-  const key = decodeURIComponent(req.params.key);
+  const key = String(req.params.key || '');
   const list = db.favorites[req.user.id] || [];
   db.favorites[req.user.id] = list.filter(x => trackKey(x) !== key);
   saveDb(); res.json({ ok: true });
+});
+api.delete('/api/favorites', authMiddleware, (req, res) => {
+  db.favorites[req.user.id] = []; saveDb(); res.json({ ok: true });
 });
 api.get('/api/history', authMiddleware, (req, res) => res.json(db.history[req.user.id] || []));
 api.post('/api/history', authMiddleware, (req, res) => {
@@ -808,7 +811,7 @@ api.delete('/api/playlists/:id/tracks/:key', authMiddleware, (req, res) => {
   const uid = req.user.id;
   const pl = (db.playlists[uid] || []).find(p => p.id === req.params.id);
   if (!pl) return res.status(404).json({ error: 'not found' });
-  const key = decodeURIComponent(req.params.key);
+  const key = String(req.params.key || '');
   pl.tracks = pl.tracks.filter(x => trackKey(x) !== key);
   pl.updatedAt = Date.now(); saveDb(); res.json({ ok: true, tracks: pl.tracks });
 });
@@ -866,20 +869,31 @@ api.get('/api/workshop/items', (req, res) => {
   else items.sort((a, b) => (b.downloads || 0) - (a.downloads || 0));
   res.json({ items: items.slice(0, 100) });
 });
+const WORKSHOP_KINDS = new Set(['css', 'svg', 'image', 'url']);
+function sanitizeSvgSource(src) {
+  const s = String(src)
+    .replace(/<script[\s\S]*?<\/script\s*>/gi, '')
+    .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+    .replace(/javascript\s*:/gi, '');
+  return /<svg[\s>]/i.test(s) ? s : '';
+}
 api.post('/api/workshop/publish', authMiddleware, (req, res) => {
   const { name, value, kind, tag, category } = req.body || {};
   if (!name || !value) return res.status(400).json({ error: 'name and value required' });
   if (String(name).length > 60) return res.status(400).json({ error: 'name too long' });
   if (String(value).length > 800000) return res.status(400).json({ error: 'value too large (max 800KB)' });
+  const k = WORKSHOP_KINDS.has(String(kind || '')) ? String(kind) : 'css';
+  const v = k === 'svg' ? sanitizeSvgSource(value) : String(value);
+  if (!v) return res.status(400).json({ error: 'invalid value' });
   const user = db.users[req.user.id];
   const item = {
     id: 'wp_' + crypto.randomBytes(6).toString('hex'),
     name: String(name), author: (user && user.username) || 'Anonymous',
     authorId: req.user.id,
-    tag: tag || (kind === 'image' ? 'image' : (kind === 'svg' ? 'icon' : (kind === 'url' ? 'gif' : 'gradient'))),
-    category: category || 'background',
-    kind: kind || 'css',
-    value: String(value), downloads: 0, createdAt: Date.now(), system: false
+    tag: String(tag || (k === 'image' ? 'image' : (k === 'svg' ? 'icon' : (k === 'url' ? 'gif' : 'gradient')))).slice(0, 40),
+    category: String(category || 'background').slice(0, 40),
+    kind: k,
+    value: v, downloads: 0, createdAt: Date.now(), system: false
   };
   workshop.items.unshift(item);
   if (workshop.items.length > 1000) workshop.items = workshop.items.slice(0, 1000);
@@ -1110,7 +1124,8 @@ async function streamViaYoutubei(vid, range, res) {
       try { url = format.decipher(yt.session.player); } catch (e) { dbg('ijs decipher err', e.message); }
     }
     if (!url) { dbg('ijs no url'); return false; }
-    const headers = { 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*', 'Range': range || 'bytes=0-' };
+    const headers = { 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*' };
+    if (range) headers.Range = range;
     const up = await fetch(url, { headers, redirect: 'follow', timeout: 20000 });
     if (!up.ok && up.status !== 206) { dbg('ijs upstream', up.status); return false; }
     const ct = up.headers.get('content-type') || format.mime_type || 'audio/mp4';
