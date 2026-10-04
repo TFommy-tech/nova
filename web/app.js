@@ -1,5 +1,5 @@
 // ============================================================
-// web/app.js — клиент NOVA (часть A)
+// web/app.js — клиент NOVA (fixed: cursor, suggestions, play state, artist)
 // ============================================================
 (function(){
   'use strict';
@@ -62,8 +62,9 @@
   let playAbort = null;
   let mutedBefore = 100;
 
-  // === Защита от самозапуска YouTube ===
-  let userPausedIntent = false;
+  // === ЕДИНЫЙ ИСТОЧНИК ПРАВДЫ О ПЛЕЕРЕ ===
+  // 'idle' | 'loading' | 'playing' | 'paused' | 'error'
+  let userIntent = 'idle';
   let ytPauseWatchdog = null;
 
   function $(id){ return document.getElementById(id); }
@@ -105,7 +106,7 @@
   let authMode = 'login';
 
   // ============================================================
-  // КУРСОР — оптимизированный, без backdrop-filter
+  // КУРСОР — мгновенная точка + CSS-transition кольцо
   // ============================================================
   (function initCustomCursor(){
     if (window.matchMedia && !window.matchMedia('(pointer: fine)').matches) return;
@@ -117,14 +118,7 @@
     document.body.appendChild(ring);
     document.body.appendChild(dot);
 
-    let mouseX = window.innerWidth / 2;
-    let mouseY = window.innerHeight / 2;
-    let ringX = mouseX;
-    let ringY = mouseY;
-    let dotX = mouseX;
-    let dotY = mouseY;
     let visible = false;
-
     function show(){
       if (visible) return;
       visible = true;
@@ -137,26 +131,18 @@
       ring.classList.remove('visible');
     }
 
+    // Точка — мгновенно, кольцо — через CSS transition на transform
     window.addEventListener('mousemove', (e) => {
-      mouseX = e.clientX;
-      mouseY = e.clientY;
+      const x = e.clientX, y = e.clientY;
+      dot.style.transform = 'translate3d(' + (x - 3) + 'px,' + (y - 3) + 'px,0)';
+      ring.style.transform = 'translate3d(' + (x - 18) + 'px,' + (y - 18) + 'px,0)';
       if (!visible) show();
     }, { passive: true });
+
     window.addEventListener('mouseleave', hide);
     window.addEventListener('mouseenter', show);
     window.addEventListener('blur', hide);
     document.addEventListener('mouseleave', hide);
-
-    function tick(){
-      dotX += (mouseX - dotX) * 0.75;
-      dotY += (mouseY - dotY) * 0.75;
-      ringX += (mouseX - ringX) * 0.22;
-      ringY += (mouseY - ringY) * 0.22;
-      dot.style.transform = 'translate3d(' + (dotX - 3) + 'px,' + (dotY - 3) + 'px,0)';
-      ring.style.transform = 'translate3d(' + (ringX - 18) + 'px,' + (ringY - 18) + 'px,0)';
-      requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
 
     function isInteractive(target){
       if (!target || !target.closest) return false;
@@ -170,16 +156,11 @@
     document.addEventListener('mouseover', (e) => {
       const t = e.target;
       if (isTextInput(t)){
-        ring.classList.add('typing');
-        ring.classList.remove('hover');
-        dot.classList.remove('hover');
+        ring.classList.add('typing'); ring.classList.remove('hover'); dot.classList.remove('hover');
       } else if (isInteractive(t)){
-        ring.classList.add('hover');
-        ring.classList.remove('typing');
-        dot.classList.add('hover');
+        ring.classList.add('hover'); ring.classList.remove('typing'); dot.classList.add('hover');
       } else {
-        ring.classList.remove('hover', 'typing');
-        dot.classList.remove('hover');
+        ring.classList.remove('hover', 'typing'); dot.classList.remove('hover');
       }
     });
 
@@ -205,7 +186,7 @@
   }
 
   // ============================================================
-  // YOUTUBE — с защитой от самозапуска
+  // YOUTUBE
   // ============================================================
   function ytSendCommand(func, args){
     if (!ytIframe || !ytIframe.contentWindow) return false;
@@ -215,14 +196,14 @@
     } catch (_){ return false; }
   }
   function ytForcePause(){
-    userPausedIntent = true;
+    userIntent = 'paused';
     for (let i = 0; i < 8; i++){
-      setTimeout(() => { if (userPausedIntent) ytSendCommand('pauseVideo'); }, i * 60);
+      setTimeout(() => { if (userIntent === 'paused') ytSendCommand('pauseVideo'); }, i * 60);
     }
     ytStartPauseWatchdog();
   }
   function ytPlay(){
-    userPausedIntent = false;
+    userIntent = 'playing';
     ytStopPauseWatchdog();
     ytSendCommand('playVideo');
   }
@@ -230,9 +211,8 @@
     if (ytPauseWatchdog) return;
     ytPauseWatchdog = setInterval(() => {
       if (!ytIframe || !ytCurrentVideo){ ytStopPauseWatchdog(); return; }
-      if (!userPausedIntent){ ytStopPauseWatchdog(); return; }
+      if (userIntent !== 'paused'){ ytStopPauseWatchdog(); return; }
       ytSendCommand('pauseVideo');
-      if (state.playState === 'playing'){ state.playState = 'paused'; updatePlayButtons(); }
     }, 200);
   }
   function ytStopPauseWatchdog(){
@@ -246,20 +226,25 @@
     if (!data || !data.event) return;
     if (data.event === 'onStateChange'){
       const s = data.info;
-      if (s === 1){
-        if (userPausedIntent){
-          ytSendCommand('pauseVideo');
-          state.playState = 'paused';
-          updatePlayButtons();
-          return;
+      // НЕ доверяем YT-сообщениям безусловно.
+      // Игнорируем всё, что противоречит userIntent.
+      if (s === 1){ // YT says playing
+        if (userIntent === 'paused'){ ytSendCommand('pauseVideo'); return; }
+        // Если userIntent = 'loading' — не трогаем, скоро playTrack сам выставит 'playing'
+        if (userIntent === 'loading') return;
+        if (userIntent !== 'playing'){ userIntent = 'playing'; updatePlayButtons(); }
+      } else if (s === 2){ // YT says paused
+        // Доверяем только если сами попросили паузу
+        if (userIntent === 'paused') return; // уже знаем
+        // YT сам ушёл в паузу — если хотим играть, пытаемся вернуть
+        if (userIntent === 'playing'){
+          ytSendCommand('playVideo');
         }
-        state.playState = 'playing'; updatePlayButtons();
-      } else if (s === 2){
-        state.playState = 'paused'; updatePlayButtons();
-      } else if (s === 0){
-        state.playState = 'idle';
-        if (state.repeat){ ytSendCommand('seekTo', [0, true]); ytPlay(); }
-        else { next(); }
+      } else if (s === 0){ // ended
+        if (userIntent === 'playing'){
+          if (state.repeat){ ytSendCommand('seekTo', [0, true]); ytPlay(); }
+          else { next(); }
+        }
       }
     }
     if (data.event === 'infoDelivery' && data.info){
@@ -271,13 +256,13 @@
 
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) return;
-    if (userPausedIntent && ytIframe && ytCurrentVideo){
-      for (let i = 0; i < 10; i++) setTimeout(() => { if (userPausedIntent) ytSendCommand('pauseVideo'); }, i * 150);
+    if (userIntent === 'paused' && ytIframe && ytCurrentVideo){
+      for (let i = 0; i < 10; i++) setTimeout(() => { if (userIntent === 'paused') ytSendCommand('pauseVideo'); }, i * 150);
     }
   });
   window.addEventListener('focus', () => {
-    if (userPausedIntent && ytIframe && ytCurrentVideo){
-      for (let i = 0; i < 10; i++) setTimeout(() => { if (userPausedIntent) ytSendCommand('pauseVideo'); }, i * 150);
+    if (userIntent === 'paused' && ytIframe && ytCurrentVideo){
+      for (let i = 0; i < 10; i++) setTimeout(() => { if (userIntent === 'paused') ytSendCommand('pauseVideo'); }, i * 150);
     }
   });
 
@@ -290,7 +275,6 @@
       ytCurrentVideo = videoId;
       ytVideoDuration = 0;
       ytVideoCurrentTime = 0;
-      userPausedIntent = false;
       ytStopPauseWatchdog();
       try { el.audio.pause(); } catch (_){}
       el.audio.removeAttribute('src');
@@ -312,25 +296,26 @@
       };
       const tryPlay = () => {
         if (myId !== undefined && myId !== playRequestId) return;
-        if (userPausedIntent){ ytSendCommand('pauseVideo'); return; }
+        if (userIntent === 'paused'){ ytSendCommand('pauseVideo'); return; }
         ytSendCommand('playVideo');
         ytSendCommand('setVolume', [state.volume]);
       };
       iframe.addEventListener('load', () => {
         setTimeout(() => {
+          // 1. Handshake
+          try { iframe.contentWindow.postMessage(JSON.stringify({event:'listening', id:'nova'}), '*'); } catch (_){}
           ytSendCommand('addEventListener', ['onStateChange']);
           ytSendCommand('addEventListener', ['infoDelivery']);
-        }, 150);
-        setTimeout(tryPlay, 250);
-        setTimeout(tryPlay, 800);
-        setTimeout(tryPlay, 1800);
+        }, 100);
+        setTimeout(tryPlay, 400);
+        setTimeout(tryPlay, 1000);
+        setTimeout(tryPlay, 2000);
         setTimeout(() => finish(), 900);
       });
       iframe.addEventListener('error', () => finish(new Error('iframe load error')));
       wrap.appendChild(iframe);
       ytIframe = iframe;
       setTimeout(() => finish(), 12000);
-      setTimeout(() => { try { iframe.contentWindow.postMessage(JSON.stringify({event:'listening', id:'nova'}), '*'); } catch (_){} }, 600);
       const cancelTick = setInterval(() => {
         if (myId !== undefined && myId !== playRequestId){ clearInterval(cancelTick); finish(new Error('Aborted')); }
       }, 100);
@@ -600,13 +585,28 @@
   function sourceClass(s){ if (s === 'FULL') return 'full'; if (s === 'PREVIEW') return 'preview'; return 'catalog'; }
   function isBadArtist(n){ const x = normalizeSearch(n); return !x || /^(unknown( artist)?|various artists|no name|без названия|null|undefined)$/i.test(x); }
   function normalizeSearch(v){ return String(v || '').toLowerCase().replace(/[’'`]/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim(); }
+
+  // Очистка названия от (Official Lyric Video), #тегов и пр.
   function cleanTitleForSearchLocal(t){
     if (!t) return '';
     return String(t)
-      .replace(/\([^)]*\)/g, ' ').replace(/\[[^\]]*\]/g, ' ').replace(/#\S+/g, ' ')
+      .replace(/\([^)]*\)/g, ' ')
+      .replace(/\[[^\]]*\]/g, ' ')
+      .replace(/#\S+/g, ' ')
       .replace(/\b(official|lyric|lyrics|video|audio|visualizer|hd|hq|4k|prod\.?|explicit|clean|mv|m\/v)\b/gi, ' ')
       .replace(/\s+/g, ' ').trim();
   }
+
+  // Из "Anarchist Sanctuary, kets4eki & asteria" делает "asteria" (главный) + массив остальных
+  function splitArtists(raw){
+    if (!raw) return { primary: '', all: [] };
+    const parts = String(raw)
+      .split(/\s*(?:,|&|\bfeat\.?\b|\bft\.?\b|\bwith\b|\bx\b|\bvs\.?\b|\bpres\.?\b)\s*/i)
+      .map(s => s.trim()).filter(Boolean);
+    // Приоритет — то, что идёт ПОСЛЕ "&" или "x" (обычно главный артист в коллабах указан первым, но в поиске помогает любой)
+    return { primary: parts[0] || String(raw).trim(), all: parts };
+  }
+
   function notify(m){
     if (!settings.notifications) return;
     el.toast.textContent = m;
@@ -736,19 +736,19 @@
       const rawTitle = String(t.title || '').trim();
       const rawArtist = String(t.artist || '').trim();
       const title = cleanTitleForSearchLocal(rawTitle) || rawTitle;
-      const artist = cleanTitleForSearchLocal(rawArtist) || rawArtist;
+      const artist = splitArtists(rawArtist).primary || rawArtist;
       if (!title && !artist) return;
       const ck = normalizeSearch(title + ' ' + artist);
       const cached = localResolveCache.get(ck);
       if (cached && Date.now() - cached.time < LOCAL_RESOLVE_TTL) return;
-      const params = new URLSearchParams({ title, artist, duration: String(t.duration || 0) });
+      const params = new URLSearchParams({ title, artist, duration: String(t.duration || 0), q: [title, artist].filter(Boolean).join(' ') });
       fetch(apiBase() + '/api/audio/resolve?' + params.toString(), { headers: { Accept: 'application/json' } })
         .then(r => r.json()).then(d => { if (d.ok && d.streamUrl){ localResolveCache.set(ck, { time: Date.now(), streamUrl: d.streamUrl, provider: d.provider }); } })
         .catch(() => {});
     });
-    try { fetch(apiBase() + '/api/audio/prefetch', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tracks }) }).catch(() => {}); } catch (_) {}
   }
-    function renderHome(){
+
+  function renderHome(){
     const recent = state.history.slice(0, 8);
     el.homeContinue.innerHTML = '';
     if (!recent.length) el.homeContinue.innerHTML = '<div class="empty" style="grid-column:1/-1"><div>Начни слушать музыку</div></div>';
@@ -880,8 +880,9 @@
   }
 
   async function playUrl(url, myId){
-    userPausedIntent = false; ytStopPauseWatchdog();
-    if (audioGraphReady && state.currentTrack && state.playState === 'playing'){ await fadeOutAndWait(350); }
+    userIntent = 'playing';
+    ytStopPauseWatchdog();
+    if (audioGraphReady && state.currentTrack && userIntent === 'playing'){ await fadeOutAndWait(350); }
     el.audio.pause();
     el.audio.removeAttribute('src'); el.audio.load();
     el.audio.src = url;
@@ -971,7 +972,7 @@
     if (!Number.isInteger(index) || index < 0 || index >= state.tracks.length) return;
     const track = state.tracks[index];
     const isSame = state.currentTrack && (trackKey(track) === trackKey(state.currentTrack));
-    const isPlayingOrPaused = (state.playState === 'playing' || state.playState === 'paused' || state.playState === 'buffering');
+    const isPlayingOrPaused = (userIntent === 'playing' || userIntent === 'paused' || userIntent === 'loading');
     if (isSame && isPlayingOrPaused && !opts.force){ openSongInfo(state.currentTrack); return; }
 
     const myId = ++playRequestId;
@@ -979,13 +980,13 @@
     const controller = new AbortController();
     playAbort = controller;
 
-    userPausedIntent = false; ytStopPauseWatchdog();
+    ytStopPauseWatchdog();
 
-    if (audioGraphReady && state.currentTrack && state.playState === 'playing'){ await fadeOutAndWait(350); }
+    if (audioGraphReady && state.currentTrack && userIntent === 'playing'){ await fadeOutAndWait(350); }
     try { el.audio.pause(); } catch (_){}
     state.currentIndex = index;
     state.currentTrack = track;
-    state.playState = 'loading';
+    userIntent = 'loading';
     resetProgressUI();
     updateMiniPlayer(); updatePlayer(); updateInfoDrawer(); updatePlayButtons();
 
@@ -994,43 +995,57 @@
 
     const rawTitle = String(track.title || '').trim();
     const rawArtist = String(track.artist || '').trim();
-    const title = cleanTitleForSearchLocal(rawTitle) || rawTitle;
-    const artist = cleanTitleForSearchLocal(rawArtist) || rawArtist;
-    if (!title && !artist){ state.playState = 'error'; updatePlayButtons(); return; }
+    const cleanTitle = cleanTitleForSearchLocal(rawTitle) || rawTitle;
+    const artists = splitArtists(rawArtist);
+    const primaryArtist = artists.primary || rawArtist;
 
-    const ck = normalizeSearch(title + ' ' + artist);
+    if (!cleanTitle && !primaryArtist){ userIntent = 'error'; updatePlayButtons(); return; }
+
+    const ck = normalizeSearch(cleanTitle + ' ' + primaryArtist);
     let streamUrl = '';
     const local = localResolveCache.get(ck);
     if (local && Date.now() - local.time < LOCAL_RESOLVE_TTL) streamUrl = local.streamUrl;
 
     if (!streamUrl){
       try {
-        const params = new URLSearchParams({ title, artist, duration: String(track.duration || 0), q: [title, artist].filter(Boolean).join(' ') });
+        const params = new URLSearchParams({
+          title: cleanTitle,
+          artist: primaryArtist,
+          duration: String(track.duration || 0),
+          q: [cleanTitle, primaryArtist].filter(Boolean).join(' ')
+        });
         const r = await fetch(apiBase() + '/api/audio/resolve?' + params.toString(), { headers: { Accept: 'application/json' }, signal: controller.signal });
         if (myId !== playRequestId) return;
         const d = await r.json();
-        if (r.ok && d.ok && d.streamUrl){ streamUrl = d.streamUrl; localResolveCache.set(ck, { time: Date.now(), streamUrl: d.streamUrl, provider: d.provider }); }
+        if (r.ok && d.ok && d.streamUrl){
+          streamUrl = d.streamUrl;
+          localResolveCache.set(ck, { time: Date.now(), streamUrl: d.streamUrl, provider: d.provider });
+        }
       } catch (e){ if (e.name === 'AbortError') return; console.warn('[resolve]', e.message); }
     }
     if (myId !== playRequestId) return;
-    if (!streamUrl){ state.playState = 'error'; updatePlayButtons(); notify('Не удалось найти аудио'); return; }
+    if (!streamUrl){ userIntent = 'error'; updatePlayButtons(); notify('Не удалось найти аудио'); return; }
 
     try {
       await playStream(streamUrl, myId);
       if (myId !== playRequestId) return;
-      state.playState = 'playing';
+      userIntent = 'playing';
       updatePlayButtons();
       addHistory(track);
       reportTrackPlay(track);
       if (!state.queue.some(x => trackKey(x) === trackKey(track))) state.queue.push(track);
       updateQueue(); renderHome(); updateInfoDrawer(); updatePlayer();
+      // На всякий случай обновим состояние кнопки через задержку
+      setTimeout(updatePlayButtons, 500);
+      setTimeout(updatePlayButtons, 1500);
+      setTimeout(updatePlayButtons, 3000);
       setTimeout(updateProgress, 100); setTimeout(updateProgress, 400); setTimeout(updateProgress, 1000);
       setTimeout(applyEq, 200);
       setTimeout(loadRecommendations, 8000);
     } catch (e){
       if (myId !== playRequestId) return;
       if (e.message === 'Aborted') return;
-      state.playState = 'error'; updatePlayButtons(); notify('Не удалось запустить трек');
+      userIntent = 'error'; updatePlayButtons(); notify('Не удалось запустить трек');
     }
   }
 
@@ -1038,25 +1053,27 @@
     initAudioGraph();
     if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().then(() => applyEq()).catch(() => {});
     if (ytIframe && ytCurrentVideo){
-      const isCurrentlyPlaying = (state.playState === 'playing' && !userPausedIntent);
-      if (isCurrentlyPlaying){
-        state.playState = 'paused'; updatePlayButtons(); ytForcePause();
+      const isPlaying = (userIntent === 'playing' || userIntent === 'loading');
+      if (isPlaying){
+        userIntent = 'paused'; updatePlayButtons();
+        for (let i = 0; i < 8; i++) setTimeout(() => { if (userIntent === 'paused') ytSendCommand('pauseVideo'); }, i * 60);
+        ytStartPauseWatchdog();
       } else {
-        userPausedIntent = false; ytStopPauseWatchdog();
-        state.playState = 'playing'; updatePlayButtons(); ytPlay();
+        ytPlay(); updatePlayButtons();
       }
       return;
     }
     if (state.currentTrack){
-      if (state.playState === 'loading') return;
+      if (userIntent === 'loading') return;
       if (el.audio.paused){
         if (audioGraphReady && fadeGain && audioCtx){
           fadeGain.gain.cancelScheduledValues(audioCtx.currentTime);
           fadeGain.gain.setValueAtTime(0, audioCtx.currentTime);
           fadeGain.gain.linearRampToValueAtTime(1, audioCtx.currentTime + 0.15);
         }
-        el.audio.play().then(() => { state.playState = 'playing'; updatePlayButtons(); }).catch(() => playTrack(state.currentIndex, { force: true }));
-      } else { el.audio.pause(); state.playState = 'paused'; updatePlayButtons(); }
+        userIntent = 'playing';
+        el.audio.play().then(() => { updatePlayButtons(); }).catch(() => playTrack(state.currentIndex, { force: true }));
+      } else { el.audio.pause(); userIntent = 'paused'; updatePlayButtons(); }
       return;
     }
     if (state.tracks.length) playTrack(0);
@@ -1065,13 +1082,11 @@
   function previous(){
     if (!state.tracks.length) return;
     if (!ytIframe && el.audio.currentTime > 4){ el.audio.currentTime = 0; return; }
-    userPausedIntent = false;
     let i = state.currentIndex - 1; if (i < 0) i = state.tracks.length - 1;
     playTrack(i, { force: true });
   }
   function next(){
     if (!state.tracks.length) return;
-    userPausedIntent = false;
     if (state.shuffle){
       let ni = state.currentIndex;
       if (state.tracks.length > 1){ while (ni === state.currentIndex) ni = Math.floor(Math.random() * state.tracks.length); }
@@ -1084,7 +1099,7 @@
     if (ytIframe && ytCurrentVideo){
       const t = Math.max(0, ytVideoCurrentTime + delta);
       ytSendCommand('seekTo', [t, true]); ytVideoCurrentTime = t; updateProgress();
-      if (userPausedIntent) ytSendCommand('pauseVideo');
+      if (userIntent === 'paused') ytSendCommand('pauseVideo');
       return;
     }
     if (!Number.isFinite(el.audio.duration) || el.audio.duration <= 0) return;
@@ -1103,7 +1118,7 @@
     if (ytIframe && ytCurrentVideo && ytVideoDuration > 0){
       const t = ytVideoDuration * pct;
       ytSendCommand('seekTo', [t, true]); ytVideoCurrentTime = t; updateProgress();
-      if (userPausedIntent){ ytSendCommand('pauseVideo'); } else { ytPlay(); }
+      if (userIntent === 'paused'){ ytSendCommand('pauseVideo'); } else { ytSendCommand('playVideo'); }
       return;
     }
     if (!Number.isFinite(el.audio.duration) || el.audio.duration <= 0) return;
@@ -1182,26 +1197,36 @@
     } else { el.bigCover.src = placeholder; }
     updateQueue(); updatePlayButtons();
   }
+
   function updatePlayButtons(){
     const isYt = !!(ytIframe && ytCurrentVideo);
-    let playing;
-    if (isYt){ playing = state.playState === 'playing' && !userPausedIntent; }
-    else { playing = !!state.currentTrack && state.playState === 'playing' && !el.audio.paused && el.audio.currentTime > 0; }
-    const loading = state.playState === 'loading';
+    const playing = (userIntent === 'playing') && !!state.currentTrack;
+    const loading = userIntent === 'loading';
+
     [el.miniPlay, el.largePlayBtn].forEach(b => { if (b) b.classList.toggle('loading', loading); });
     if (!el.miniPlayIcon || !el.largePlayIcon) return;
+
     if (loading){
       const svg = '<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="22 22"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur=".9s" repeatCount="indefinite"/></circle>';
-      el.miniPlayIcon.innerHTML = svg; el.largePlayIcon.innerHTML = svg; return;
+      el.miniPlayIcon.innerHTML = svg; el.largePlayIcon.innerHTML = svg;
+      const pb = el.largePlayBtn; if (pb) pb.title = 'Загрузка';
+      const mb = el.miniPlay; if (mb) mb.title = 'Загрузка';
+      return;
     }
+
     if (playing){
       const svg = '<rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/>';
       el.miniPlayIcon.innerHTML = svg; el.largePlayIcon.innerHTML = svg;
+      const pb = el.largePlayBtn; if (pb) pb.title = 'Пауза';
+      const mb = el.miniPlay; if (mb) mb.title = 'Пауза';
     } else {
       const svg = '<path d="M8 5v14l11-7z"/>';
       el.miniPlayIcon.innerHTML = svg; el.largePlayIcon.innerHTML = svg;
+      const pb = el.largePlayBtn; if (pb) pb.title = 'Play';
+      const mb = el.miniPlay; if (mb) mb.title = 'Play';
     }
   }
+
   function updateInfoDrawer(){
     const t = state.currentTrack;
     if (!t){ el.infoTitle.textContent = 'Ничего не играет'; el.infoArtist.textContent = '—'; el.infoMeta.textContent = '—'; return; }
@@ -1398,6 +1423,9 @@
   function closeLyrics(){ el.lyricsModal.classList.remove('open'); el.lyricsModal.setAttribute('aria-hidden', 'true'); }
   function findSimilar(){ if (!state.currentTrack){ notify('Сначала включи трек'); return; } const a = String(state.currentTrack.artist || '').trim(); if (!a) return; el.searchInput.value = a; showView('search'); search(a); }
 
+  // ============================================================
+  // HANDLERS
+  // ============================================================
   on(el.searchButton, 'click', () => search(el.searchInput.value));
   on(el.searchInput, 'keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); search(el.searchInput.value); } });
   document.querySelectorAll('.nav-btn').forEach(btn => { btn.addEventListener('click', () => { const v = btn.dataset.view; if (v === 'search'){ showSearchView(); el.searchInput.focus(); return; } showView(v); }); });
@@ -1472,10 +1500,10 @@
   on(el.audio, 'loadedmetadata', updateProgress);
   on(el.audio, 'durationchange', updateProgress);
   on(el.audio, 'timeupdate', updateProgress);
-  on(el.audio, 'play', () => { state.playState = 'playing'; updatePlayButtons(); });
-  on(el.audio, 'pause', () => { if (state.playState !== 'loading' && state.playState !== 'error') state.playState = 'paused'; updatePlayButtons(); });
-  on(el.audio, 'playing', () => { state.playState = 'playing'; updatePlayButtons(); updateProgress(); });
-  on(el.audio, 'waiting', () => { if (state.currentTrack){ state.playState = 'buffering'; updatePlayButtons(); } });
+  on(el.audio, 'play', () => { userIntent = 'playing'; updatePlayButtons(); });
+  on(el.audio, 'pause', () => { if (userIntent !== 'loading' && userIntent !== 'error') userIntent = 'paused'; updatePlayButtons(); });
+  on(el.audio, 'playing', () => { userIntent = 'playing'; updatePlayButtons(); updateProgress(); });
+  on(el.audio, 'waiting', () => { if (state.currentTrack && userIntent !== 'paused'){ updatePlayButtons(); } });
 
   let preEndFadeTriggered = false;
   on(el.audio, 'timeupdate', () => {
@@ -1486,7 +1514,7 @@
   });
   on(el.audio, 'play', () => { preEndFadeTriggered = false; });
   on(el.audio, 'ended', () => {
-    state.playState = 'idle'; preEndFadeTriggered = false;
+    userIntent = 'idle'; preEndFadeTriggered = false;
     if (state.repeat){ el.audio.currentTime = 0; rampFadeTo(1, 200); el.audio.play().catch(() => {}); return; }
     next();
   });
@@ -1510,14 +1538,16 @@
   });
   window.addEventListener('beforeunload', persist);
 
+  // Дополнительная страховка: раз в секунду сверяем состояние с реальностью
   setInterval(() => {
-    if (userPausedIntent && ytIframe && ytCurrentVideo){
-      ytSendCommand('pauseVideo');
-      if (state.playState === 'playing'){ state.playState = 'paused'; updatePlayButtons(); }
+    if (ytIframe && ytCurrentVideo){
+      if (userIntent === 'paused') ytSendCommand('pauseVideo');
+      updateProgress();
+      updatePlayButtons();
+      return;
     }
-    if (ytIframe && ytCurrentVideo) { updateProgress(); return; }
-    if (state.currentTrack && state.playState === 'playing') updateProgress();
-  }, 500);
+    if (state.currentTrack && userIntent === 'playing') updateProgress();
+  }, 1000);
 
   applyTheme();
   applyToggle(el.notificationsToggle, settings.notifications);
@@ -1595,17 +1625,30 @@
     });
   })();
 
+  // ============================================================
+  // SUGGESTIONS — теперь напрямую iTunes (мгновенно)
+  // ============================================================
   (function initSuggestions(){
     const input = document.getElementById('searchInput');
     const box = document.getElementById('searchSuggestions');
     if (!input || !box) return;
     let timer = null, lastQ = '', controller = null;
+    let localCounter = 0;
+
     function hide(){ box.classList.add('hidden'); box.innerHTML = ''; }
+    function showLoading(){
+      box.innerHTML = '<div class="suggestion-empty">Поиск…</div>';
+      box.classList.remove('hidden');
+    }
+    function showEmpty(){
+      box.innerHTML = '<div class="suggestion-empty">Ничего не найдено</div>';
+      box.classList.remove('hidden');
+    }
     function show(items){
-      if (!items.length){ box.innerHTML = '<div class="suggestion-empty">Ничего не найдено</div>'; box.classList.remove('hidden'); return; }
+      if (!items.length){ showEmpty(); return; }
       box.innerHTML = '';
       items.slice(0, 8).forEach((item, i) => {
-        const s = document.createElement('div'); s.className = 'suggestion'; s.style.animationDelay = (i * 30) + 'ms';
+        const s = document.createElement('div'); s.className = 'suggestion'; s.style.animationDelay = (i * 25) + 'ms';
         const fb = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" fill="#111"/></svg>');
         s.innerHTML = '<img src="' + (item.cover || fb) + '" alt=""><div class="suggestion-main"><div class="suggestion-title">' + escapeHtml(item.title || '') + '</div><div class="suggestion-artist">' + escapeHtml(item.artist || '—') + '</div></div><span class="suggestion-badge ' + (item.source === 'FULL' ? 'full' : '') + '">' + (item.source || 'CATALOG') + '</span>';
         s.addEventListener('mousedown', e => { e.preventDefault(); input.value = item.title + (item.artist ? ' ' + item.artist : ''); hide(); search(input.value); });
@@ -1613,23 +1656,45 @@
       });
       box.classList.remove('hidden');
     }
+
+    async function fetchItunes(q, signal){
+      const url = 'https://itunes.apple.com/search?term=' + encodeURIComponent(q) + '&media=music&entity=song&limit=8';
+      const r = await fetch(url, { signal });
+      if (!r.ok) throw new Error('itunes ' + r.status);
+      const d = await r.json();
+      const items = Array.isArray(d.results) ? d.results : [];
+      return items.map(tr => ({
+        id: 'itunes_' + (tr.trackId || ''),
+        title: tr.trackName || 'Untitled',
+        artist: tr.artistName || '',
+        cover: (tr.artworkUrl100 || '').replace('100x100', '200x200'),
+        source: 'CATALOG',
+        provider: 'itunes'
+      }));
+    }
+
     function trigger(){
       const q = input.value.trim();
       if (q.length < 2){ hide(); return; }
       if (q === lastQ) return;
       lastQ = q;
-      if (controller) controller.abort();
+      const myLocal = ++localCounter;
+      if (controller) try { controller.abort(); } catch(_){}
       controller = new AbortController();
       clearTimeout(timer);
+      showLoading();
       timer = setTimeout(async () => {
         try {
-          const r = await fetch(apiBase() + '/api/search?q=' + encodeURIComponent(q), { signal: controller.signal });
-          const d = await r.json();
+          const items = await fetchItunes(q, controller.signal);
           if (input.value.trim() !== q) return;
-          show(d.results || []);
-          if (d.results && d.results.length) prefetchTracks(d.results.slice(0, 6).map(normalizeTrack).filter(Boolean));
-        } catch (e){ if (e.name !== 'AbortError') console.warn(e); }
-      }, 250);
+          if (myLocal !== localCounter) return;
+          show(items);
+        } catch (e){
+          if (e.name === 'AbortError') return;
+          if (myLocal !== localCounter) return;
+          try { hide(); } catch (_){}
+        }
+      }, 120); // КОРОТКИЙ дебаунс — мгновенные подсказки
     }
     input.addEventListener('input', trigger);
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') hide(); });
