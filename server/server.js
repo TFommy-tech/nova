@@ -1,5 +1,5 @@
 // ============================================================
-// server/server.js — бэкенд NOVA (full)
+// server/server.js — бэкенд NOVA (full, v3.8.0)
 // ============================================================
 const express = require('express');
 const cors = require('cors');
@@ -275,7 +275,7 @@ api.get('/api/recently-played', authMiddleware, (req, res) => {
 });
 
 // ============================================================
-// STATS — сводка медиатеки для профиля
+// STATS
 // ============================================================
 api.get('/api/stats', authMiddleware, (req, res) => {
   const userId = req.user.id;
@@ -334,7 +334,7 @@ api.get('/api/stats', authMiddleware, (req, res) => {
 });
 
 // ============================================================
-// WORKSHOP — мастерская оформления
+// WORKSHOP
 // ============================================================
 const WORKSHOP_FILE = path.join(DATA_DIR, 'workshop.json');
 function loadWorkshop(){
@@ -351,24 +351,23 @@ if (!workshop.items) workshop.items = [];
 if (!workshop.items.length){
   const now = Date.now();
   const presets = [
-    { name: 'Midnight Rain', author: 'NovaTeam', value: 'linear-gradient(135deg,#0a0e27 0%,#1a1a3e 50%,#000 100%)', tag: 'gradient' },
-    { name: 'Sunset Drive', author: 'NovaTeam', value: 'linear-gradient(135deg,#3a0d1f 0%,#1a0a14 50%,#000 100%)', tag: 'gradient' },
-    { name: 'Deep Ocean', author: 'NovaTeam', value: 'linear-gradient(180deg,#001a2e 0%,#000 100%)', tag: 'gradient' },
-    { name: 'Forest Path', author: 'NovaTeam', value: 'linear-gradient(180deg,#0a1a0a 0%,#000 100%)', tag: 'gradient' },
-    { name: 'Purple Haze', author: 'NovaTeam', value: 'radial-gradient(circle at bottom right,#3a0a3a 0%,#000 60%)', tag: 'gradient' },
-    { name: 'Graphite', author: 'NovaTeam', value: 'linear-gradient(180deg,#101010 0%,#000 100%)', tag: 'gradient' },
-    { name: 'Cosmic Dust', author: 'NovaTeam', value: 'radial-gradient(ellipse at top,#1a1a3e 0%,#000 60%)', tag: 'gradient' },
-    { name: 'Rose Noir', author: 'NovaTeam', value: 'linear-gradient(135deg,#1a0410 0%,#3a0a1f 100%)', tag: 'gradient' }
+    { name: 'Midnight Rain', value: 'linear-gradient(135deg,#0a0e27 0%,#1a1a3e 50%,#000 100%)' },
+    { name: 'Sunset Drive', value: 'linear-gradient(135deg,#3a0d1f 0%,#1a0a14 50%,#000 100%)' },
+    { name: 'Deep Ocean', value: 'linear-gradient(180deg,#001a2e 0%,#000 100%)' },
+    { name: 'Forest Path', value: 'linear-gradient(180deg,#0a1a0a 0%,#000 100%)' },
+    { name: 'Purple Haze', value: 'radial-gradient(circle at bottom right,#3a0a3a 0%,#000 60%)' },
+    { name: 'Graphite', value: 'linear-gradient(180deg,#101010 0%,#000 100%)' }
   ];
   workshop.items = presets.map((p, i) => ({
     id: 'wp_' + crypto.randomBytes(6).toString('hex'),
     name: p.name,
-    author: p.author,
-    tag: p.tag,
+    author: 'NovaTeam',
+    tag: 'gradient',
     kind: 'css',
     value: p.value,
-    downloads: Math.floor(Math.random() * 400) + 50,
-    createdAt: now - i * 86400000
+    downloads: 0,
+    createdAt: now - i * 86400000,
+    system: true
   }));
   saveWorkshop(workshop);
 }
@@ -376,7 +375,7 @@ if (!workshop.items.length){
 api.get('/api/workshop/items', (req, res) => {
   const sort = String(req.query.sort || 'popular');
   const q = String(req.query.q || '').trim().toLowerCase();
-  let items = workshop.items.slice();
+  let items = workshop.items.filter(x => !x.system);
   if (q) items = items.filter(x =>
     String(x.name || '').toLowerCase().includes(q) ||
     String(x.author || '').toLowerCase().includes(q) ||
@@ -403,7 +402,8 @@ api.post('/api/workshop/publish', authMiddleware, (req, res) => {
     kind: kind === 'image' ? 'image' : 'css',
     value: String(value),
     downloads: 0,
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    system: false
   };
   workshop.items.unshift(item);
   if (workshop.items.length > 500) workshop.items = workshop.items.slice(0, 500);
@@ -654,11 +654,11 @@ api.get('/api/health', async (req, res) => {
   ]);
   const allOk = Object.values(checks).every(c => c.ok);
   res.status(allOk ? 200 : 207).json({
-    ok: allOk, service: 'NOVA', version: '3.7.0',
+    ok: allOk, service: 'NOVA', version: '3.8.0',
     uptime: Math.round(process.uptime()),
     users: Object.keys(db.users).length,
     caches: { search: searchCache.size, resolve: resolveCache.size, lyrics: lyricsCache.size, artist: artistCache.size },
-    workshop: workshop.items.length,
+    workshop: workshop.items.filter(x => !x.system).length,
     upstream: checks
   });
 });
@@ -1202,7 +1202,7 @@ api.get('/api/album/:id', async (req, res) => {
 });
 
 // ============================================================
-// LYRICS
+// LYRICS (LRCLIB, возвращает plainLyrics + syncedLyrics)
 // ============================================================
 api.get('/api/lyrics', async (req, res) => {
   const track = String(req.query.track_name || '').trim();
@@ -1215,6 +1215,8 @@ api.get('/api/lyrics', async (req, res) => {
   if (cached && Date.now() - cached.time < LYRICS_TTL) return res.json(cached.data);
   const cleanTrack = track.replace(/\([^)]*\)/g, '').replace(/\[[^\]]*\]/g, '').replace(/\b(official|audio|video|lyric|lyrics|visualizer|hd|hq|explicit)\b/gi, '').replace(/\s+/g, ' ').trim();
   const send = (payload) => { lyricsCache.set(cacheKey, { time: Date.now(), data: payload }); res.json(payload); };
+
+  // 1. Точный get (самый надёжный для синхронизации)
   try {
     const params = new URLSearchParams({ track_name: cleanTrack });
     if (artist) params.set('artist_name', artist);
@@ -1223,9 +1225,13 @@ api.get('/api/lyrics', async (req, res) => {
     const r = await jsonFetch('https://lrclib.net/api/get?' + params.toString(), { headers: { 'User-Agent': 'NOVA/2.0' } }, 10000);
     if (r.ok){
       const d = await readJson(r);
-      if (d.plainLyrics || d.syncedLyrics) return send({ found: true, plainLyrics: d.plainLyrics || '', syncedLyrics: d.syncedLyrics || '', source: 'LRCLIB' });
+      if (d.plainLyrics || d.syncedLyrics){
+        return send({ found: true, plainLyrics: d.plainLyrics || '', syncedLyrics: d.syncedLyrics || '', source: 'LRCLIB', synced: !!d.syncedLyrics });
+      }
     }
   } catch (e){}
+
+  // 2. Поиск с артистом, приоритет записям с syncedLyrics
   try {
     const q = [cleanTrack, artist].filter(Boolean).join(' ');
     const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q }).toString(), { headers: { 'User-Agent': 'NOVA/2.0' } }, 10000);
@@ -1233,22 +1239,36 @@ api.get('/api/lyrics', async (req, res) => {
       const arr = await r.json();
       if (Array.isArray(arr) && arr.length){
         const normArt = normalizeSearchText(artist);
-        let best = arr[0];
-        if (normArt){ for (const item of arr){ if (normalizeSearchText(item.artistName || '') === normArt){ best = item; break; } } }
-        if (best.plainLyrics || best.syncedLyrics) return send({ found: true, plainLyrics: best.plainLyrics || '', syncedLyrics: best.syncedLyrics || '', source: 'LRCLIB' });
+        const synced = arr.filter(x => x.syncedLyrics);
+        const pool = synced.length ? synced : arr;
+        let best = pool[0];
+        if (normArt){
+          for (const item of pool){
+            if (normalizeSearchText(item.artistName || '') === normArt){ best = item; break; }
+          }
+        }
+        if (best.plainLyrics || best.syncedLyrics){
+          return send({ found: true, plainLyrics: best.plainLyrics || '', syncedLyrics: best.syncedLyrics || '', source: 'LRCLIB', synced: !!best.syncedLyrics });
+        }
       }
     }
   } catch (e){}
+
+  // 3. Только по названию
   try {
     const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q: cleanTrack }).toString(), { headers: { 'User-Agent': 'NOVA/2.0' } }, 10000);
     if (r.ok){
       const arr = await r.json();
       if (Array.isArray(arr) && arr.length){
-        const best = arr[0];
-        if (best.plainLyrics || best.syncedLyrics) return send({ found: true, plainLyrics: best.plainLyrics || '', syncedLyrics: best.syncedLyrics || '', source: 'LRCLIB' });
+        const synced = arr.filter(x => x.syncedLyrics);
+        const best = (synced[0] || arr[0]);
+        if (best.plainLyrics || best.syncedLyrics){
+          return send({ found: true, plainLyrics: best.plainLyrics || '', syncedLyrics: best.syncedLyrics || '', source: 'LRCLIB', synced: !!best.syncedLyrics });
+        }
       }
     }
   } catch (e){}
+
   send({ found: false });
 });
 
@@ -1427,7 +1447,7 @@ function startServer(options = {}){
       console.log('[NOVA] listening on http://' + host + ':' + port);
       console.log('[NOVA] DB at ' + DB_PATH);
       console.log('[NOVA] users: ' + Object.keys(db.users).length);
-      console.log('[NOVA] workshop items: ' + workshop.items.length);
+      console.log('[NOVA] workshop items: ' + workshop.items.filter(x => !x.system).length + ' (user)');
       if (IS_PROD && !process.env.DATA_DIR) console.warn('[NOVA] WARNING: DATA_DIR not set — DB reset on restart!');
       console.log('============================================================');
       resolve(server);
