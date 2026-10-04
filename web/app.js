@@ -1,19 +1,9 @@
-// ============================================================
-// web/app.js — клиент NOVA (v4.1.0)
-// ============================================================
 (function(){
   'use strict';
 
-  // Preconnect для быстрой загрузки YouTube / iTunes
-  (function preconnect(){
-    const links = [
-      ['preconnect','https://www.youtube-nocookie.com'],
-      ['preconnect','https://www.youtube.com'],
-      ['dns-prefetch','https://i.ytimg.com'],
-      ['dns-prefetch','https://itunes.apple.com'],
-      ['dns-prefetch','https://is1-ssl.mzstatic.com']
-    ];
-    links.forEach(([rel, href]) => {
+  // Preconnect
+  (function(){
+    [['preconnect','https://www.youtube-nocookie.com'],['preconnect','https://www.youtube.com'],['dns-prefetch','https://i.ytimg.com'],['dns-prefetch','https://itunes.apple.com'],['dns-prefetch','https://is1-ssl.mzstatic.com']].forEach(([rel, href]) => {
       const l = document.createElement('link');
       l.rel = rel; l.href = href;
       if (rel === 'preconnect') l.crossOrigin = 'anonymous';
@@ -91,27 +81,47 @@
   }
 
   const el = {};
-  ['searchInput','searchButton','connection','resultsInfo','homeContinue','homePopular','homeArtists','homeAlbums','homeGreeting',
-   'homeRecommendations','recommendationsSection','recommendationsSub',
-   'backgroundLayer','backgroundShade','startupScreen','startupStatus','backgroundInput','localAudioInput',
-   'backgroundBtn','backgroundResetBtn','settingsOpenFileBtn','openLocalFileBtn','openWorkshopBtn','openProfileBtn',
-   'infoDrawer','infoDrawerClose','infoCover','infoTitle','infoArtist','infoMeta','infoFavorite','infoQueue',
-   'artistHeroImage','artistHeroName','artistHeroMeta','artistBanner','artistBannerBg','artistShowAllBtn','artistTracks','artistAlbums','artistSingles',
-   'albumHeroImage','albumHeroName','albumHeroArtist','albumHeroMeta','albumTracks','albumPlay',
-   'trackGrid','miniPlayer','miniCover','miniTitle','miniArtist','miniPlay','miniPlayIcon',
-   'largePlayIcon','bigCover','nowTitle','nowArtist','progress','currentTime','duration','queueContent','queueClear',
-   'volumeLarge','volumeMini','libraryList','favoritesList','clearHistory','clearFavorites','settingsVolumeValue',
-   'lyricsModal','lyricsClose','lyricsTrackTitle','lyricsTrackArtist','lyricsBody',
-   'audio','toast','avatarBtn','userSlot','userMenu','userAvatar','userName','userTag','userLoginBtn','userLogoutBtn',
-   'loginModal','loginClose','loginDiscordBtn','loginTabs','tabLogin','tabRegister','localAuthForm',
-   'authUsername','authPassword','authError','authSubmit','authSubmitText','continueAsGuest',
-   'songInfoModal','songInfoClose','songInfoCover','songInfoTitle','songInfoArtist','songInfoAlbum',
-   'songInfoMeta','songInfoSource','songInfoFavorite','songInfoPlay','songInfoQueue','songInfoDownload',
-   'equalizerModal','equalizerClose','equalizerPresets','equalizerBands','eqNotice',
-   'logoBtn','miniPrev','prevBtn','miniNext','nextBtn','miniRepeat','repeatBtn','miniShuffle','shuffleBtn',
-   'downloadBtn','lyricsBtn','equalizerBtn','similarBtn',
-   'miniProgress','miniTime','miniFavorite','miniLyrics','miniExpand','miniTrackClick',
-   'themeToggle','notificationsToggle','hotkeysToggle','autoplayToggle','playerBack','miniVolIcon'
+  [
+    // Основа
+    'searchInput','searchButton','connection','resultsInfo','homeContinue','homePopular','homeArtists','homeAlbums','homeGreeting',
+    'homeRecommendations','recommendationsSection','recommendationsSub',
+    'backgroundLayer','backgroundShade','startupScreen','startupStatus','backgroundInput','localAudioInput',
+    'backgroundBtn','backgroundResetBtn','settingsOpenFileBtn','openLocalFileBtn',
+    // Drawer
+    'infoDrawer','infoDrawerClose','infoCover','infoTitle','infoArtist','infoMeta','infoFavorite','infoQueue',
+    // Artist
+    'artistHeroImage','artistHeroName','artistHeroMeta','artistBanner','artistBannerBg','artistShowAllBtn','artistTracks','artistAlbums','artistSingles',
+    // Album
+    'albumHeroImage','albumHeroName','albumHeroArtist','albumHeroMeta','albumTracks','albumPlay',
+    // Search
+    'trackGrid',
+    // Mini player
+    'miniPlayer','miniCover','miniTitle','miniArtist','miniPlay','miniPlayIcon',
+    // Player
+    'largePlayIcon','bigCover','nowTitle','nowArtist','progress','currentTime','duration','queueContent','queueClear',
+    // Volume / library
+    'volumeLarge','volumeMini','libraryList','favoritesList','clearHistory','clearFavorites','settingsVolumeValue',
+    // Lyrics / song info / eq
+    'lyricsModal','lyricsClose','lyricsTrackTitle','lyricsTrackArtist','lyricsBody',
+    'audio','toast','avatarBtn','userSlot','userMenu','userAvatar','userName','userTag','userLoginBtn','userLogoutBtn',
+    'loginModal','loginClose','loginDiscordBtn','loginTabs','tabLogin','tabRegister','localAuthForm',
+    'authUsername','authPassword','authError','authSubmit','authSubmitText','continueAsGuest',
+    'songInfoModal','songInfoClose','songInfoCover','songInfoTitle','songInfoArtist','songInfoAlbum',
+    'songInfoMeta','songInfoSource','songInfoFavorite','songInfoPlay','songInfoQueue','songInfoDownload',
+    'equalizerModal','equalizerClose','equalizerPresets','equalizerBands','eqNotice',
+    // Controls
+    'logoBtn','miniPrev','prevBtn','miniNext','nextBtn','miniRepeat','repeatBtn','miniShuffle','shuffleBtn',
+    'downloadBtn','lyricsBtn','equalizerBtn','similarBtn',
+    'miniProgress','miniTime','miniFavorite','miniLyrics','miniExpand','miniTrackClick',
+    'themeToggle','notificationsToggle','hotkeysToggle','autoplayToggle','playerBack','miniVolIcon',
+    // Settings modal
+    'settingsModal','settingsModalClose','settingsNav','settingsContent',
+    // Profile modal
+    'profileModal','profileModalClose','profileAvatarBig','profileName','profileTag','profilePremiumBtn','profileSummaryTitle',
+    'statTracks','statArtists','statPlaylists','profileTopArtists','profileTopTracks',
+    'openProfileBtn',
+    // Workshop modal
+    'workshopModal','workshopModalClose','workshopGrid','workshopSearch','workshopPublish','openWorkshopBtn'
   ].forEach(id => { el[id] = safeEl(id); });
 
   function on(node, event, handler){ if (node && typeof node.addEventListener === 'function') node.addEventListener(event, handler); }
@@ -126,16 +136,10 @@
   // ============================================================
   (function initCustomCursor(){
     if (window.matchMedia && !window.matchMedia('(pointer: fine)').matches) return;
-
-    const dot = document.createElement('div');
-    dot.className = 'nova-cursor-dot';
-    const ring = document.createElement('div');
-    ring.className = 'nova-cursor-ring';
-    const glow = document.createElement('div');
-    glow.className = 'nova-cursor-glow';
-    document.body.appendChild(glow);
-    document.body.appendChild(ring);
-    document.body.appendChild(dot);
+    const dot = document.createElement('div'); dot.className = 'nova-cursor-dot';
+    const ring = document.createElement('div'); ring.className = 'nova-cursor-ring';
+    const glow = document.createElement('div'); glow.className = 'nova-cursor-glow';
+    document.body.appendChild(glow); document.body.appendChild(ring); document.body.appendChild(dot);
 
     let visible = false;
     function show(){ if (visible) return; visible = true; dot.classList.add('visible'); ring.classList.add('visible'); glow.classList.add('visible'); }
@@ -143,8 +147,7 @@
 
     let gx = 0, gy = 0, gtx = 0, gty = 0;
     function tickGlow(){
-      gx += (gtx - gx) * 0.10;
-      gy += (gty - gy) * 0.10;
+      gx += (gtx - gx) * 0.10; gy += (gty - gy) * 0.10;
       glow.style.transform = 'translate3d(' + (gx - 90) + 'px,' + (gy - 90) + 'px,0)';
       requestAnimationFrame(tickGlow);
     }
@@ -161,11 +164,10 @@
     window.addEventListener('mouseleave', hide);
     window.addEventListener('mouseenter', show);
     window.addEventListener('blur', hide);
-    document.addEventListener('mouseleave', hide);
 
     function isInteractive(target){
       if (!target || !target.closest) return false;
-      return !!target.closest('button, a, input, textarea, select, .card, .home-mini-card, .list-row, .nav-btn, .queue-row, .suggestion, .eq-preset, .accent-preset, .bg-preset, .song-info-btn, .settings-action, .login-tab, .artist-link, .settings-tab, .profile-action, .workshop-item-btn, .workshop-sort-btn, .lyrics-line, .player-tab, .row-actions button, .small-btn');
+      return !!target.closest('button, a, input, textarea, select, .card, .home-mini-card, .list-row, .nav-btn, .queue-row, .suggestion, .eq-preset, .accent-preset, .bg-preset, .song-info-btn, .settings-action, .login-tab, .artist-link, .settings-tab, .profile-action, .workshop-item-btn, .workshop-sort-btn, .lyrics-line, .player-tab, .small-btn, .inline-control, .section-action, .icon-control, .mini-btn');
     }
     function isTextInput(target){
       if (!target || !target.closest) return false;
@@ -174,13 +176,9 @@
 
     document.addEventListener('mouseover', (e) => {
       const t = e.target;
-      if (isTextInput(t)){
-        ring.classList.add('typing'); ring.classList.remove('hover'); dot.classList.remove('hover'); glow.classList.remove('hover');
-      } else if (isInteractive(t)){
-        ring.classList.add('hover'); ring.classList.remove('typing'); dot.classList.add('hover'); glow.classList.add('hover');
-      } else {
-        ring.classList.remove('hover', 'typing'); dot.classList.remove('hover'); glow.classList.remove('hover');
-      }
+      if (isTextInput(t)){ ring.classList.add('typing'); ring.classList.remove('hover'); dot.classList.remove('hover'); glow.classList.remove('hover'); }
+      else if (isInteractive(t)){ ring.classList.add('hover'); ring.classList.remove('typing'); dot.classList.add('hover'); glow.classList.add('hover'); }
+      else { ring.classList.remove('hover','typing'); dot.classList.remove('hover'); glow.classList.remove('hover'); }
     });
 
     document.addEventListener('mousedown', () => { dot.classList.add('click'); ring.classList.add('click'); glow.classList.add('click'); });
@@ -209,21 +207,14 @@
   // ============================================================
   function ytSendCommand(func, args){
     if (!ytIframe || !ytIframe.contentWindow) return false;
-    try {
-      ytIframe.contentWindow.postMessage(JSON.stringify({ event:'command', func: func, args: args || [] }), '*');
-      return true;
-    } catch (_){ return false; }
+    try { ytIframe.contentWindow.postMessage(JSON.stringify({ event:'command', func: func, args: args || [] }), '*'); return true; } catch (_){ return false; }
   }
   function ytForcePause(){
     userIntent = 'paused';
     for (let i = 0; i < 8; i++) setTimeout(() => { if (userIntent === 'paused') ytSendCommand('pauseVideo'); }, i * 60);
     ytStartPauseWatchdog();
   }
-  function ytPlay(){
-    userIntent = 'playing';
-    ytStopPauseWatchdog();
-    ytSendCommand('playVideo');
-  }
+  function ytPlay(){ userIntent = 'playing'; ytStopPauseWatchdog(); ytSendCommand('playVideo'); }
   function ytStartPauseWatchdog(){
     if (ytPauseWatchdog) return;
     ytPauseWatchdog = setInterval(() => {
@@ -232,43 +223,24 @@
       ytSendCommand('pauseVideo');
     }, 200);
   }
-  function ytStopPauseWatchdog(){
-    if (ytPauseWatchdog){ clearInterval(ytPauseWatchdog); ytPauseWatchdog = null; }
-  }
+  function ytStopPauseWatchdog(){ if (ytPauseWatchdog){ clearInterval(ytPauseWatchdog); ytPauseWatchdog = null; } }
 
   window.addEventListener('message', (e) => {
     if (!/^https:\/\/(www\.)?youtube(-nocookie)?\.com$/.test(e.origin || '')) return;
     let data;
     try { data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch (_){ return; }
     if (!data || !data.event) return;
-
     if (data.event === 'onReady'){
-      if (userIntent === 'playing' || userIntent === 'loading'){
-        ytSendCommand('playVideo');
-        ytSendCommand('setVolume', [state.volume]);
-      }
+      if (userIntent === 'playing' || userIntent === 'loading'){ ytSendCommand('playVideo'); ytSendCommand('setVolume', [state.volume]); }
     }
-
     if (data.event === 'onStateChange'){
       const s = data.info;
-      if (s === 1){
-        if (userIntent === 'paused'){ ytSendCommand('pauseVideo'); return; }
-        if (userIntent !== 'playing'){ userIntent = 'playing'; updatePlayButtons(); }
-      } else if (s === 2){
-        if (userIntent === 'paused') return;
-        if (userIntent === 'playing') ytSendCommand('playVideo');
-      } else if (s === 3){
-        if (userIntent === 'loading') return;
-      } else if (s === 0){
-        if (userIntent === 'playing'){
-          if (state.repeat){ ytSendCommand('seekTo', [0, true]); ytPlay(); }
-          else { next(); }
-        }
-      } else if (s === -1){
-        if (userIntent === 'playing') ytSendCommand('playVideo');
-      }
+      if (s === 1){ if (userIntent === 'paused'){ ytSendCommand('pauseVideo'); return; } if (userIntent !== 'playing'){ userIntent = 'playing'; updatePlayButtons(); } }
+      else if (s === 2){ if (userIntent === 'paused') return; if (userIntent === 'playing') ytSendCommand('playVideo'); }
+      else if (s === 3){ if (userIntent === 'loading') return; }
+      else if (s === 0){ if (userIntent === 'playing'){ if (state.repeat){ ytSendCommand('seekTo', [0, true]); ytPlay(); } else { next(); } } }
+      else if (s === -1){ if (userIntent === 'playing') ytSendCommand('playVideo'); }
     }
-
     if (data.event === 'infoDelivery' && data.info){
       if (typeof data.info.currentTime === 'number') ytVideoCurrentTime = data.info.currentTime;
       if (typeof data.info.duration === 'number' && data.info.duration > 0) ytVideoDuration = data.info.duration;
@@ -293,14 +265,10 @@
       const wrap = document.getElementById('youtubePlayerWrap');
       if (!wrap) return reject(new Error('no youtube wrap'));
       wrap.innerHTML = '';
-      ytIframe = null;
-      ytCurrentVideo = videoId;
-      ytVideoDuration = 0;
-      ytVideoCurrentTime = 0;
+      ytIframe = null; ytCurrentVideo = videoId; ytVideoDuration = 0; ytVideoCurrentTime = 0;
       ytStopPauseWatchdog();
       try { el.audio.pause(); } catch (_){}
-      el.audio.removeAttribute('src');
-      el.audio.load();
+      el.audio.removeAttribute('src'); el.audio.load();
 
       const iframe = document.createElement('iframe');
       iframe.setAttribute('allow', 'autoplay; encrypted-media');
@@ -312,12 +280,10 @@
 
       let resolved = false;
       const finish = (err) => {
-        if (resolved) return;
-        resolved = true;
+        if (resolved) return; resolved = true;
         if (myId !== undefined && myId !== playRequestId){ reject(new Error('Aborted')); return; }
         if (err) reject(err); else resolve();
       };
-
       const handshake = () => {
         try {
           if (myId !== undefined && myId !== playRequestId) return;
@@ -327,7 +293,6 @@
           iframe.contentWindow.postMessage(JSON.stringify({ event:'command', func:'addEventListener', args:['infoDelivery'] }), '*');
         } catch (_){}
       };
-
       const tryPlay = () => {
         if (myId !== undefined && myId !== playRequestId) return;
         if (userIntent === 'paused'){ ytSendCommand('pauseVideo'); return; }
@@ -335,24 +300,17 @@
         ytSendCommand('setVolume', [state.volume]);
         ytSendCommand('unMute');
       };
-
       iframe.addEventListener('load', () => {
-        handshake();
-        tryPlay();
-        setTimeout(handshake, 60);
-        setTimeout(tryPlay, 120);
-        setTimeout(handshake, 200);
-        setTimeout(tryPlay, 300);
-        setTimeout(tryPlay, 600);
-        setTimeout(tryPlay, 1200);
+        handshake(); tryPlay();
+        setTimeout(handshake, 60); setTimeout(tryPlay, 120);
+        setTimeout(handshake, 200); setTimeout(tryPlay, 300);
+        setTimeout(tryPlay, 600); setTimeout(tryPlay, 1200);
         setTimeout(() => finish(), 500);
       });
-
       iframe.addEventListener('error', () => finish(new Error('iframe load error')));
       wrap.appendChild(iframe);
       ytIframe = iframe;
       setTimeout(() => finish(), 8000);
-
       const cancelTick = setInterval(() => {
         if (myId !== undefined && myId !== playRequestId){ clearInterval(cancelTick); finish(new Error('Aborted')); }
       }, 100);
@@ -413,8 +371,7 @@
 
   function initAudioGraph(){
     if (audioGraphReady){
-      if (audioCtx && audioCtx.state === 'suspended'){ audioCtx.resume().then(() => applyEq()).catch(() => {}); }
-      else { applyEq(); }
+      if (audioCtx && audioCtx.state === 'suspended'){ audioCtx.resume().then(() => applyEq()).catch(() => {}); } else { applyEq(); }
       return;
     }
     try {
@@ -422,24 +379,15 @@
       sourceNode = audioCtx.createMediaElementSource(el.audio);
       fadeGain = audioCtx.createGain(); fadeGain.gain.value = 1;
       volumeGain = audioCtx.createGain(); volumeGain.gain.value = state.volume / 100;
-      eqFilters = EQ_BANDS.map(b => {
-        const f = audioCtx.createBiquadFilter();
-        f.type = b.type; f.frequency.value = b.freq;
-        if (b.type === 'peaking') f.Q.value = 1.0;
-        f.gain.value = 0;
-        return f;
-      });
+      eqFilters = EQ_BANDS.map(b => { const f = audioCtx.createBiquadFilter(); f.type = b.type; f.frequency.value = b.freq; if (b.type === 'peaking') f.Q.value = 1.0; f.gain.value = 0; return f; });
       sourceNode.connect(fadeGain);
       fadeGain.connect(volumeGain);
       let prev = volumeGain;
       eqFilters.forEach(f => { prev.connect(f); prev = f; });
       prev.connect(audioCtx.destination);
-      audioGraphReady = true;
-      applyEq();
+      audioGraphReady = true; applyEq();
       if (audioCtx.state === 'suspended'){ audioCtx.resume().then(() => applyEq()).catch(() => {}); }
-    } catch (e){
-      audioCtx = null; audioGraphReady = false; fadeGain = null; volumeGain = null; eqFilters = null;
-    }
+    } catch (e){ audioCtx = null; audioGraphReady = false; fadeGain = null; volumeGain = null; eqFilters = null; }
   }
   function applyEq(){
     if (!eqFilters || !audioGraphReady || !audioCtx) return;
@@ -515,15 +463,9 @@
     const eqNotice = document.getElementById('eqNotice');
     if (eqNotice){
       const isYt = !!(ytIframe && ytCurrentVideo);
-      if (isYt){
-        eqNotice.textContent = 'Эквалайзер не применяется к YouTube-трекам. Запусти Audius или локальный файл — тогда эффекты будут слышны.';
-        eqNotice.style.display = 'block';
-      } else if (!state.currentTrack){
-        eqNotice.textContent = 'Сначала включи трек.';
-        eqNotice.style.display = 'block';
-      } else {
-        eqNotice.style.display = 'none';
-      }
+      if (isYt){ eqNotice.textContent = 'Эквалайзер не применяется к YouTube-трекам. Запусти Audius или локальный файл.'; eqNotice.style.display = 'block'; }
+      else if (!state.currentTrack){ eqNotice.textContent = 'Сначала включи трек.'; eqNotice.style.display = 'block'; }
+      else { eqNotice.style.display = 'none'; }
     }
     el.equalizerModal.classList.add('open'); el.equalizerModal.setAttribute('aria-hidden','false');
   }
@@ -810,7 +752,7 @@
   }
 
   // ============================================================
-  // RENDER HOME
+  // HOME
   // ============================================================
   function renderHome(){
     const recent = state.history.slice(0, 8);
@@ -868,6 +810,12 @@
     d.addEventListener('click', () => { if (track.albumId) showAlbum(track.albumId); });
     d.append(img, t, s);
     return d;
+  }
+
+  function playByTrackObject(track){
+    const i = state.tracks.findIndex(x => trackKey(x) === trackKey(track));
+    if (i >= 0) playTrack(i);
+    else { state.tracks = [track]; playTrack(0); }
   }
 
   // ============================================================
@@ -946,10 +894,8 @@
     if (!audioGraphReady) el.audio.volume = state.volume / 100;
     el.audio.load();
     if (audioGraphReady && fadeGain && audioCtx && volumeGain){
-      fadeGain.gain.cancelScheduledValues(audioCtx.currentTime);
-      fadeGain.gain.value = 0;
-      volumeGain.gain.cancelScheduledValues(audioCtx.currentTime);
-      volumeGain.gain.value = state.volume / 100;
+      fadeGain.gain.cancelScheduledValues(audioCtx.currentTime); fadeGain.gain.value = 0;
+      volumeGain.gain.cancelScheduledValues(audioCtx.currentTime); volumeGain.gain.value = state.volume / 100;
     }
     await new Promise((resolve, reject) => {
       let done = false;
@@ -1043,7 +989,6 @@
     ytStopPauseWatchdog();
     clearLyricsSync();
 
-    // Плавный фейд если что-то играет
     const shouldFade = audioGraphReady && state.currentTrack && state.playState === 'playing';
     if (shouldFade) await fadeOutAndWait(180);
     try { el.audio.pause(); } catch (_){}
@@ -1107,9 +1052,10 @@
       setTimeout(updatePlayButtons, 1500);
       setTimeout(applyEq, 200);
       setTimeout(loadRecommendations, 8000);
-      const lyrTab = document.querySelector('.player-tab[data-tab="lyrics"]');
-      if (lyrTab && lyrTab.classList.contains('active')) loadInlineLyrics(track);
-      // Префетч следующего трека — для плавного перехода
+      // Если сейчас открыт текст — перезагрузим под текущий трек
+      const lyrBtn = document.querySelector('.player-tab[data-tab="lyrics"]');
+      if (lyrBtn && lyrBtn.classList.contains('active')) loadInlineLyrics(track);
+      // Префетч следующего
       const nextIdx = index + 1;
       if (nextIdx < state.tracks.length) setTimeout(() => prefetchTrack(state.tracks[nextIdx]), 1500);
     } catch (e){
@@ -1128,9 +1074,7 @@
         userIntent = 'paused'; updatePlayButtons();
         for (let i = 0; i < 8; i++) setTimeout(() => { if (userIntent === 'paused') ytSendCommand('pauseVideo'); }, i * 60);
         ytStartPauseWatchdog();
-      } else {
-        ytPlay(); updatePlayButtons();
-      }
+      } else { ytPlay(); updatePlayButtons(); }
       return;
     }
     if (state.currentTrack){
@@ -1331,15 +1275,13 @@
     el.artistSingles.innerHTML = '';
     el.artistShowAllBtn.classList.add('hidden');
     el.artistHeroImage.onload = () => {
-      const src = el.artistHeroImage.src;
-      if (!src) return;
+      const src = el.artistHeroImage.src; if (!src) return;
       el.artistBannerBg.style.backgroundImage = 'url("' + src.replace(/"/g,'\\"') + '")';
       el.artistBannerBg.classList.add('loaded');
     };
     if (!name && !id){ el.artistTracks.innerHTML = '<div class="empty">Нет данных.</div>'; return; }
     try {
-      let artistId = id;
-      let artistPicture = '';
+      let artistId = id, artistPicture = '';
       if (!artistId && name){
         try {
           const sr = await fetch(apiBase() + '/api/artist-search?q=' + encodeURIComponent(name));
@@ -1350,7 +1292,7 @@
       if (!artistId){
         el.artistHeroName.textContent = name || 'Исполнитель';
         if (artistPicture) el.artistHeroImage.src = artistPicture;
-        el.artistTracks.innerHTML = '<div class="empty">Точных совпадений артиста не найдено.</div>';
+        el.artistTracks.innerHTML = '<div class="empty">Точных совпадений не найдено.</div>';
         return;
       }
       const r = await fetch(apiBase() + '/api/artist/' + encodeURIComponent(artistId));
@@ -1370,10 +1312,7 @@
       const INITIAL = 5;
       let expanded = false;
       const renderTopTracks = () => {
-        if (!allTracks.length){
-          el.artistTracks.innerHTML = '<div class="empty"><div>У этого артиста пока нет доступных треков.</div></div>';
-          return;
-        }
+        if (!allTracks.length){ el.artistTracks.innerHTML = '<div class="empty"><div>У этого артиста пока нет доступных треков.</div></div>'; return; }
         renderList(el.artistTracks, expanded ? allTracks : allTracks.slice(0, INITIAL));
       };
       renderTopTracks();
@@ -1412,7 +1351,6 @@
       if (d.cover_xl) el.albumHeroImage.src = d.cover_xl;
       const tracks = raw.map(normalizeTrack).filter(Boolean);
 
-      // Сохраняем контекст альбома
       state.albumContext = { id: String(id), title: d.title || 'Альбом', artist: d.artist?.name || '', cover: d.cover_xl || d.cover_big || d.cover_medium || '' };
 
       el.albumTracks.innerHTML = '';
@@ -1420,15 +1358,14 @@
         const row = document.createElement('div'); row.className = 'list-row';
         row.innerHTML = '<div style="color:var(--text-dim);font-size:10px">' + String(i+1).padStart(2,'0') + '</div><div class="list-main"><strong>' + escapeHtml(t.title) + '</strong><span>' + artistsHtml(t.artist) + '</span></div><div class="row-actions"><button class="small-btn" title="Воспроизвести">▶</button></div>';
         const playBtn = row.querySelector('button');
-        // Клик по кнопке — играем но не раскрываем плеер
+        // Клик по кнопке — играем, но НЕ раскрываем плеер
         playBtn.onclick = e => { e.stopPropagation(); state.tracks = tracks.slice(); playTrack(i, { force:true }); };
-        // Клик по строке — тоже играем но не открываем
+        // Клик по строке — тоже играем, но НЕ открываем
         row.onclick = () => { state.tracks = tracks.slice(); playTrack(i); };
         row.addEventListener('mouseenter', () => prefetchTrack(t), { once:true });
         el.albumTracks.appendChild(row);
       });
 
-      // «Воспроизвести» — играем первый, но не раскрываем плеер
       el.albumPlay.onclick = () => { state.tracks = tracks.slice(); if (tracks.length) playTrack(0, { force:true }); };
 
       setTimeout(() => prefetchTracks(tracks.slice(0,4)), 300);
@@ -1465,12 +1402,11 @@
   function renderFavorites(){ renderList(el.favoritesList, state.favorites); }
 
   // ============================================================
-  // DOWNLOAD — качаем с YouTube (или Audius)
+  // DOWNLOAD
   // ============================================================
   async function downloadCurrent(){
     const track = state.currentTrack;
     if (!track){ notify('Нет трека'); return; }
-    // Если у трека уже есть готовый downloadUrl (Audius downloadable)
     if (track.downloadable && track.downloadUrl){
       const a = document.createElement('a');
       a.href = track.downloadUrl; a.download = '';
@@ -1478,7 +1414,6 @@
       notify('Загрузка началась');
       return;
     }
-    // Иначе — через YouTube resolve
     try {
       const rd = track._resolveData;
       if (rd && rd.provider === 'youtube' && rd.videoId){
@@ -1490,7 +1425,6 @@
         notify('Загрузка началась');
         return;
       }
-      // Fallback: сначала resolve
       const rawTitle = String(track.title || '').trim();
       const rawArtist = String(track.artist || '').trim();
       const cleanTitle = cleanTitleForSearchLocal(rawTitle) || rawTitle;
@@ -1518,11 +1452,12 @@
   function findSimilar(){ if (!state.currentTrack){ notify('Сначала включи трек'); return; } const a = String(state.currentTrack.artist || '').trim(); if (!a) return; el.searchInput.value = a; showView('search'); search(a); }
 
   // ============================================================
-  // INLINE LYRICS
+  // LYRICS — inline, как альтернативный вид обложки
   // ============================================================
   let lyricsTimer = null;
   let lyricsLines = [];
   let lyricsActiveIndex = -1;
+  let lyricsCurrentView = 'cover'; // 'cover' | 'lyrics'
 
   function parseLrc(lrc){
     if (!lrc) return [];
@@ -1541,7 +1476,6 @@
     out.sort((a,b) => a.t - b.t);
     return out;
   }
-
   function clearLyricsSync(){
     if (lyricsTimer){ clearInterval(lyricsTimer); lyricsTimer = null; }
     lyricsLines = [];
@@ -1568,35 +1502,45 @@
     }
   }
 
+  // Создаём обёртку для переключения "обложка / текст" внутри player-layout
   function setupInlineLyrics(){
-    const playerBottom = document.querySelector('.player-bottom-row');
-    if (!playerBottom) return;
-    if (playerBottom.parentNode.querySelector('.player-tabs')) return;
+    const layout = document.querySelector('.player-layout');
+    if (!layout) return;
+    if (layout.querySelector('.player-tabs')) return;
 
+    // Обёртка левой колонки: обложка + панель текста
+    const coverWrap = layout.querySelector('.big-cover-wrap');
+    if (!coverWrap) return;
+
+    // Панель текста — заменяет обложку по размеру
+    const lyricsPanel = document.createElement('div');
+    lyricsPanel.className = 'lyrics-panel-inline hidden';
+    lyricsPanel.id = 'lyricsPanelInline';
+    lyricsPanel.innerHTML = '<div class="lyrics-panel-inline-head"><div class="lyrics-panel-inline-title">Текст песни</div><button id="lyricsRefresh" class="queue-clear" title="Обновить">Обновить</button></div><div id="lyricsInlineContent" class="lyrics-panel-inline-body"><div class="lyrics-placeholder">Загрузка…</div></div>';
+    coverWrap.parentNode.insertBefore(lyricsPanel, coverWrap.nextSibling);
+
+    // Вкладки над заголовком в правой колонке
+    const playerSide = layout.querySelector('.player-side');
+    const overline = playerSide.querySelector('.player-overline');
     const tabs = document.createElement('div');
-    tabs.className = 'player-tabs';
-    tabs.innerHTML = '<button class="player-tab active" data-tab="queue">Очередь</button><button class="player-tab" data-tab="lyrics">Текст песни</button>';
-    playerBottom.parentNode.insertBefore(tabs, playerBottom);
-
-    const lyricsBox = document.createElement('div');
-    lyricsBox.className = 'queue-box queue-box-wide hidden';
-    lyricsBox.id = 'lyricsBox';
-    lyricsBox.innerHTML = '<div class="queue-head"><div class="queue-title">Текст песни</div><button id="lyricsRefresh" class="queue-clear" title="Обновить">Обновить</button></div><div id="lyricsInlineContent" class="queue-content lyrics-inline-list"><div class="lyrics-placeholder">Открой вкладку «Текст», чтобы увидеть слова</div></div>';
-    playerBottom.appendChild(lyricsBox);
+    tabs.className = 'player-tabs-inline';
+    tabs.innerHTML = '<button class="player-tab active" data-tab="cover">Обложка</button><button class="player-tab" data-tab="lyrics">Текст песни</button>';
+    overline.parentNode.insertBefore(tabs, overline);
 
     tabs.querySelectorAll('.player-tab').forEach(btn => {
       btn.addEventListener('click', () => {
         tabs.querySelectorAll('.player-tab').forEach(x => x.classList.toggle('active', x === btn));
         const tab = btn.dataset.tab;
-        const queueBox = playerBottom.querySelector('.queue-box:not(#lyricsBox)');
-        if (tab === 'queue'){
-          if (queueBox) queueBox.classList.remove('hidden');
-          lyricsBox.classList.add('hidden');
-          clearLyricsSync();
-        } else {
-          if (queueBox) queueBox.classList.add('hidden');
-          lyricsBox.classList.remove('hidden');
+        if (tab === 'lyrics'){
+          lyricsCurrentView = 'lyrics';
+          coverWrap.classList.add('hidden');
+          lyricsPanel.classList.remove('hidden');
           if (state.currentTrack) loadInlineLyrics(state.currentTrack);
+        } else {
+          lyricsCurrentView = 'cover';
+          coverWrap.classList.remove('hidden');
+          lyricsPanel.classList.add('hidden');
+          clearLyricsSync();
         }
       });
     });
@@ -1672,8 +1616,9 @@
     setTimeout(() => {
       const tab = document.querySelector('.player-tab[data-tab="lyrics"]');
       if (tab) tab.click();
-    }, 60);
+    }, 80);
   }
+  function closeLyrics(){ clearLyricsSync(); }
 
   // ============================================================
   // HANDLERS
@@ -1773,7 +1718,6 @@
     clearLyricsSync();
     userIntent = 'idle'; preEndFadeTriggered = false;
     if (state.repeat){ el.audio.currentTime = 0; rampFadeTo(1, 200); el.audio.play().catch(() => {}); return; }
-    // Автоматический переход на следующий — плавный fade уже был
     next();
   });
 
@@ -1807,63 +1751,55 @@
     if (state.currentTrack && userIntent === 'playing') updateProgress();
   }, 1000);
 
-  // ============================================================
-  // ARTIST LINK DELEGATION
-  // ============================================================
   document.addEventListener('click', function(e){
     const link = e.target && e.target.closest && e.target.closest('.artist-link');
     if (!link) return;
-    e.preventDefault();
-    e.stopPropagation();
+    e.preventDefault(); e.stopPropagation();
     const name = link.dataset.artist || link.textContent || '';
     if (name) showArtist('', name);
   }, true);
 
   // ============================================================
-  // SETTINGS MODAL
+  // SETTINGS
   // ============================================================
   const settingsSchema = {
     general: [
       { title:'Общие', sub:'Воспроизведение и поведение приложения.', rows:[
-        { label:'Восстанавливать позицию воспроизведения', hint:'Продолжать трек с того же места после перезагрузки.', kind:'pill', get:()=>store.get('nova_resume','1')==='1', set:(v)=>store.set('nova_resume', v?'1':'0') },
-        { label:'Анимации интерфейса', hint:'Плавные переходы и hover-эффекты.', kind:'pill', get:()=>store.get('nova_anim','1')==='1', set:(v)=>store.set('nova_anim', v?'1':'0') },
+        { label:'Восстанавливать позицию', hint:'Продолжать трек с того же места.', kind:'pill', get:()=>store.get('nova_resume','1')==='1', set:(v)=>store.set('nova_resume', v?'1':'0') },
+        { label:'Анимации интерфейса', hint:'Плавные переходы.', kind:'pill', get:()=>store.get('nova_anim','1')==='1', set:(v)=>store.set('nova_anim', v?'1':'0') },
         { label:'Explicit — без цензуры', hint:'Приоритет версиям без цензуры.', kind:'pill', get:()=>store.get('nova_explicit','1')==='1', set:(v)=>store.set('nova_explicit', v?'1':'0') }
       ]},
-      { title:'Экспериментальные каталоги', sub:'Дополнительные источники метаданных для поиска.', rows:[
-        { label:'iTunes Music', hint:'Большой каталог, быстрый отклик.', kind:'pill', get:()=>store.get('nova_cat_itunes','1')==='1', set:(v)=>store.set('nova_cat_itunes', v?'1':'0') },
-        { label:'Deezer Catalog', hint:'Иногда точнее по артистам.', kind:'pill', get:()=>store.get('nova_cat_deezer','1')==='1', set:(v)=>store.set('nova_cat_deezer', v?'1':'0') },
-        { label:'Audius Network', hint:'Независимые артисты, полные треки.', kind:'pill', get:()=>store.get('nova_cat_audius','1')==='1', set:(v)=>store.set('nova_cat_audius', v?'1':'0') }
-      ]},
-      { title:'Приложение', sub:'Язык интерфейса.', rows:[
-        { label:'Язык', hint:'Язык интерфейса приложения.', kind:'select', options:[['ru','Русский'],['en','English']], get:()=>store.get('nova_lang','ru'), set:(v)=>store.set('nova_lang', v) }
+      { title:'Каталоги', sub:'Дополнительные источники метаданных.', rows:[
+        { label:'iTunes Music', hint:'Большой каталог.', kind:'pill', get:()=>store.get('nova_cat_itunes','1')==='1', set:(v)=>store.set('nova_cat_itunes', v?'1':'0') },
+        { label:'Deezer Catalog', hint:'Точнее по артистам.', kind:'pill', get:()=>store.get('nova_cat_deezer','1')==='1', set:(v)=>store.set('nova_cat_deezer', v?'1':'0') },
+        { label:'Audius Network', hint:'Независимые артисты.', kind:'pill', get:()=>store.get('nova_cat_audius','1')==='1', set:(v)=>store.set('nova_cat_audius', v?'1':'0') }
       ]}
     ],
     appearance: [
       { title:'Интерфейс', sub:'Внешний вид.', rows:[
         { label:'Тема', hint:'Тёмная или светлая.', kind:'select', options:[['dark','Тёмная'],['light','Светлая']], get:()=>settings.theme, set:(v)=>{ settings.theme = v; applyTheme(); } }
       ]},
-      { title:'Цвет акцента', sub:'Основной цвет интерфейса.', rows:[], extra:'accent' }
+      { title:'Цвет акцента', sub:'Основной цвет.', rows:[], extra:'accent' }
     ],
     playback: [
       { title:'Звук', sub:'Воспроизведение.', rows:[
-        { label:'Громкость', hint:'Общая громкость плеера.', kind:'range', get:()=>state.volume, set:(v)=>setVolume(v) },
-        { label:'Автовоспроизведение', hint:'Сразу запускать трек при выборе.', kind:'pill', get:()=>settings.autoplay, set:(v)=>{ settings.autoplay = v; store.set('nova_autoplay', v?'1':'0'); applyToggle(el.autoplayToggle, v); } }
+        { label:'Громкость', hint:'Общая громкость.', kind:'range', get:()=>state.volume, set:(v)=>setVolume(v) },
+        { label:'Автовоспроизведение', hint:'Сразу запускать трек.', kind:'pill', get:()=>settings.autoplay, set:(v)=>{ settings.autoplay = v; store.set('nova_autoplay', v?'1':'0'); applyToggle(el.autoplayToggle, v); } }
       ]},
       { title:'Эквалайзер', sub:'Для HTML5 audio (не для YouTube).', rows:[
-        { label:'Открыть эквалайзер', hint:'5-полосный, Web Audio API.', kind:'pill', get:()=>state.eq.on, set:()=>{ closeSettings(); openEqualizer(); } }
+        { label:'Открыть эквалайзер', hint:'5-полосный.', kind:'pill', get:()=>state.eq.on, set:()=>{ closeSettings(); openEqualizer(); } }
       ]}
     ],
     sources: [
       { title:'Источники', sub:'Порядок поиска трека.', rows:[
-        { label:'YouTube', hint:'Основной источник полных треков.', kind:'pill', get:()=>store.get('nova_src_youtube','1')==='1', set:(v)=>store.set('nova_src_youtube', v?'1':'0') },
+        { label:'YouTube', hint:'Основной источник.', kind:'pill', get:()=>store.get('nova_src_youtube','1')==='1', set:(v)=>store.set('nova_src_youtube', v?'1':'0') },
         { label:'Audius', hint:'Когда YouTube не нашёл.', kind:'pill', get:()=>store.get('nova_src_audius','1')==='1', set:(v)=>store.set('nova_src_audius', v?'1':'0') },
-        { label:'Локальные файлы', hint:'Файлы с устройства.', kind:'pill', get:()=>true, set:()=>{} }
+        { label:'Локальные файлы', hint:'С устройства.', kind:'pill', get:()=>true, set:()=>{} }
       ]}
     ],
     privacy: [
       { title:'Приватность', sub:'Что сохраняется.', rows:[
-        { label:'Хранить историю', hint:'Локально на устройстве.', kind:'pill', get:()=>store.get('nova_hist','1')==='1', set:(v)=>store.set('nova_hist', v?'1':'0') },
-        { label:'Отправлять статистику', hint:'Анонимная телеметрия.', kind:'pill', get:()=>store.get('nova_tel','0')==='1', set:(v)=>store.set('nova_tel', v?'1':'0') }
+        { label:'Хранить историю', hint:'Локально.', kind:'pill', get:()=>store.get('nova_hist','1')==='1', set:(v)=>store.set('nova_hist', v?'1':'0') }
       ]}
     ],
     account: [
@@ -1871,9 +1807,9 @@
     ],
     data: [
       { title:'Сброс', sub:'Очистка данных.', rows:[
-        { label:'Очистить историю', hint:'Удалить прослушанные треки.', kind:'pill danger', get:()=>false, set:()=>{ state.history=[]; persist(); renderLibrary(); notify('История очищена'); } },
-        { label:'Очистить избранное', hint:'Удалить сохранённые треки.', kind:'pill danger', get:()=>false, set:()=>{ state.favorites=[]; persist(); renderFavorites(); notify('Избранное очищено'); } },
-        { label:'Очистить кэш плеера', hint:'Сброс кэша резолва.', kind:'pill danger', get:()=>false, set:()=>{ localResolveCache.clear(); notify('Кэш плеера очищен'); } }
+        { label:'Очистить историю', hint:'Удалить прослушанные.', kind:'pill danger', get:()=>false, set:()=>{ state.history=[]; persist(); renderLibrary(); notify('История очищена'); } },
+        { label:'Очистить избранное', hint:'Удалить сохранённые.', kind:'pill danger', get:()=>false, set:()=>{ state.favorites=[]; persist(); renderFavorites(); notify('Избранное очищено'); } },
+        { label:'Очистить кэш', hint:'Сброс кэша резолва.', kind:'pill danger', get:()=>false, set:()=>{ localResolveCache.clear(); notify('Кэш очищен'); } }
       ]}
     ]
   };
@@ -1911,8 +1847,7 @@
       }
       if (group.extra === 'account'){
         const user = state.user;
-        const info = document.createElement('div');
-        info.className = 'settings-row';
+        const info = document.createElement('div'); info.className = 'settings-row';
         info.innerHTML = '<div class="settings-row-copy"><div class="settings-row-label">' + escapeHtml(user ? (user.username || 'User') : 'Гость') + '</div><div class="settings-row-hint">' + (user ? (user.provider === 'discord' ? 'Discord аккаунт' : 'Локальный аккаунт') : 'Не авторизован') + '</div></div>';
         const btn = document.createElement('button'); btn.className = 'settings-pill'; btn.textContent = user ? 'Выйти' : 'Войти';
         btn.addEventListener('click', () => { closeSettings(); user ? logout() : openLoginModal(); });
@@ -1941,8 +1876,7 @@
           value.appendChild(s);
         } else if (row.kind === 'range'){
           const wrap2 = document.createElement('div'); wrap2.className = 'settings-range';
-          const inp = document.createElement('input');
-          inp.type = 'range'; inp.min = '0'; inp.max = '100'; inp.value = row.get();
+          const inp = document.createElement('input'); inp.type = 'range'; inp.min = '0'; inp.max = '100'; inp.value = row.get();
           const lbl = document.createElement('span'); lbl.textContent = inp.value + '%'; lbl.style.fontSize = '11px'; lbl.style.color = '#777';
           inp.addEventListener('input', () => { lbl.textContent = inp.value + '%'; row.set(Number(inp.value)); });
           wrap2.appendChild(inp); wrap2.appendChild(lbl);
@@ -2038,7 +1972,12 @@
     } catch (e){ el.workshopGrid.innerHTML = '<div class="workshop-empty">Не удалось загрузить</div>'; }
   }
   function renderWorkshop(){
-    if (!workshopItems.length){ el.workshopGrid.innerHTML = '<div class="workshop-empty">Пока никто не публиковал.<br>Стань первым!</div>'; return; }
+    if (!workshopItems.length){
+      el.workshopGrid.innerHTML = '<div class="workshop-empty">Пока никто не публиковал оформления.<br><br><button class="workshop-item-btn primary" id="workshopEmptyPublish" style="max-width:240px;margin:0 auto;display:block;height:40px;font-size:12.5px">Опубликовать свой фон</button></div>';
+      const btn = document.getElementById('workshopEmptyPublish');
+      if (btn) btn.addEventListener('click', () => el.workshopPublish.click());
+      return;
+    }
     el.workshopGrid.innerHTML = '';
     workshopItems.forEach(item => {
       const card = document.createElement('div'); card.className = 'workshop-item';
@@ -2061,11 +2000,11 @@
   on(el.workshopPublish, 'click', async () => {
     if (!state.user || !authToken) return notify('Войди, чтобы публиковать');
     const name = prompt('Название темы:'); if (!name) return;
-    const current = state.background.src || ''; if (!current) return notify('Сначала выбери фон');
+    const current = state.background.src || ''; if (!current) return notify('Сначала выбери фон в настройках');
     const kind = current.startsWith('data:') ? 'image' : 'css';
     if (kind === 'image' && current.length > 300000) return notify('Файл слишком большой');
     try { await apiAuth('/api/workshop/publish', { method:'POST', headers:{ 'Content-Type':'application/json' }, body: JSON.stringify({ name, value: current, kind }) }); notify('Опубликовано'); loadWorkshop(); }
-    catch (e){ notify('Не удалось'); }
+    catch (e){ notify('Не удалось опубликовать'); }
   });
   on(el.openWorkshopBtn, 'click', openWorkshop);
   on(el.openProfileBtn, 'click', () => { toggleUserMenu(false); openProfile(); });
@@ -2087,7 +2026,7 @@
     function showEmpty(){ box.innerHTML = '<div class="suggestion-empty">Ничего не найдено</div>'; box.classList.remove('hidden'); }
     function show(items, label){
       if (!items.length){ showEmpty(); return; }
-      box.innerHTML = label ? '<div class="suggestion-empty" style="padding:6px 12px;text-align:left;font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:#555">' + label + '</div>' : '';
+      box.innerHTML = label ? '<div class="suggestion-label">' + escapeHtml(label) + '</div>' : '';
       items.slice(0, 8).forEach((item, i) => {
         const s = document.createElement('div'); s.className = 'suggestion'; s.style.animationDelay = (i*25) + 'ms';
         const fb = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" fill="#111"/></svg>');
@@ -2116,14 +2055,12 @@
       const items = await getPopular();
       if (!items.length){ hide(); return; }
       if (!q){ show(items.slice(0, 8), 'Популярное сейчас'); return; }
-      // Фильтруем популярные по введённому тексту
       const filtered = items.filter(x => {
         const t = String(x.title || '').toLowerCase();
         const a = String(x.artist || '').toLowerCase();
         return t.includes(q) || a.includes(q);
       });
       if (filtered.length){ show(filtered, 'Популярное'); return; }
-      // Если нет совпадений — показываем те же популярные (пользователь ещё печатает)
       show(items.slice(0, 8), 'Популярное');
     }
 
