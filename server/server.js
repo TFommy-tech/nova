@@ -1,7 +1,6 @@
 // ============================================================================
-// server/server.js — NOVA v5.1.0
-// Fixes: HTML scrape YouTube (главный резолвер), строгий artist filter,
-//        склейка feat., ranking v2, workshop API.
+// server/server.js — NOVA v5.2.0
+// youtubei.js как primary резолвер, категории в мастерской
 // ============================================================================
 'use strict';
 const express = require('express');
@@ -37,11 +36,9 @@ function dbg(...a) { if (DEBUG_RESOLVE) console.log('[resolve]', ...a); }
 // ---------- DB ----------
 function loadJson(p, fb) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return fb; } }
 function saveJson(p, d) { try { fs.writeFileSync(p, JSON.stringify(d, null, 2)); } catch (e) { console.error('[db]', e.message); } }
-
 let db = loadJson(DB_PATH, {});
 for (const k of ['users', 'favorites', 'history', 'plays', 'playlists']) if (!db[k]) db[k] = {};
 const saveDb = () => saveJson(DB_PATH, db);
-
 let workshop = loadJson(WORKSHOP_PATH, { items: [] });
 if (!Array.isArray(workshop.items)) workshop.items = [];
 const saveWorkshop = () => saveJson(WORKSHOP_PATH, workshop);
@@ -68,7 +65,7 @@ setInterval(() => {
 const api = express();
 api.disable('x-powered-by');
 api.use(cors({ origin: true, credentials: true }));
-api.use(express.json({ limit: '2mb' }));
+api.use(express.json({ limit: '4mb' }));
 api.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
   const t = Date.now();
@@ -105,7 +102,6 @@ function splitArtists(raw) {
   return String(raw).split(/\s*(?:,|&|\bfeat\.?\b|\bft\.?\b|\bwith\b|\bvs\.?\b|\bx\b)\s*/i)
     .map(s => s.trim()).filter(Boolean);
 }
-// Извлекаем feat. из title_version / title и дописываем к artist
 function extractFeat(title, titleVersion) {
   const combined = String(title || '') + ' ' + String(titleVersion || '');
   const m = combined.match(/\b(?:feat\.?|ft\.?|with)\s+([^(\[\]\-]+?)(?=[(\[\]\-]|$)/i);
@@ -127,7 +123,7 @@ function firstImage(o) {
 async function jsonFetch(url, opts = {}, ms = 10000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
-  const headers = { Accept: 'application/json', 'User-Agent': 'NOVA/5.1', ...(opts.headers || {}) };
+  const headers = { Accept: 'application/json', 'User-Agent': 'NOVA/5.2', ...(opts.headers || {}) };
   return fetch(url, { ...opts, headers, signal: ctrl.signal }).finally(() => clearTimeout(timer));
 }
 async function readJson(res) {
@@ -147,6 +143,172 @@ function req_onclose(res, upstream) {
 }
 
 // ============================================================================
+// YOUTUBE via youtubei.js — primary
+// ============================================================================
+let ytClient = null, ytInitFailed = false;
+
+async function getYtClient() {
+  if (ytClient) return ytClient;
+  if (ytInitFailed) return null;
+  try {
+    const mod = require('youtubei.js');
+    const Innertube = mod.Innertube;
+    if (!Innertube) throw new Error('no Innertube export');
+    dbg('initializing youtubei.js...');
+    ytClient = await Innertube.create({
+      retrieve_player: true,
+      generate_session_locally: true,
+      enable_safety_mode: false,
+      lang: 'en',
+      location: 'US'
+    });
+    console.log('[youtubei] initialized');
+    return ytClient;
+  } catch (e) {
+    ytInitFailed = true;
+    console.error('[youtubei] init failed:', e.message);
+    return null;
+  }
+}
+
+async function youtubeSearchIjs(q, limit = 20) {
+  try {
+    const yt = await getYtClient();
+    if (!yt) return [];
+    const res = await yt.search(q, { type: 'video' });
+    const videos = res.videos || [];
+    const out = [];
+    for (const v of videos) {
+      if (out.length >= limit) break;
+      const vid = v.video_id;
+      const title = v.title?.text || v.title?.toString?.() || String(v.title || '');
+      const author = v.author?.name || v.author?.toString?.() || '';
+      const thumb = v.thumbnails?.[0]?.url || v.thumbnail?.url || '';
+      const dur = v.duration?.seconds || v.duration?.text ? (v.duration.seconds || 0) : 0;
+      if (!vid || !title) continue;
+      if (isNoise(title)) continue;
+      out.push({
+        provider: 'youtube', providerId: 'yt_' + vid, id: 'yt_' + vid, videoId: vid,
+        title, artist: author, channel: author, cover: thumb, duration: dur,
+        sourceUrl: 'https://www.youtube.com/watch?v=' + vid
+      });
+    }
+    dbg('ijs search:', out.length);
+    return out;
+  } catch (e) {
+    dbg('ijs search err:', e.message);
+    return [];
+  }
+}
+
+async function youtubeSearchHtml(q, limit = 20) {
+  try {
+    const url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q) + '&sp=EgIQAQ%253D%253D';
+    const r = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Cookie': 'SOCS=CAI; CONSENT=YES+cb'
+      },
+      timeout: 8000
+    });
+    if (!r.ok) return [];
+    const html = await r.text();
+    const marker = 'var ytInitialData = ';
+    const idx = html.indexOf(marker);
+    if (idx < 0) return [];
+    const scriptEnd = html.indexOf(';</script>', idx);
+    if (scriptEnd < 0) return [];
+    const jsonStr = html.slice(idx + marker.length, scriptEnd);
+    const data = JSON.parse(jsonStr);
+    const items = [];
+    (function walk(o) {
+      if (!o || typeof o !== 'object' || items.length >= limit) return;
+      if (o.videoRenderer) {
+        const v = o.videoRenderer;
+        const vid = v.videoId;
+        const title = v.title?.runs?.[0]?.text || v.title?.simpleText || '';
+        const author = v.ownerText?.runs?.[0]?.text || v.longBylineText?.runs?.[0]?.text || '';
+        const thumb = v.thumbnail?.thumbnails?.slice(-1)[0]?.url || '';
+        const durText = v.lengthText?.simpleText || '';
+        let dur = 0;
+        if (durText) {
+          const parts = durText.split(':').map(Number);
+          if (parts.length === 3) dur = parts[0] * 3600 + parts[1] * 60 + parts[2];
+          else if (parts.length === 2) dur = parts[0] * 60 + parts[1];
+        }
+        if (vid && title && !isNoise(title)) {
+          items.push({
+            provider: 'youtube', providerId: 'yt_' + vid, id: 'yt_' + vid, videoId: vid,
+            title, artist: author, channel: author, cover: thumb, duration: dur,
+            sourceUrl: 'https://www.youtube.com/watch?v=' + vid
+          });
+        }
+      }
+      for (const k in o) {
+        if (Array.isArray(o[k])) o[k].forEach(walk);
+        else if (typeof o[k] === 'object') walk(o[k]);
+      }
+    })(data);
+    return items;
+  } catch (e) { dbg('html err:', e.message); return []; }
+}
+
+const PIPED_INSTANCES = [
+  'https://pipedapi.kavin.rocks', 'https://pipedapi.adminforge.de',
+  'https://api.piped.yt', 'https://pipedapi.reallyaweso.me'
+];
+const INVIDIOUS_INSTANCES = [
+  'https://invidious.f5.si', 'https://inv.nadeko.net', 'https://yewtu.be',
+  'https://invidious.nerdvpn.de', 'https://iv.melmac.space',
+  'https://invidious.privacyredirect.com', 'https://vid.puffyan.us',
+  'https://invidious.projectsegfau.lt', 'https://inv.tux.pizza'
+];
+
+async function youtubeSearchPiped(q, limit = 15) {
+  const jobs = PIPED_INSTANCES.map(async base => {
+    const r = await fetch(`${base}/search?q=${encodeURIComponent(q)}&filter=videos`,
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 5500 });
+    if (!r.ok) throw new Error('piped ' + r.status);
+    const d = await r.json();
+    return (d?.items || [])
+      .filter(x => x?.type === 'stream' && typeof x.url === 'string')
+      .map(x => {
+        const vid = x.url.split('watch?v=')[1]?.split('&')[0] || '';
+        return {
+          provider: 'youtube', providerId: 'yt_' + vid, id: 'yt_' + vid, videoId: vid,
+          title: x.title || '', artist: x.uploaderName || '', channel: x.uploaderName || '',
+          cover: x.thumbnail || '', duration: Number(x.duration || 0),
+          sourceUrl: 'https://www.youtube.com/watch?v=' + vid
+        };
+      })
+      .filter(x => x.videoId && x.title && !isNoise(x.title))
+      .slice(0, limit);
+  });
+  try { return await Promise.any(jobs); } catch { return []; }
+}
+
+async function youtubeSearch(q, limit = 20) {
+  const [ijs, html, piped] = await Promise.allSettled([
+    youtubeSearchIjs(q, limit),
+    youtubeSearchHtml(q, limit),
+    youtubeSearchPiped(q, limit)
+  ]);
+  const out = [];
+  const seen = new Set();
+  for (const res of [ijs, html, piped]) {
+    if (res.status !== 'fulfilled') continue;
+    for (const t of res.value || []) {
+      if (!t.videoId || seen.has(t.videoId)) continue;
+      seen.add(t.videoId);
+      out.push(t);
+      if (out.length >= limit) return out;
+    }
+  }
+  return out;
+}
+
+// ============================================================================
 // DEEZER
 // ============================================================================
 function deezerToNorm(t) {
@@ -155,14 +317,12 @@ function deezerToNorm(t) {
   const baseArtist = t.artist?.name || '';
   const artist = feat && !normalize(baseArtist).includes(normalize(feat))
     ? `${baseArtist}, ${feat}` : baseArtist;
-  // Чистим title от feat-скобок для отображения
   const title = String(t.title_short || t.title || '')
     .replace(/\s*[\(\[]\s*(?:feat\.?|ft\.?|with)\s+[^\)\]]+[\)\]]\s*/gi, '')
     .trim();
   return {
     provider: 'deezer', providerId: String(t.id), id: String(t.id),
     title: title || t.title_short || t.title || '',
-    titleVersion: t.title_version || '',
     artist, artistId: t.artist?.id ? String(t.artist.id) : '',
     album: t.album?.title || '', albumId: t.album?.id ? String(t.album.id) : '',
     cover: t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '',
@@ -207,7 +367,6 @@ async function deezerArtistTop(id) {
     const r = await jsonFetch(`https://api.deezer.com/artist/${encodeURIComponent(id)}/top?limit=60`, {}, 8000);
     const d = await readJson(r);
     const items = Array.isArray(d?.data) ? d.data : [];
-    // СТРОГИЙ фильтр — только треки этого артиста
     return items
       .filter(t => !isNoise(t.title_short || t.title || ''))
       .filter(t => t.artist?.id && String(t.artist.id) === String(id))
@@ -290,119 +449,7 @@ async function audiusTrending(limit = 50) {
 }
 
 // ============================================================================
-// YOUTUBE — HTML scrape + Piped fallback
-// ============================================================================
-const PIPED_INSTANCES = [
-  'https://pipedapi.kavin.rocks',
-  'https://pipedapi.adminforge.de',
-  'https://api.piped.yt',
-  'https://pipedapi.reallyaweso.me',
-];
-const INVIDIOUS_INSTANCES = [
-  'https://invidious.f5.si', 'https://inv.nadeko.net', 'https://yewtu.be',
-  'https://invidious.nerdvpn.de', 'https://iv.melmac.space',
-  'https://invidious.privacyredirect.com', 'https://vid.puffyan.us',
-  'https://invidious.projectsegfau.lt', 'https://inv.tux.pizza',
-];
-
-// Прямой HTML-scrape youtube.com/results — то что раньше работало
-async function youtubeSearchHtml(q, limit = 20) {
-  try {
-    const url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q) + '&sp=EgIQAQ%253D%253D';
-    const r = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      timeout: 8000
-    });
-    if (!r.ok) return [];
-    const html = await r.text();
-    const m = html.match(/var ytInitialData\s*=\s*(\{.+?\});\s*<\/script>/s) ||
-              html.match(/ytInitialData"\]\s*=\s*(\{.+?\});/s);
-    if (!m) return [];
-    const data = JSON.parse(m[1]);
-    const items = [];
-    function walk(o) {
-      if (!o || typeof o !== 'object' || items.length >= limit) return;
-      if (o.videoRenderer) {
-        const v = o.videoRenderer;
-        const vid = v.videoId;
-        const title = v.title?.runs?.[0]?.text || v.title?.simpleText || '';
-        const author = v.ownerText?.runs?.[0]?.text || v.longBylineText?.runs?.[0]?.text || '';
-        const thumb = v.thumbnail?.thumbnails?.slice(-1)[0]?.url || '';
-        const durText = v.lengthText?.simpleText || '';
-        let dur = 0;
-        if (durText) {
-          const parts = durText.split(':').map(Number);
-          if (parts.length === 3) dur = parts[0] * 3600 + parts[1] * 60 + parts[2];
-          else if (parts.length === 2) dur = parts[0] * 60 + parts[1];
-        }
-        if (vid && title && !isNoise(title)) {
-          items.push({
-            provider: 'youtube', providerId: 'yt_' + vid, id: 'yt_' + vid, videoId: vid,
-            title, artist: author, channel: author, cover: thumb, duration: dur,
-            sourceUrl: 'https://www.youtube.com/watch?v=' + vid
-          });
-        }
-      }
-      for (const k in o) {
-        if (Array.isArray(o[k])) o[k].forEach(walk);
-        else if (typeof o[k] === 'object') walk(o[k]);
-      }
-    }
-    walk(data);
-    return items;
-  } catch (e) { dbg('html scrape err', e.message); return []; }
-}
-
-async function youtubeSearchPiped(q, limit = 15) {
-  const jobs = PIPED_INSTANCES.map(async base => {
-    const r = await fetch(`${base}/search?q=${encodeURIComponent(q)}&filter=videos`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 5500 });
-    if (!r.ok) throw new Error('piped ' + r.status);
-    const d = await r.json();
-    return (d?.items || [])
-      .filter(x => x?.type === 'stream' && typeof x.url === 'string')
-      .map(x => {
-        const vid = x.url.split('watch?v=')[1]?.split('&')[0] || '';
-        return {
-          provider: 'youtube', providerId: 'yt_' + vid, id: 'yt_' + vid, videoId: vid,
-          title: x.title || '', artist: x.uploaderName || '', channel: x.uploaderName || '',
-          cover: x.thumbnail || '', duration: Number(x.duration || 0),
-          sourceUrl: 'https://www.youtube.com/watch?v=' + vid
-        };
-      })
-      .filter(x => x.videoId && x.title && !isNoise(x.title))
-      .slice(0, limit);
-  });
-  try { return await Promise.any(jobs); } catch { return []; }
-}
-
-// Главный поиск YouTube — HTML сначала, Piped как backup
-async function youtubeSearch(q, limit = 20) {
-  const [html, piped] = await Promise.allSettled([
-    youtubeSearchHtml(q, limit),
-    youtubeSearchPiped(q, limit)
-  ]);
-  const htmlRes = html.status === 'fulfilled' ? html.value : [];
-  const pipedRes = piped.status === 'fulfilled' ? piped.value : [];
-  if (htmlRes.length) {
-    // dedupe
-    const seen = new Set();
-    const out = [];
-    for (const t of [...htmlRes, ...pipedRes]) {
-      if (seen.has(t.videoId)) continue;
-      seen.add(t.videoId);
-      out.push(t);
-    }
-    return out.slice(0, limit);
-  }
-  return pipedRes.slice(0, limit);
-}
-
-// ============================================================================
-// RANKING v2
+// RANKING
 // ============================================================================
 function scoreTrack(item, query) {
   const q = normalize(query);
@@ -412,8 +459,6 @@ function scoreTrack(item, query) {
   const tokens = q.split(/\s+/).filter(Boolean);
   const combined = t + ' ' + a;
   let s = 0;
-
-  // Точные совпадения — приоритет
   if (t === q && a === q) s += 10_000_000;
   else if (t === q) s += 5_000_000;
   else if (a === q) s += 4_000_000;
@@ -432,17 +477,10 @@ function scoreTrack(item, query) {
     if (hits === 0) return 0;
     s += hits * 50_000;
   }
-
-  // Popularity — теперь с бОльшим весом (до 60k)
   if (item.popularity) s += Math.min(60_000, Math.log10(Number(item.popularity) + 1) * 8000);
-
-  // Explicit небольшой бонус
   if (item.explicit) s += 5000;
-
-  // Проверка что трек вообще играбельный (Audius имеет прямой стрим)
-  if (item.provider === 'audius') s += 8000; // было 20000 — уменьшено
-
-  // Штрафы за мусор
+  if (item.provider === 'audius') s += 8000;
+  if (item.provider === 'youtube' && / - topic$/i.test(item.channel || '')) s += 10000;
   const low = (item.title + ' ' + item.artist).toLowerCase();
   const userWants = /\b(remix|live|instrumental|cover|karaoke|slowed|sped|nightcore)\b/i.test(q);
   if (!userWants) {
@@ -452,14 +490,9 @@ function scoreTrack(item, query) {
     if (/\bcompilation\b/.test(low)) s -= 500_000;
     if (isNoise(low)) s -= 3_000_000;
   }
-
   const artLow = a.trim();
-  if (/^(unknown|unknown artist|various artists|no name|без названия|null|undefined|va|release|topic)$/.test(artLow))
+  if (/^(unknown|unknown artist|various artists|no name|без названия|null|undefined|va|release)$/.test(artLow))
     s -= 2_000_000;
-
-  // YouTube "Topic" — обычно официальные треки, даём бонус
-  if (item.provider === 'youtube' && /\s-\s*topic$/i.test(item.channel || '')) s += 5000;
-
   return s;
 }
 function dedupeTracks(list) {
@@ -496,9 +529,9 @@ async function resolvePlayback(track) {
   const hit = resolveCache.get(ck);
   if (hit && Date.now() - hit.time < RESOLVE_TTL) return hit.data;
 
-  dbg('query:', query, 'duration:', track.duration);
+  dbg('query:', query, 'dur:', track.duration);
 
-  // 1. Audius (прямой стрим, mp3)
+  // 1. Audius (прямой mp3)
   const audiusRes = await audiusSearch(query, 10);
   dbg('audius:', audiusRes.length);
   const bestA = pickBest(audiusRes, track);
@@ -513,7 +546,7 @@ async function resolvePlayback(track) {
     return data;
   }
 
-  // 2. YouTube (HTML scrape главный)
+  // 2. YouTube
   const ytRes = await youtubeSearch(query, 20);
   dbg('youtube:', ytRes.length);
   const bestY = pickBest(ytRes, track);
@@ -531,7 +564,6 @@ async function resolvePlayback(track) {
   dbg('→ no match');
   throw makeErr('no_match', 'No playable source found');
 }
-
 function pickBest(list, want) {
   if (!list?.length) return null;
   const wT = normalize(cleanTitle(want.title));
@@ -692,11 +724,6 @@ api.post('/api/track-play', authMiddleware, (req, res) => {
   cur.count += 1; cur.last = Date.now(); cur.track = t;
   db.plays[uid][k] = cur; saveDb(); res.json({ ok: true, count: cur.count });
 });
-api.get('/api/recently-played', authMiddleware, (req, res) => {
-  const plays = db.plays[req.user.id] || {};
-  const sorted = Object.values(plays).sort((a, b) => (b.last || 0) - (a.last || 0)).slice(0, 30);
-  res.json(sorted.map(p => p.track).filter(Boolean));
-});
 api.get('/api/stats', authMiddleware, (req, res) => {
   const uid = req.user.id;
   const hist = db.history[uid] || [];
@@ -704,13 +731,11 @@ api.get('/api/stats', authMiddleware, (req, res) => {
   const plays = db.plays[uid] || {};
   const tSet = new Set(), aSet = new Set();
   for (const t of [...hist, ...favs]) {
-    if (!t) continue;
-    tSet.add(trackKey(t));
+    if (!t) continue; tSet.add(trackKey(t));
     const a = splitArtists(t.artist)[0]; if (a) aSet.add(a.toLowerCase());
   }
   for (const p of Object.values(plays)) {
-    if (!p?.track) continue;
-    tSet.add(trackKey(p.track));
+    if (!p?.track) continue; tSet.add(trackKey(p.track));
     const a = splitArtists(p.track.artist)[0]; if (a) aSet.add(a.toLowerCase());
   }
   const artistPlays = new Map();
@@ -800,12 +825,38 @@ api.post('/api/playlists/:id/reorder', authMiddleware, (req, res) => {
 });
 
 // ============================================================================
-// WORKSHOP (возвращено)
+// WORKSHOP — с категориями
 // ============================================================================
+// Сид системных элементов (чтобы мастерская не была пустой при первом открытии)
+function seedWorkshop() {
+  if (workshop.items.some(x => x.system)) return;
+  const seeds = [
+    { id: 'sys_cosmos', name: 'Космос', author: 'NOVA', tag: 'background', category: 'background', kind: 'css',
+      value: 'radial-gradient(ellipse at top,#0b0b1e 0%,#000 60%)', system: true },
+    { id: 'sys_sunset', name: 'Закат', author: 'NOVA', tag: 'background', category: 'background', kind: 'css',
+      value: 'linear-gradient(135deg,#2a0a14 0%,#0a0408 60%,#000 100%)', system: true },
+    { id: 'sys_ocean', name: 'Океан', author: 'NOVA', tag: 'background', category: 'background', kind: 'css',
+      value: 'linear-gradient(180deg,#001018 0%,#000 100%)', system: true },
+    { id: 'sys_graphite', name: 'Графит', author: 'NOVA', tag: 'background', category: 'background', kind: 'css',
+      value: 'linear-gradient(180deg,#101010 0%,#000 100%)', system: true },
+    { id: 'sys_purple_glow', name: 'Пурпурное свечение', author: 'NOVA', tag: 'gradient', category: 'background', kind: 'css',
+      value: 'radial-gradient(circle at bottom right,#3a0a3a 0%,#000 60%)', system: true },
+    { id: 'sys_pulse', name: 'Пульс', author: 'NOVA', tag: 'animation', category: 'animation', kind: 'css',
+      value: 'linear-gradient(90deg, #0a0a0a, #1a1a2e, #0a0a0a)', system: true },
+    { id: 'sys_star', name: 'Звезда', author: 'NOVA', tag: 'icon', category: 'icon', kind: 'svg',
+      value: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M16 4 L17.5 14.5 L28 16 L17.5 17.5 L16 28 L14.5 17.5 L4 16 L14.5 14.5 Z" fill="#fff"/></svg>', system: true }
+  ];
+  workshop.items.push(...seeds.map(s => ({ ...s, downloads: 0, createdAt: Date.now(), authorId: 'system' })));
+  saveWorkshop();
+}
+seedWorkshop();
+
 api.get('/api/workshop/items', (req, res) => {
   const sort = String(req.query.sort || 'popular');
+  const category = String(req.query.category || '').trim();
   const q = String(req.query.q || '').trim().toLowerCase();
-  let items = workshop.items.filter(x => !x.system);
+  let items = workshop.items.slice();
+  if (category && category !== 'all') items = items.filter(x => (x.category || 'background') === category);
   if (q) items = items.filter(x =>
     String(x.name || '').toLowerCase().includes(q) ||
     String(x.author || '').toLowerCase().includes(q) ||
@@ -813,24 +864,25 @@ api.get('/api/workshop/items', (req, res) => {
   if (sort === 'new') items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   else if (sort === 'az') items.sort((a, b) => String(a.name).localeCompare(String(b.name)));
   else items.sort((a, b) => (b.downloads || 0) - (a.downloads || 0));
-  res.json({ items: items.slice(0, 60) });
+  res.json({ items: items.slice(0, 100) });
 });
 api.post('/api/workshop/publish', authMiddleware, (req, res) => {
-  const { name, value, kind, tag } = req.body || {};
+  const { name, value, kind, tag, category } = req.body || {};
   if (!name || !value) return res.status(400).json({ error: 'name and value required' });
   if (String(name).length > 60) return res.status(400).json({ error: 'name too long' });
-  if (String(value).length > 500000) return res.status(400).json({ error: 'value too large (max 500 KB)' });
+  if (String(value).length > 800000) return res.status(400).json({ error: 'value too large (max 800KB)' });
   const user = db.users[req.user.id];
   const item = {
     id: 'wp_' + crypto.randomBytes(6).toString('hex'),
     name: String(name), author: (user && user.username) || 'Anonymous',
     authorId: req.user.id,
-    tag: tag || (kind === 'image' ? 'image' : 'gradient'),
-    kind: kind === 'image' ? 'image' : 'css',
+    tag: tag || (kind === 'image' ? 'image' : (kind === 'svg' ? 'icon' : (kind === 'url' ? 'gif' : 'gradient'))),
+    category: category || 'background',
+    kind: kind || 'css',
     value: String(value), downloads: 0, createdAt: Date.now(), system: false
   };
   workshop.items.unshift(item);
-  if (workshop.items.length > 500) workshop.items = workshop.items.slice(0, 500);
+  if (workshop.items.length > 1000) workshop.items = workshop.items.slice(0, 1000);
   saveWorkshop();
   res.json({ ok: true, item });
 });
@@ -869,7 +921,7 @@ api.get('/api/search', async (req, res) => {
     safe(deezerSearchTracks(q, 40), 4500),
     safe(deezerSearchArtists(q, 8), 3500),
     safe(audiusSearch(q, 25), 4000),
-    safe(youtubeSearch(q, 15), 7000)
+    safe(youtubeSearch(q, 20), 9000)
   ]);
 
   const candidates = [...deezerTracks, ...audiusTracks, ...ytTracks];
@@ -906,22 +958,14 @@ api.get('/api/artist-search', async (req, res) => {
 });
 api.get('/api/artist/:id', async (req, res) => {
   const id = String(req.params.id);
-  const ck = 'artist:v2:' + id;
+  const ck = 'artist:v3:' + id;
   const hit = artistCache.get(ck);
   if (hit && Date.now() - hit.time < (hit.ttl || ARTIST_TTL)) return res.json(hit.data);
-
   const artist = await deezerGetArtist(id);
   if (!artist) return res.status(404).json({ error: 'not found' });
-
-  // Параллельно
-  const [top, albums] = await Promise.all([
-    deezerArtistTop(id),
-    deezerArtistAlbums(id)
-  ]);
-
+  const [top, albums] = await Promise.all([deezerArtistTop(id), deezerArtistAlbums(id)]);
   const sortByDate = arr => arr.slice().sort((a, b) =>
     String(b.releaseDate || '').localeCompare(String(a.releaseDate || '')));
-
   const payload = {
     artist,
     top_tracks: top.slice(0, 60),
@@ -942,17 +986,13 @@ api.get('/api/album/:id', async (req, res) => {
 // POPULAR / RECOMMENDATIONS
 // ============================================================================
 api.get('/api/popular', async (req, res) => {
-  const ck = 'popular:v2';
+  const ck = 'popular:v3';
   const hit = searchCache.get(ck);
   if (hit && Date.now() - hit.time < 10 * 60 * 1000) return res.json(hit.data);
-
   const [audius, deezer] = await Promise.all([
     audiusTrending(50).catch(() => []),
     deezerChart(50).catch(() => [])
   ]);
-  // Deezer chart имеет popularity — идёт вперёд; Audius — только если мало
-  const deezerScored = deezer.map(t => ({ t, s: scoreTrack(t, '') + (t.popularity || 0) / 1000 }));
-  const audiusScored = audius.map(t => ({ t, s: 0 }));
   const merged = dedupeTracks([...deezer, ...audius]).slice(0, 60);
   const payload = { results: merged };
   searchCache.set(ck, { time: Date.now(), data: payload });
@@ -974,14 +1014,13 @@ api.get('/api/recommendations', authMiddleware, async (req, res) => {
   }
   const topArtists = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([a]) => a);
   if (!topArtists.length) {
-    const popular = searchCache.get('popular:v2');
+    const popular = searchCache.get('popular:v3');
     if (popular?.data?.results?.length) {
       return res.json({ results: popular.data.results.slice(0, 30).sort(() => Math.random() - 0.5), based_on: [] });
     }
     return res.json({ results: [], based_on: [] });
   }
-  const collected = [];
-  const seen = new Set();
+  const collected = [], seen = new Set();
   for (const artist of topArtists) {
     try {
       const [dz, au] = await Promise.all([deezerSearchTracks(artist, 8), audiusSearch(artist, 8)]);
@@ -1050,7 +1089,47 @@ api.get('/api/audio/audius/:id', async (req, res) => {
   } catch { if (!res.headersSent) res.status(502).end(); }
 });
 
-// YouTube stream via Invidious → Piped
+// ---------- YouTube stream: youtubei.js → Invidious → Piped ----------
+async function streamViaYoutubei(vid, range, res) {
+  try {
+    const yt = await getYtClient();
+    if (!yt) return false;
+    const info = await yt.getInfo(vid);
+    let format = null;
+    try { format = info.chooseFormat({ type: 'audio', quality: 'best' }); } catch {}
+    if (!format) {
+      try {
+        const formats = info.streaming_data?.adaptive_formats || [];
+        const audioFmts = formats.filter(f => f.has_audio && !f.has_video);
+        format = audioFmts.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+      } catch {}
+    }
+    if (!format) { dbg('ijs no format'); return false; }
+    let url = format.url;
+    if (!url || !/googlevideo\.com/.test(url)) {
+      try { url = format.decipher(yt.session.player); } catch (e) { dbg('ijs decipher err', e.message); }
+    }
+    if (!url) { dbg('ijs no url'); return false; }
+    const headers = { 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*', 'Range': range || 'bytes=0-' };
+    const up = await fetch(url, { headers, redirect: 'follow', timeout: 20000 });
+    if (!up.ok && up.status !== 206) { dbg('ijs upstream', up.status); return false; }
+    const ct = up.headers.get('content-type') || format.mime_type || 'audio/mp4';
+    const cl = up.headers.get('content-length');
+    const cr = up.headers.get('content-range');
+    res.setHeader('Content-Type', ct);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (cl) res.setHeader('Content-Length', cl);
+    if (cr) res.setHeader('Content-Range', cr);
+    res.status(up.status === 206 ? 206 : 200);
+    up.body.pipe(res);
+    req_onclose(res, up);
+    dbg('→ youtubei stream ok');
+    return true;
+  } catch (e) { dbg('ijs stream err:', e.message); return false; }
+}
+
 async function tryInvidious(vid, itag, range, res) {
   for (const base of INVIDIOUS_INSTANCES) {
     try {
@@ -1078,18 +1157,27 @@ async function tryInvidious(vid, itag, range, res) {
       res.status(up.status === 206 ? 206 : 200);
       up.body.pipe(res);
       req_onclose(res, up);
+      dbg('→ invidious stream ok', base);
       return true;
     } catch {}
   }
   return false;
 }
+
 api.get('/api/audio/youtube/:videoId', async (req, res) => {
   const vid = String(req.params.videoId || '');
   if (!/^[A-Za-z0-9_-]{6,20}$/.test(vid)) return res.status(400).end();
   const range = req.headers.range || '';
+
+  // 1. youtubei.js (самый надёжный на Render)
+  if (await streamViaYoutubei(vid, range, res)) return;
+
+  // 2. Invidious
   for (const itag of ['251', '140']) {
     if (await tryInvidious(vid, itag, range, res)) return;
   }
+
+  // 3. Piped
   for (const base of PIPED_INSTANCES) {
     try {
       const r = await fetch(`${base}/streams/${vid}`, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
@@ -1120,11 +1208,31 @@ api.get('/api/audio/youtube/:videoId', async (req, res) => {
   res.status(502).end();
 });
 
-// Downloads
 api.get('/api/download/youtube/:videoId', async (req, res) => {
   const vid = String(req.params.videoId || '');
   const name = String(req.query.name || 'track').replace(/[<>:"/\\|?*]+/g, '_').slice(0, 120);
   if (!/^[A-Za-z0-9_-]{6,20}$/.test(vid)) return res.status(400).end();
+  try {
+    const yt = await getYtClient();
+    if (yt) {
+      const info = await yt.getInfo(vid);
+      let format = info.chooseFormat({ type: 'audio', quality: 'best' });
+      let url = format?.url;
+      if (!url || !/googlevideo\.com/.test(url)) {
+        try { url = format?.decipher(yt.session.player); } catch {}
+      }
+      if (url) {
+        const up = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*' }, timeout: 20000 });
+        if (up.ok || up.status === 206) {
+          res.setHeader('Content-Type', format.mime_type || 'audio/mp4');
+          res.setHeader('Content-Disposition', `attachment; filename="${name}.m4a"`);
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          const cl = up.headers.get('content-length'); if (cl) res.setHeader('Content-Length', cl);
+          up.body.pipe(res); req_onclose(res, up); return;
+        }
+      }
+    }
+  } catch {}
   for (const itag of ['140', '251']) {
     for (const base of INVIDIOUS_INSTANCES) {
       try {
@@ -1155,30 +1263,25 @@ api.get('/api/lyrics', async (req, res) => {
   const ck = 'lyr:' + normalize(track + '|' + artist) + '|' + Math.round(dur);
   const hit = lyricsCache.get(ck);
   if (hit && Date.now() - hit.time < LYRICS_TTL) return res.json(hit.data);
-
   const clean = String(track)
     .replace(/\([^)]*\)/g, ' ').replace(/\[[^\]]*\]/g, ' ')
     .replace(/\b(official|audio|video|lyric|lyrics|visualizer|hd|hq|explicit|mv|m\/v)\b/gi, ' ')
     .replace(/\s+/g, ' ').trim();
   const send = p => { lyricsCache.set(ck, { time: Date.now(), data: p }); res.json(p); };
-
-  // Точный get
   try {
     const params = new URLSearchParams({ track_name: clean });
     if (artist) params.set('artist_name', artist);
     if (dur > 0) params.set('duration', String(Math.round(dur)));
-    const r = await jsonFetch('https://lrclib.net/api/get?' + params, { headers: { 'User-Agent': 'NOVA/5.1' } }, 8000);
+    const r = await jsonFetch('https://lrclib.net/api/get?' + params, { headers: { 'User-Agent': 'NOVA/5.2' } }, 8000);
     if (r.ok) {
       const d = await readJson(r);
       if (d.plainLyrics || d.syncedLyrics)
         return send({ found: true, plainLyrics: d.plainLyrics || '', syncedLyrics: d.syncedLyrics || '', source: 'LRCLIB' });
     }
   } catch {}
-
-  // Search fallback
   try {
     const q = [clean, artist].filter(Boolean).join(' ');
-    const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q }), { headers: { 'User-Agent': 'NOVA/5.1' } }, 8000);
+    const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q }), { headers: { 'User-Agent': 'NOVA/5.2' } }, 8000);
     if (r.ok) {
       const arr = await r.json();
       if (Array.isArray(arr) && arr.length) {
@@ -1192,10 +1295,8 @@ api.get('/api/lyrics', async (req, res) => {
       }
     }
   } catch {}
-
-  // Только по названию
   try {
-    const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q: clean }), { headers: { 'User-Agent': 'NOVA/5.1' } }, 8000);
+    const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q: clean }), { headers: { 'User-Agent': 'NOVA/5.2' } }, 8000);
     if (r.ok) {
       const arr = await r.json();
       if (Array.isArray(arr) && arr.length) {
@@ -1206,7 +1307,6 @@ api.get('/api/lyrics', async (req, res) => {
       }
     }
   } catch {}
-
   send({ found: false });
 });
 
@@ -1230,9 +1330,10 @@ api.get('/api/health', async (req, res) => {
   ]);
   const allOk = Object.values(checks).every(c => c.ok);
   res.status(allOk ? 200 : 207).json({
-    ok: allOk, service: 'NOVA', version: '5.1.0', env: NODE_ENV,
+    ok: allOk, service: 'NOVA', version: '5.2.0', env: NODE_ENV,
     uptime: Math.round(process.uptime()),
     users: Object.keys(db.users).length,
+    youtubei: ytClient ? 'ready' : (ytInitFailed ? 'failed' : 'lazy'),
     caches: { search: searchCache.size, resolve: resolveCache.size, lyrics: lyricsCache.size, artist: artistCache.size },
     upstream: checks
   });
@@ -1258,13 +1359,15 @@ function startServer(options = {}) {
   return new Promise((resolve, reject) => {
     const server = api.listen(port, host, () => {
       console.log('============================================================');
-      console.log(`[NOVA] v5.1.0 env=${NODE_ENV}`);
+      console.log(`[NOVA] v5.2.0 env=${NODE_ENV}`);
       console.log(`[NOVA] listening on http://${host}:${port}`);
       console.log(`[NOVA] DB at ${DB_PATH}`);
       console.log(`[NOVA] resolve debug: ${DEBUG_RESOLVE ? 'ON' : 'off'}`);
       console.log(`[NOVA] users: ${Object.keys(db.users).length}`);
       if (IS_PROD && !process.env.DATA_DIR) console.warn('[NOVA] WARNING: DATA_DIR not set');
       console.log('============================================================');
+      // Прогреваем youtubei.js в фоне
+      getYtClient().catch(() => {});
       resolve(server);
     });
     server.once('error', reject);
