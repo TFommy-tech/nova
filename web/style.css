@@ -597,7 +597,7 @@ html[data-theme="light"] .login-divider::before, html[data-theme="light"] .login
 }
 
 /* ============================================================
-   NOVA CUSTOM CURSOR — лёгкая версия
+   NOVA CUSTOM CURSOR — быстрый
    ============================================================ */
 html.nova-custom-cursor,
 html.nova-custom-cursor * {
@@ -614,12 +614,12 @@ html.nova-custom-cursor * {
   will-change: transform;
   opacity: 0;
   transition: opacity .18s ease-out;
-  transform: translate3d(-9999px, -9999px, 0);
 }
+
 .nova-cursor-dot.visible,
 .nova-cursor-ring.visible { opacity: 1; }
 
-/* Точка */
+/* Точка — двигается мгновенно (без transition на transform) */
 .nova-cursor-dot {
   width: 6px;
   height: 6px;
@@ -632,7 +632,7 @@ html.nova-custom-cursor * {
               background .2s ease, box-shadow .2s ease;
 }
 
-/* Кольцо */
+/* Кольцо — плавно через CSS transition на transform */
 .nova-cursor-ring {
   width: 36px;
   height: 36px;
@@ -640,6 +640,7 @@ html.nova-custom-cursor * {
   border-radius: 50%;
   background: transparent;
   transition: opacity .18s ease-out,
+              transform .12s cubic-bezier(.2,.9,.3,1),
               width .22s cubic-bezier(.34,1.56,.64,1),
               height .22s cubic-bezier(.34,1.56,.64,1),
               border-color .22s ease,
