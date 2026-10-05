@@ -1220,19 +1220,33 @@ api.get('/api/audio/soundcloud/:id', async (req, res) => {
     if (hit && Date.now() - hit.time > CK) { scStreamCache.delete(id); hit = null; }
     let url = hit ? hit.url : '';
     if (!url) {
-      const r = await jsonFetch(
-        `https://api-v2.soundcloud.com/tracks/${id}/streams?client_id=${encodeURIComponent(SOUNDCLOUD_CLIENT_ID)}`,
-        {}, 7000);
-      const d = await readJson(r);
-      url = d?.http_mp3_128_url || d?.http_mp3_1_0_url || '';
-      if (!url) {
-        console.log('[soundcloud] no mp3 stream, id=', id);
+      const cid = encodeURIComponent(SOUNDCLOUD_CLIENT_ID);
+      // Шаг 1: данные трека — media.transcodings + track_authorization
+      const rt = await jsonFetch(`https://api-v2.soundcloud.com/tracks/${id}?client_id=${cid}`, {}, 7000);
+      const t = await readJson(rt);
+      const trs = Array.isArray(t?.media?.transcodings) ? t.media.transcodings : [];
+      const auth = t?.track_authorization || '';
+      const prog = trs.find(x => x?.format?.protocol === 'progressive' && x.url);
+      if (!prog) {
+        console.log('[soundcloud] no progressive, id=', id, 'protocols=', trs.map(x => x?.format?.protocol).join(','));
         return res.status(404).json({
-          error: 'no_mp3_stream',
-          message: 'Прямой mp3-поток недоступен для этого трека (Go+ или ограничение)'
+          error: 'hls_only',
+          message: 'Трек доступен только через HLS, требуется hls.js на клиенте'
         });
       }
-      scStreamCache.set(id, { url, time: Date.now() });
+      if (!auth) {
+        console.log('[soundcloud] no track_authorization, id=', id);
+        return res.status(404).json({ error: 'no_track_authorization', message: 'SoundCloud не вернул track_authorization' });
+      }
+      // Шаг 2: transcoding → финальный CDN-URL
+      const rq = await jsonFetch(`${prog.url}?client_id=${cid}&track_authorization=${encodeURIComponent(auth)}`, {}, 7000);
+      const q = await readJson(rq);
+      url = q?.url || '';
+      if (!url) {
+        console.log('[soundcloud] no cdn url, id=', id);
+        return res.status(502).json({ error: 'no_cdn_url', message: 'SoundCloud не вернул CDN-URL' });
+      }
+      scStreamCache.set(id, { url, time: Date.now() }); // кэшируем ФИНАЛЬНЫЙ CDN-URL, не промежуточный
     }
     const headers = {};
     if (req.headers.range) headers.Range = req.headers.range;
