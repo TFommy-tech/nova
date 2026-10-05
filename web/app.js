@@ -70,7 +70,13 @@
     theme: store.get('nova_theme', 'dark'),
     notifications: store.get('nova_notifications', '1') === '1',
     hotkeys: store.get('nova_hotkeys', '1') === '1',
-    autoplay: store.get('nova_autoplay', '1') === '1'
+    autoplay: store.get('nova_autoplay', '1') === '1',
+    // Дефолтный источник поиска. Deezer/YouTube сознательно не предлагаем:
+    // на Render они не воспроизводятся.
+    defaultSource: (() => {
+      const v = String(store.get('nova_default_source', 'all')).toLowerCase();
+      return ['all', 'soundcloud', 'audius'].includes(v) ? v : 'all';
+    })()
   };
 
   let playRequestId = 0, playAbort = null, userIntent = 'idle';
@@ -109,7 +115,7 @@
     'downloadBtn','repeatBtn','prevBtn','largePlayBtn','largePlayIcon','nextBtn','shuffleBtn','favoriteBtn','queueToggleBtn','moreBtn',
     'volumeLarge','equalizerBtn','similarBtn',
     'themeToggle','cursorToggle','accentPresets','backgroundBtn','backgroundResetBtn','bgPresets','settingsVolumeValue',
-    'autoplayToggle','notificationsToggle','hotkeysToggle','settingsOpenFileBtn',
+    'autoplayToggle','notificationsToggle','hotkeysToggle','defaultSource','settingsOpenFileBtn',
     'settingsAccountName','settingsAccountHint','settingsAccountBtn',
     'clearHistory2','clearFavorites2','clearCacheBtn','diagnostics',
     'workshopModal','workshopModalClose','workshopGrid','workshopSearch','workshopPublish','workshopCategories',
@@ -2002,6 +2008,7 @@
     const isNested = ['artist', 'album', 'playlist', 'player'].includes(view);
     el.topbarBack.classList.toggle('hidden', !isNested);
     if (view === 'home') renderHome();
+    if (view === 'search') applyDefaultSource();
     if (view === 'library') { renderHistory(); renderLocal(); }
     if (view === 'favorites') renderFavorites();
     if (view === 'playlists') { loadPlaylists(); renderPlaylists(); }
@@ -2029,6 +2036,8 @@
     applyToggle(el.notificationsToggle, settings.notifications);
     applyToggle(el.hotkeysToggle, settings.hotkeys);
     applyToggle(el.autoplayToggle, settings.autoplay);
+    if (el.defaultSource && el.defaultSource.value !== settings.defaultSource)
+      el.defaultSource.value = settings.defaultSource;
     if (el.settingsVolumeValue) el.settingsVolumeValue.textContent = state.volume + '%';
     if (el.cursorToggle) el.cursorToggle.textContent = CURSOR_LABELS[state.cursor] || 'Кольцо';
     renderAccentPicker(); renderBgPresets(); renderUser();
@@ -2437,6 +2446,25 @@
     if (state.query) doSearch(state.query);
   });
   syncSourceSelect();
+
+  // Дефолт из настроек применяется, только пока пользователь не трогал фильтр руками.
+  // ВАЖНО: функция НЕ запускает поиск — её вызывает showView('search'),
+  // а doSearch() сам зовёт showView('search'), так что запуск отсюда дал бы цепочку.
+  function applyDefaultSource() {
+    if (state.sourceFilterTouched) return false;
+    const def = settings.defaultSource || 'all';
+    if (state.sourceFilter === def) return false;
+    state.sourceFilter = def;
+    store.set('nova_source_filter', def);
+    syncSourceSelect();
+    return true;
+  }
+  on(el.defaultSource, 'change', () => {
+    const raw = String(el.defaultSource.value || 'all').toLowerCase();
+    settings.defaultSource = ['all', 'soundcloud', 'audius'].includes(raw) ? raw : 'all';
+    store.set('nova_default_source', settings.defaultSource);
+    if (applyDefaultSource() && state.view === 'search' && state.query) doSearch(state.query);
+  });
 
   on(el.searchInput, 'input', () => {
     clearTimeout(searchDebounceTimer);

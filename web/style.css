@@ -591,6 +591,15 @@ body.has-background #backgroundLayer { opacity: 1; }
 .settings-action:hover { color: #fff; background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.14); }
 .settings-action.primary { background: #fff; color: #000; border-color: #fff; }
 .settings-action.primary:hover { background: #f0f0f0; }
+.setting-select { height: 32px; min-width: 130px; padding: 0 30px 0 12px;
+  border: 1px solid rgba(255,255,255,.06); border-radius: 8px;
+  background: rgba(255,255,255,.05); color: #fff; font-size: 12px; font-weight: 600;
+  cursor: pointer; outline: 0; -webkit-appearance: none; appearance: none;
+  transition: border-color var(--dur) var(--ease), background-color var(--dur) var(--ease);
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='.55' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 10px center; background-size: 13px; }
+.setting-select:hover, .setting-select:focus { border-color: rgba(255,255,255,.16); background-color: rgba(255,255,255,.1); }
+.setting-select option { background: #161616; color: #fff; }
 .settings-action.off { opacity: .5; }
 .settings-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .accent-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(40px, 1fr)); gap: 8px; max-width: 560px; }
