@@ -554,7 +554,15 @@ function scoreTrack(item, query) {
     if (hits === 0) return 0;
     s += hits * 50_000;
   }
-  if (item.popularity) s += Math.min(60_000, Math.log10(Number(item.popularity) + 1) * 8000);
+  // Популярность: у SoundCloud вес и потолок выше — иначе точное совпадение названия
+  // (5 000 000 против 4 000_000 за артиста) навсегда перебивает популярность.
+  // Для остальных провайдеров значения оставлены как были.
+  if (item.popularity) {
+    if (item.provider === 'soundcloud')
+      s += Math.min(400_000, Math.log10(Number(item.popularity) + 1) * 40_000);
+    else
+      s += Math.min(60_000, Math.log10(Number(item.popularity) + 1) * 8_000);
+  }
   if (item.explicit) s += 5000;
   if (item.provider === 'audius') s += 8000;
   if (item.provider === 'soundcloud') s += 8000;
@@ -1061,12 +1069,22 @@ api.get('/api/search', searchRateLimit, async (req, res) => {
 
   const candidates = [...scTracks, ...audiusTracks, ...deezerTracks, ...ytTracks];
   const deduped = dedupeTracks(candidates);
-  const scored = deduped
+  let ranked = deduped
     .map(t => ({ t, s: scoreTrack(t, q) }))
     .filter(x => x.s > 0)
-    .sort((a, b) => b.s - a.s)
-    .slice(0, 60)
-    .map(x => x.t);
+    .sort((a, b) => b.s - a.s);
+
+  // Короткий запрос (1–2 слова) на SoundCloud: после отсева по релевантности
+  // (score > 0) сортируем по популярности. Для короткого запроса пользователь обычно
+  // ищет исполнителя или тему, и среди совпадений первым идёт популярное.
+  // Полное имя трека (3+ слова) остаётся на чистом score — там точное совпадение важнее.
+  const shortQuery = q.trim().split(/\s+/).filter(Boolean).length <= 2;
+  if (source === 'soundcloud' && shortQuery && ranked.length) {
+    ranked = ranked.slice().sort((a, b) =>
+      (Number(b.t.popularity) || 0) - (Number(a.t.popularity) || 0) || b.s - a.s);
+  }
+
+  const scored = ranked.slice(0, 60).map(x => x.t);
 
   const payload = {
     query: q, source, results: scored, artists: deezerArtists,
