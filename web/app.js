@@ -49,6 +49,12 @@
     background: { src: '' }, queue: [],
     albumContext: null, playlists: [], currentPlaylistId: null,
     searchFilter: 'all', lastSearchArtists: [],
+    // Фильтр источника поиска (all | soundcloud | audius | deezer | youtube)
+    sourceFilter: (() => {
+      const v = String(store.get('nova_source_filter', 'all')).toLowerCase();
+      return ['all', 'soundcloud', 'audius', 'deezer', 'youtube'].includes(v) ? v : 'all';
+    })(),
+    sourceFilterTouched: store.get('nova_source_filter_set', '0') === '1',
     cursor: initialCursor,
     eq: (() => {
       try {
@@ -83,7 +89,7 @@
   const el = {};
   [
     'sidebar','logoBtn','userSlot','avatarBtn','userMenu','userAvatar','userName','userTag','userLoginBtn','userLogoutBtn','openProfileBtn',
-    'topbarBack','searchWrap','searchInput','searchSuggestions',
+    'topbarBack','searchWrap','searchInput','searchSuggestions','sourceFilter',
     'backgroundLayer','backgroundShade','ambientGlow','startupScreen','startupStatus',
     'backgroundInput','localAudioInput',
     'loginModal','loginClose','loginDiscordBtn','loginTabs','tabLogin','tabRegister','localAuthForm',
@@ -800,7 +806,8 @@
     renderSkeleton();
 
     try {
-      const r = await fetch(apiBase() + '/api/search?q=' + encodeURIComponent(q), {
+      const r = await fetch(apiBase() + '/api/search?q=' + encodeURIComponent(q)
+        + '&source=' + encodeURIComponent(state.sourceFilter || 'all'), {
         headers: { Accept: 'application/json' }, signal: controller.signal
       });
       if (!r.ok) throw new Error('HTTP ' + r.status);
@@ -852,11 +859,18 @@
         const badge = document.createElement('div');
         badge.className = 'source-badge';
         if (track._metaOnly && (track.provider === 'deezer' || track.provider === 'youtube')) {
-          badge.textContent = 'только метаданные';
-          badge.style.background = 'rgba(110,110,110,.6)';
-          badge.style.borderColor = 'rgba(255,255,255,.14)';
-          badge.style.textTransform = 'none';
-          badge.style.fontSize = '8.5px';
+          // Если выбран именно этот источник, пользователь и так знает, что треки
+          // неиграбельные, — длинная плашка «только метаданные» не нужна.
+          const srcNow = state.sourceFilter || 'all';
+          if (srcNow === track.provider) {
+            badge.textContent = track.provider;
+          } else {
+            badge.textContent = 'только метаданные';
+            badge.style.background = 'rgba(110,110,110,.6)';
+            badge.style.borderColor = 'rgba(255,255,255,.14)';
+            badge.style.textTransform = 'none';
+            badge.style.fontSize = '8.5px';
+          }
         } else if (track.provider === 'soundcloud') {
           badge.textContent = 'SoundCloud';
           badge.style.background = '#ff5500';
@@ -2403,6 +2417,26 @@
   });
   on(el.logoBtn, 'click', () => showView('home'));
   on(el.topbarBack, 'click', goBack);
+
+  // Ставит значение селекта в UI (и data-active для индикации на узких экранах)
+  function syncSourceSelect() {
+    if (!el.sourceFilter) return;
+    const v = state.sourceFilter || 'all';
+    if (el.sourceFilter.value !== v) el.sourceFilter.value = v;
+    el.sourceFilter.dataset.active = v;
+  }
+  on(el.sourceFilter, 'change', () => {
+    const raw = String(el.sourceFilter.value || 'all').toLowerCase();
+    const valid = ['all', 'soundcloud', 'audius', 'deezer', 'youtube'].includes(raw) ? raw : 'all';
+    state.sourceFilter = valid;
+    state.sourceFilterTouched = true; // ручной выбор приоритетнее дефолта из настроек
+    store.set('nova_source_filter', valid);
+    store.set('nova_source_filter_set', '1');
+    syncSourceSelect();
+    // Перезапускаем поиск, только если запрос реально был — пустой поиск не гоним
+    if (state.query) doSearch(state.query);
+  });
+  syncSourceSelect();
 
   on(el.searchInput, 'input', () => {
     clearTimeout(searchDebounceTimer);
