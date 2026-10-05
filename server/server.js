@@ -41,6 +41,8 @@ const DISCORD_CLIENT_SECRET = process.env.DISCORD_CLIENT_SECRET || '';
 const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI ||
   (PUBLIC_URL ? PUBLIC_URL + '/api/auth/discord/callback' : '');
 const AUDIUS_API_KEY = process.env.AUDIUS_API_KEY || '';
+// SoundCloud client_id периодически ротируется — на Render добавить в Environment (fallback в коде есть)
+const SOUNDCLOUD_CLIENT_ID = process.env.SOUNDCLOUD_CLIENT_ID || 'dkevB9EsY4jIoSm8RfddPNUKyn6hurXF';
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -479,6 +481,37 @@ async function audiusTrending(limit = 50) {
 }
 
 // ============================================================================
+// SOUNDCLOUD
+// ============================================================================
+const scStreamCache = new Map(); // <trackId> → { url, time }; TTL 10 мин (см. /api/audio/soundcloud/:id)
+function soundcloudNorm(t) {
+  if (!t?.id) return null;
+  return {
+    provider: 'soundcloud', providerId: String(t.id), id: String(t.id),
+    title: t.title || '', artist: t.user?.username || '',
+    artistId: t.user?.id ? String(t.user.id) : '',
+    album: '', albumId: '',
+    cover: String(t.artwork_url || '').replace(/-large\./, '-t500x500.'),
+    duration: Math.round(Number(t.duration || 0) / 1000), // SoundCloud отдаёт мс
+    popularity: Number(t.playback_count || 0),
+    sourceUrl: t.permalink_url || ''
+  };
+}
+async function soundcloudSearch(q, limit = 30) {
+  try {
+    const params = new URLSearchParams({
+      q, client_id: SOUNDCLOUD_CLIENT_ID,
+      limit: String(limit), linked_partitioning: '1'
+    });
+    const r = await jsonFetch(`https://api-v2.soundcloud.com/search/tracks?${params}`, {}, 7000);
+    const d = await readJson(r);
+    return (Array.isArray(d?.collection) ? d.collection : [])
+      .map(soundcloudNorm)
+      .filter(Boolean);
+  } catch { return []; }
+}
+
+// ============================================================================
 // RANKING
 // ============================================================================
 function scoreTrack(item, query) {
@@ -510,6 +543,7 @@ function scoreTrack(item, query) {
   if (item.popularity) s += Math.min(60_000, Math.log10(Number(item.popularity) + 1) * 8000);
   if (item.explicit) s += 5000;
   if (item.provider === 'audius') s += 8000;
+  if (item.provider === 'soundcloud') s += 8000;
   if (item.provider === 'youtube' && / - topic$/i.test(item.channel || '')) s += 10000;
   const low = (item.title + ' ' + item.artist).toLowerCase();
   const userWants = /\b(remix|live|instrumental|cover|karaoke|slowed|sped|nightcore)\b/i.test(q);
@@ -545,6 +579,8 @@ async function resolvePlayback(track) {
   if (!track) throw makeErr('empty_track', 'No track');
   if (track.source === 'LOCAL' && track.localUrl)
     return { provider: 'local', kind: 'local', url: track.localUrl };
+  if (track.provider === 'soundcloud' && track.providerId)
+    return { provider: 'soundcloud', kind: 'soundcloud', url: '/api/audio/soundcloud/' + encodeURIComponent(track.providerId) };
   if (track.provider === 'audius' && track.providerId)
     return { provider: 'audius', kind: 'audius', url: '/api/audio/audius/' + encodeURIComponent(track.providerId) };
   if (track.provider === 'youtube' && track.videoId)
@@ -989,14 +1025,16 @@ api.get('/api/search', searchRateLimit, async (req, res) => {
     catch { return []; }
   };
 
-  const [deezerTracks, deezerArtists, audiusTracks, ytTracks] = await Promise.all([
+  const [scTracks, deezerTracks, deezerArtists, audiusTracks, ytTracks] = await Promise.all([
+    safe(soundcloudSearch(q, 30), 6000),
     safe(deezerSearchTracks(q, 40), 4500),
     safe(deezerSearchArtists(q, 8), 3500),
     safe(audiusSearch(q, 25), 4000),
     safe(youtubeSearch(q, 20), 9000)
   ]);
+  console.log('[search] soundcloud:', scTracks.length, 'audius:', audiusTracks.length, 'deezer:', deezerTracks.length, 'youtube:', ytTracks.length);
 
-  const candidates = [...deezerTracks, ...audiusTracks, ...ytTracks];
+  const candidates = [...scTracks, ...audiusTracks, ...deezerTracks, ...ytTracks];
   const deduped = dedupeTracks(candidates);
   const scored = deduped
     .map(t => ({ t, s: scoreTrack(t, q) }))
@@ -1162,6 +1200,47 @@ api.get('/api/audio/audius/:id', async (req, res) => {
     if (req.headers.range) headers.Range = req.headers.range;
     const up = await fetch(url, { headers, redirect: 'follow', timeout: 30000 });
     if (!up.ok || !up.body) return res.status(502).end();
+    for (const h of ['content-type', 'content-length', 'accept-ranges', 'content-range']) {
+      const v = up.headers.get(h); if (v) res.setHeader(h, v);
+    }
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.status(up.status);
+    up.body.pipe(res);
+    req_onclose(res, up);
+  } catch { if (!res.headersSent) res.status(502).end(); }
+});
+
+// SoundCloud stream (mp3, с поддержкой Range, кэш URL 10 мин)
+api.get('/api/audio/soundcloud/:id', async (req, res) => {
+  const id = String(req.params.id);
+  if (!/^\d{1,20}$/.test(id)) return res.status(400).json({ error: 'bad_id' });
+  try {
+    const CK = 10 * 60 * 1000;
+    let hit = scStreamCache.get(id);
+    if (hit && Date.now() - hit.time > CK) { scStreamCache.delete(id); hit = null; }
+    let url = hit ? hit.url : '';
+    if (!url) {
+      const r = await jsonFetch(
+        `https://api-v2.soundcloud.com/tracks/${id}/streams?client_id=${encodeURIComponent(SOUNDCLOUD_CLIENT_ID)}`,
+        {}, 7000);
+      const d = await readJson(r);
+      url = d?.http_mp3_128_url || d?.http_mp3_1_0_url || '';
+      if (!url) {
+        console.log('[soundcloud] no mp3 stream, id=', id);
+        return res.status(404).json({
+          error: 'no_mp3_stream',
+          message: 'Прямой mp3-поток недоступен для этого трека (Go+ или ограничение)'
+        });
+      }
+      scStreamCache.set(id, { url, time: Date.now() });
+    }
+    const headers = {};
+    if (req.headers.range) headers.Range = req.headers.range;
+    const up = await fetch(url, { headers, redirect: 'follow', timeout: 20000 });
+    if (!up.ok || !up.body) {
+      if (scStreamCache.has(id)) scStreamCache.delete(id); // закэшированный URL протух — сброс
+      return res.status(502).end();
+    }
     for (const h of ['content-type', 'content-length', 'accept-ranges', 'content-range']) {
       const v = up.headers.get(h); if (v) res.setHeader(h, v);
     }

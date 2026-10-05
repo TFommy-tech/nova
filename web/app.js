@@ -607,6 +607,8 @@
   }
 
   async function resolvePlaybackServer(track, signal) {
+    if (track.provider === 'soundcloud' && track.providerId)
+      return { provider: 'soundcloud', kind: 'soundcloud', url: '/api/audio/soundcloud/' + encodeURIComponent(track.providerId) };
     if (track.provider === 'audius' && track.providerId)
       return { provider: 'audius', kind: 'audius', url: '/api/audio/audius/' + encodeURIComponent(track.providerId) };
     if (track.provider === 'youtube' && track.videoId)
@@ -840,7 +842,21 @@
       if (track.provider) {
         const badge = document.createElement('div');
         badge.className = 'source-badge';
-        badge.textContent = track.provider;
+        if (track._metaOnly && (track.provider === 'deezer' || track.provider === 'youtube')) {
+          badge.textContent = 'только метаданные';
+          badge.style.background = 'rgba(110,110,110,.6)';
+          badge.style.borderColor = 'rgba(255,255,255,.14)';
+          badge.style.textTransform = 'none';
+          badge.style.fontSize = '8.5px';
+        } else if (track.provider === 'soundcloud') {
+          badge.textContent = 'SoundCloud';
+          badge.style.background = '#ff5500';
+          badge.style.borderColor = '#ff5500';
+          badge.style.color = '#fff';
+          badge.style.textTransform = 'none'; // иначе CSS сделает «SOUNDCLOUD»
+        } else {
+          badge.textContent = track.provider;
+        }
         coverBox.appendChild(badge);
       }
       const play = document.createElement('div');
@@ -902,6 +918,7 @@
   function prefetchTracks(tracks) { tracks.forEach(prefetchTrack); }
   function prefetchTrack(t) {
     if (!t) return;
+    if (t.provider === 'soundcloud' && t.providerId) return;
     if (t.provider === 'audius' && t.providerId) return;
     if (t.provider === 'youtube' && t.videoId) return;
     const { key: ck, title, primaryArtist } = resolveCacheParts(t);
@@ -1000,10 +1017,11 @@
     try { stream = await resolvePlaybackServer(track, controller.signal); }
     catch (e) {
       if (e.name === 'AbortError' || e.message === 'Aborted') return;
+      markMetaOnly(track);
       onPlaybackError(e); return;
     }
     if (myId !== playRequestId) return;
-    if (!stream || !stream.url) { onPlaybackError(new Error('Нет playable URL')); return; }
+    if (!stream || !stream.url) { markMetaOnly(track); onPlaybackError(new Error('Нет playable URL')); return; }
 
     track._resolveData = { ...stream, time: Date.now() };
 
@@ -1033,6 +1051,12 @@
     const nextTrack = state.queue[state.currentIndex + 1];
     if (nextTrack) setTimeout(() => prefetchTrack(nextTrack), 1200);
     refreshDiagnostics();
+  }
+  function markMetaOnly(track) {
+    if (track?.provider === 'deezer' || track?.provider === 'youtube') {
+      track._metaOnly = true;
+      if (state.tracks.includes(track)) renderTracks();
+    }
   }
   function onPlaybackError(e) {
     userIntent = 'error';
