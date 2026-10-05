@@ -1172,9 +1172,10 @@ api.get('/api/audio/audius/:id', async (req, res) => {
   } catch { if (!res.headersSent) res.status(502).end(); }
 });
 
-// ---------- YouTube stream: youtubei.js → Invidious → Piped ----------
+// ---------- YouTube stream: Invidious → Piped → youtubei.js ----------
 async function streamViaYoutubei(vid, range, res) {
-  try {
+  // Подготовка до отправки заголовков в res — чтобы таймаут не оборвал начатый стрим
+  const prep = (async () => {
     const yt = await getYtClient();
     if (!yt) return false;
     const info = await yt.getInfo(vid);
@@ -1196,6 +1197,12 @@ async function streamViaYoutubei(vid, range, res) {
     const headers = { 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*' };
     if (range) headers.Range = range;
     const up = await fetch(url, { headers, redirect: 'follow', timeout: 20000 });
+    return { up, format };
+  })();
+  try {
+    const r = await withTimeout(prep, 10000, 'ijs_stream_timeout');
+    if (!r) return false;
+    const { up, format } = r;
     if (!up.ok && up.status !== 206) { dbg('ijs upstream', up.status); return false; }
     const ct = up.headers.get('content-type') || format.mime_type || 'audio/mp4';
     const cl = up.headers.get('content-length');
@@ -1211,7 +1218,12 @@ async function streamViaYoutubei(vid, range, res) {
     req_onclose(res, up);
     dbg('→ youtubei stream ok');
     return true;
-  } catch (e) { dbg('ijs stream err:', e.message); return false; }
+  } catch (e) {
+    // Таймаут или ошибка: поздний ответ придушиваем, чтобы он не писал в res
+    prep.then(r => { try { r?.up?.body?.destroy(); } catch {} }).catch(() => {});
+    dbg('ijs stream err:', e.message);
+    return false;
+  }
 }
 
 async function tryInvidious(vid, itag, range, res) {
@@ -1253,15 +1265,12 @@ api.get('/api/audio/youtube/:videoId', async (req, res) => {
   if (!/^[A-Za-z0-9_-]{6,20}$/.test(vid)) return res.status(400).end();
   const range = req.headers.range || '';
 
-  // 1. youtubei.js (самый надёжный на Render)
-  if (await streamViaYoutubei(vid, range, res)) return;
-
-  // 2. Invidious
+  // 1. Invidious
   for (const itag of ['251', '140']) {
     if (await tryInvidious(vid, itag, range, res)) return;
   }
 
-  // 3. Piped
+  // 2. Piped
   for (const base of PIPED_INSTANCES) {
     try {
       const r = await fetch(`${base}/streams/${vid}`, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
@@ -1290,6 +1299,10 @@ api.get('/api/audio/youtube/:videoId', async (req, res) => {
       return;
     } catch {}
   }
+
+  // 3. youtubei.js — fallback, жёсткий лимит 10 с
+  if (await streamViaYoutubei(vid, range, res)) return;
+
   res.status(502).end();
 });
 
