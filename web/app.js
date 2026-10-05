@@ -1863,6 +1863,8 @@
     try {
       const r = await fetch(apiBase() + '/api/lyrics?' + params);
       const d = await r.json().catch(() => ({}));
+      // F2: трек сменился, пока грузился текст — чужой ответ не трогаем
+      if (box.dataset.trackKey !== trackKey(track)) return;
       if (!r.ok || !d?.found) {
         if (!lyricsRetried) {
           lyricsRetried = true;
@@ -1907,6 +1909,7 @@
       box.innerHTML = '<div class="lyrics-placeholder">Текст не найден</div>';
       box.dataset.loaded = '1';
     } catch (e) {
+      if (box.dataset.trackKey !== trackKey(track)) return;
       box.innerHTML = `<div class="lyrics-placeholder">${escapeHtml(e.message || 'Ошибка загрузки')}</div>`;
       box.dataset.loaded = '1';
     }
@@ -2691,7 +2694,7 @@
         s.className = 'suggestion';
         s.style.animationDelay = (i * 25) + 'ms';
         const fb = placeholderCover();
-        s.innerHTML = `<img src="${item.cover || fb}" alt=""><div class="suggestion-main"><div class="suggestion-title">${escapeHtml(item.title || '')}</div><div class="suggestion-artist">${escapeHtml(item.artist || '—')}</div></div><span class="suggestion-badge">${item.provider || 'CATALOG'}</span>`;
+        s.innerHTML = `<img src="${escapeHtml(item.cover || fb)}" alt=""><div class="suggestion-main"><div class="suggestion-title">${escapeHtml(item.title || '')}</div><div class="suggestion-artist">${escapeHtml(item.artist || '—')}</div></div><span class="suggestion-badge">${escapeHtml(item.provider || 'CATALOG')}</span>`;
         s.addEventListener('mousedown', e => {
           e.preventDefault();
           input.value = [item.title, item.artist].filter(Boolean).join(' ');

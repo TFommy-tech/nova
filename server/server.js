@@ -64,6 +64,7 @@ const artistCache = new Map();
 const SEARCH_TTL = 60 * 1000;
 const RESOLVE_TTL = 25 * 60 * 1000;
 const LYRICS_TTL = 24 * 60 * 60 * 1000;
+const LYRICS_NEG_TTL = 5 * 60 * 1000; // B14: «не найдено» кэшируем на минуты, не на сутки
 const ARTIST_TTL = 10 * 60 * 1000;
 const ARTIST_EMPTY_TTL = 60 * 1000;
 setInterval(() => {
@@ -641,6 +642,19 @@ function authRateLimit(req, res, next) {
   if (++e.count > 10) return res.status(429).json({ error: 'Слишком много попыток. Повтори через 15 минут.' });
   next();
 }
+
+// B15: rate-limit на поисковые ручки — поиск дергает 4 внешних провайдера,
+// на публичном деплое их квоты можно сжечь без авторизации
+const searchAttempts = new Map();
+function searchRateLimit(req, res, next) {
+  const ip = String(req.ip || req.socket?.remoteAddress || 'unknown');
+  const now = Date.now();
+  if (searchAttempts.size > 5000) for (const [k, v] of searchAttempts) if (now >= v.resetAt) searchAttempts.delete(k);
+  let e = searchAttempts.get(ip);
+  if (!e || now >= e.resetAt) { e = { count: 0, resetAt: now + 60 * 1000 }; searchAttempts.set(ip, e); }
+  if (++e.count > 60) return res.status(429).json({ error: 'Слишком много запросов. Подожди минуту.' });
+  next();
+}
 setInterval(() => {
   const now = Date.now();
   for (const [k, v] of authAttempts) if (now >= v.resetAt) authAttempts.delete(k);
@@ -963,8 +977,8 @@ api.delete('/api/workshop/:id', authMiddleware, (req, res) => {
 // ============================================================================
 // SEARCH
 // ============================================================================
-api.get('/api/search', async (req, res) => {
-  const q = String(req.query.q || '').trim();
+api.get('/api/search', searchRateLimit, async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 200); // B15: глубина запроса тоже режется
   if (!q) return res.json({ results: [], artists: [], counts: {} });
   const ck = 'search:' + normalize(q);
   const hit = searchCache.get(ck);
@@ -1002,8 +1016,8 @@ api.get('/api/search', async (req, res) => {
 // ============================================================================
 // ARTIST / ALBUM
 // ============================================================================
-api.get('/api/artist-search', async (req, res) => {
-  const q = String(req.query.q || '').trim();
+api.get('/api/artist-search', searchRateLimit, async (req, res) => {
+  const q = String(req.query.q || '').trim().slice(0, 200); // B15: глубина запроса тоже режется
   if (!q) return res.status(400).json({ error: 'empty' });
   const list = await deezerSearchArtists(q, 10);
   if (!list.length) return res.status(404).json({ error: 'not found' });
@@ -1096,14 +1110,25 @@ api.get('/api/recommendations', authMiddleware, async (req, res) => {
 // ============================================================================
 // PLAYBACK ROUTES
 // ============================================================================
+// B12: yt.search/yt.getInfo у youtubei.js идут без своего таймаута —
+// общий лимит, чтобы resolve зависал максимум на 12 с
+function withTimeout(p, ms, msg) {
+  let t;
+  return Promise.race([
+    p,
+    new Promise((_, rj) => { t = setTimeout(() => rj(new Error(msg || 'timeout')), ms); })
+  ]).finally(() => clearTimeout(t));
+}
 api.post('/api/playback/resolve', async (req, res) => {
   const track = req.body || {};
   if (!track.title && !track.providerId && !track.videoId)
     return res.status(400).json({ error: { code: 'invalid_track', message: 'No track info' } });
   try {
-    const data = await resolvePlayback(track);
+    const data = await withTimeout(resolvePlayback(track), 12000, 'resolve_timeout');
     res.json(data);
   } catch (e) {
+    if (e.message === 'resolve_timeout')
+      return res.status(504).json({ error: { code: 'resolve_timeout', message: 'Источник не ответил вовремя' } });
     if (e.structured) return res.status(502).json({ error: { code: e.code, message: e.message } });
     res.status(502).json({ error: { code: 'resolve_failed', message: e.message } });
   }
@@ -1119,10 +1144,10 @@ api.get('/api/audio/resolve', async (req, res) => {
   if (hit && Date.now() - hit.time < RESOLVE_TTL)
     return res.json({ ok: true, ...hit.data, cached: true });
   try {
-    const data = await resolvePlayback({ title, artist, duration });
+    const data = await withTimeout(resolvePlayback({ title, artist, duration }), 12000, 'resolve_timeout');
     resolveCache.set(ck, { time: Date.now(), data });
     res.json({ ok: true, ...data });
-  } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+  } catch (e) { res.status(e.message === 'resolve_timeout' ? 504 : 502).json({ ok: false, error: e.message }); }
 });
 
 // Audius stream
@@ -1258,6 +1283,7 @@ api.get('/api/audio/youtube/:videoId', async (req, res) => {
       res.setHeader('Cache-Control', 'no-store');
       res.setHeader('Access-Control-Allow-Origin', '*');
       const cl = up.headers.get('content-length'); if (cl) res.setHeader('Content-Length', cl);
+      const cr = up.headers.get('content-range'); if (cr) res.setHeader('Content-Range', cr);
       res.status(up.status === 206 ? 206 : 200);
       up.body.pipe(res);
       req_onclose(res, up);
@@ -1321,12 +1347,12 @@ api.get('/api/lyrics', async (req, res) => {
   if (!track && !artist) return res.status(400).json({ found: false });
   const ck = 'lyr:' + normalize(track + '|' + artist) + '|' + Math.round(dur);
   const hit = lyricsCache.get(ck);
-  if (hit && Date.now() - hit.time < LYRICS_TTL) return res.json(hit.data);
+  if (hit && Date.now() - hit.time < (hit.neg ? LYRICS_NEG_TTL : LYRICS_TTL)) return res.json(hit.data);
   const clean = String(track)
     .replace(/\([^)]*\)/g, ' ').replace(/\[[^\]]*\]/g, ' ')
     .replace(/\b(official|audio|video|lyric|lyrics|visualizer|hd|hq|explicit|mv|m\/v)\b/gi, ' ')
     .replace(/\s+/g, ' ').trim();
-  const send = p => { lyricsCache.set(ck, { time: Date.now(), data: p }); res.json(p); };
+  const send = p => { lyricsCache.set(ck, { time: Date.now(), data: p, neg: !p.found }); res.json(p); };
   try {
     const params = new URLSearchParams({ track_name: clean });
     if (artist) params.set('artist_name', artist);
