@@ -1493,14 +1493,11 @@ api.get('/api/lyrics', async (req, res) => {
   const ck = 'lyr:' + normalize(track + '|' + artist) + '|' + Math.round(dur);
   const hit = lyricsCache.get(ck);
   if (hit && Date.now() - hit.time < (hit.neg ? LYRICS_NEG_TTL : LYRICS_TTL)) return res.json(hit.data);
-  console.log('[lyrics] req', { track, artist, dur });
-  console.log('[lyrics] cache', ck, 'neg=' + (hit ? hit.neg : '-'));
   const clean = String(track)
     .replace(/\([^)]*\)/g, ' ').replace(/\[[^\]]*\]/g, ' ')
     .replace(/\b(official|audio|video|lyric|lyrics|visualizer|hd|hq|explicit|mv|m\/v)\b/gi, ' ')
     .replace(/#\S+/g, ' ')
     .replace(/\s+/g, ' ').trim();
-  console.log('[lyrics] final', { clean });
   const send = p => { lyricsCache.set(ck, { time: Date.now(), data: p, neg: !p.found }); res.json(p); };
   try {
     const params = new URLSearchParams({ track_name: clean });
