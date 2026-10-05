@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 /* ============================================================
    NOVA — style.css (v5.2.0)
    ============================================================ */
@@ -10,10 +11,10 @@ a { color: inherit; text-decoration: none; }
 kbd { font-family: inherit; }
 
 :root {
-  --bg: #000; --bg-2: #0a0a0a;
+  --bg: #0a0a0a; --bg-2: #111;
   --surface: #0d0d0d; --surface-2: #141414; --surface-3: #1a1a1a;
   --border: #1c1c1c; --border-2: #262626;
-  --text: #fff; --text-2: #b4b4b4; --text-3: #7a7a7a; --text-4: #4a4a4a;
+  --text: #fff; --text-2: rgba(255,255,255,.5); --text-3: #7a7a7a; --text-4: #4a4a4a;
   --accent: #ffffff; --glow: 168,85,247;
   --danger: #f87171; --success: #4ade80;
   --dur-fast: 130ms; --dur: 200ms; --dur-slow: 320ms;
@@ -23,11 +24,29 @@ kbd { font-family: inherit; }
   --radius-xs: 6px; --radius-sm: 8px; --radius: 10px;
   --radius-md: 12px; --radius-lg: 16px; --radius-xl: 20px;
   --sidebar-collapsed: 64px; --sidebar-expanded: 216px; --mini-h: 68px;
+  /* ===== NoverPlay-restyle tokens ===== */
+  --glass-bg: rgba(255,255,255,.05);
+  --glass-border: rgba(255,255,255,.08);
+  --glass-blur: 20px;
+  --glass-radius: 16px;
+  --btn-radius: 30px;
+  --sidebar-w: 80px;
+  --player-h: 80px;
+  --progress-h: 2px;
+  --play-btn-size: 48px;
+  --page-pad: 30px;
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
 }
 html { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
   font-size: 14px; color: var(--text); background: var(--bg); }
-body { color: var(--text); background: var(--bg); }
+body { color: var(--text);
+  /* дефолтный «затемнённый» фон-подложка; перекрывается фото из настроек через #backgroundLayer */
+  background:
+    radial-gradient(1100px 700px at 15% -10%, rgba(255,255,255,.06), transparent 60%),
+    radial-gradient(900px 600px at 85% 110%, rgba(255,255,255,.04), transparent 55%),
+    var(--bg);
+}
 
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -58,7 +77,7 @@ html[data-accent="white"]   { --accent: #ffffff; --glow: 255,255,255; }
 @keyframes slideUpMini { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
 
 #backgroundLayer { position: fixed; inset: 0; z-index: 0; background: #000 center/cover no-repeat; opacity: 0; transition: opacity .5s var(--ease); }
-#backgroundShade { position: fixed; inset: 0; z-index: 1; background: rgba(0,0,0,.72); pointer-events: none; }
+#backgroundShade { position: fixed; inset: 0; z-index: 1; background: rgba(10,10,10,.72); pointer-events: none; }
 .ambient-glow { position: fixed; inset: 0; z-index: 1; pointer-events: none;
   background: radial-gradient(circle at 20% 15%, rgba(var(--glow), .10), transparent 55%),
               radial-gradient(circle at 80% 85%, rgba(var(--glow), .08), transparent 60%);
