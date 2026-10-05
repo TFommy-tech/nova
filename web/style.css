@@ -164,20 +164,23 @@ body.has-background #backgroundLayer { opacity: 1; }
 .workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 
 .topbar { height: 56px; flex: 0 0 56px; display: flex; align-items: center; gap: 10px;
-  padding: 0 18px; border-bottom: 1px solid var(--border); background: #030303; z-index: 10; }
+  padding: 0 18px; border-bottom: 1px solid rgba(255,255,255,.06);
+  background: rgba(255,255,255,.03);
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); z-index: 10; }
 .topbar-back { width: 34px; height: 34px; display: grid; place-items: center;
   border-radius: var(--radius-sm); color: var(--text-3); transition: all var(--dur) var(--ease); }
 .topbar-back:hover { color: #fff; background: rgba(255,255,255,.06); }
 .topbar-back.hidden { display: none; }
 .search-wrap { flex: 1; max-width: 620px; height: 40px; display: flex; align-items: center; gap: 10px;
-  padding: 0 12px; background: #0a0a0a; border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 0 16px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.06);
+  border-radius: var(--btn-radius);
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease); position: relative; }
-.search-wrap:focus-within { border-color: #2e2e2e; background: #0d0d0d; }
-.search-icon { color: var(--text-3); flex: 0 0 auto; }
+.search-wrap:focus-within { border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.08); }
+.search-icon { width: 18px; height: 18px; color: rgba(255,255,255,.5); flex: 0 0 auto; }
 .search-input { flex: 1; height: 100%; border: 0; outline: 0; background: transparent; color: #fff; font-size: 13px; }
-.search-input::placeholder { color: var(--text-4); }
+.search-input::placeholder { color: rgba(255,255,255,.45); }
 .search-kbd { font-size: 10px; font-weight: 600; color: var(--text-4); padding: 3px 7px;
-  border: 1px solid var(--border-2); border-radius: 6px; background: #080808; white-space: nowrap; }
+  border: 1px solid rgba(255,255,255,.08); border-radius: 6px; background: rgba(255,255,255,.04); white-space: nowrap; }
 .search-wrap:focus-within .search-kbd { display: none; }
 .search-suggestions { position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 100;
   max-height: 400px; overflow-y: auto; background: #0c0c0c; border: 1px solid var(--border-2);
