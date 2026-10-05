@@ -3,6 +3,17 @@
 // youtubei.js как primary резолвер, категории в мастерской
 // ============================================================================
 'use strict';
+
+// Необработанный Promise/ошибка не должны убивать сервер целиком:
+// логируем и продолжаем работу. Сеть/CDN периодически отдают мусор,
+// и раньше один отказ в async-цепочке ронял весь процесс.
+process.on('unhandledRejection', (err) => {
+  console.error('[unhandledRejection]', (err && err.message) || err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', (err && err.message) || err);
+});
+
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
@@ -1287,7 +1298,9 @@ async function streamViaYoutubei(vid, range, res) {
     if (!format) { dbg('ijs no format'); return false; }
     let url = format.url;
     if (!url || !/googlevideo\.com/.test(url)) {
-      try { url = format.decipher(yt.session.player); } catch (e) { dbg('ijs decipher err', e.message); }
+      // format.decipher() — async: синхронный try/catch его отказ не ловил,
+      // и процесс падал на необработанном Promise. Ждём результат в try.
+      try { url = await format.decipher(yt.session.player); } catch (e) { dbg('ijs decipher err', e?.message); }
     }
     if (!url) { dbg('ijs no url'); return false; }
     const headers = { 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*' };
@@ -1413,7 +1426,7 @@ api.get('/api/download/youtube/:videoId', async (req, res) => {
       let format = info.chooseFormat({ type: 'audio', quality: 'best' });
       let url = format?.url;
       if (!url || !/googlevideo\.com/.test(url)) {
-        try { url = format?.decipher(yt.session.player); } catch {}
+        try { url = await format?.decipher(yt.session.player); } catch (e) { dbg('download decipher err', e?.message); }
       }
       if (url) {
         const up = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*' }, timeout: 20000 });
