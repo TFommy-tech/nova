@@ -1030,7 +1030,13 @@ api.delete('/api/workshop/:id', authMiddleware, (req, res) => {
 api.get('/api/search', searchRateLimit, async (req, res) => {
   const q = String(req.query.q || '').trim().slice(0, 200); // B15: глубина запроса тоже режется
   if (!q) return res.json({ results: [], artists: [], counts: {} });
-  const ck = 'search:' + normalize(q);
+  // Фильтр по источнику: all | soundcloud | audius | deezer | youtube.
+  // Неизвестное/пустое значение трактуем как all, чтобы старый клиент не получал ошибку.
+  const rawSource = String(req.query.source || 'all').trim().toLowerCase();
+  const source = ['all', 'soundcloud', 'audius', 'deezer', 'youtube'].includes(rawSource) ? rawSource : 'all';
+  const only = source !== 'all';
+  // Ключ кэша включает источник: выдача для разных фильтров — это разные данные.
+  const ck = 'search:' + normalize(q) + '|' + source;
   const hit = searchCache.get(ck);
   if (hit && Date.now() - hit.time < SEARCH_TTL) return res.json(hit.data);
 
@@ -1039,14 +1045,19 @@ api.get('/api/search', searchRateLimit, async (req, res) => {
     catch { return []; }
   };
 
+  // При выбранном источнике дёргаем только его: один сетевой вызов вместо четырёх.
+  const wantSC = !only || source === 'soundcloud';
+  const wantAudius = !only || source === 'audius';
+  const wantDeezer = !only || source === 'deezer';
+  const wantYT = !only || source === 'youtube';
   const [scTracks, deezerTracks, deezerArtists, audiusTracks, ytTracks] = await Promise.all([
-    safe(soundcloudSearch(q, 30), 6000),
-    safe(deezerSearchTracks(q, 40), 4500),
-    safe(deezerSearchArtists(q, 8), 3500),
-    safe(audiusSearch(q, 25), 4000),
-    safe(youtubeSearch(q, 20), 9000)
+    wantSC ? safe(soundcloudSearch(q, 30), 6000) : Promise.resolve([]),
+    wantDeezer ? safe(deezerSearchTracks(q, 40), 4500) : Promise.resolve([]),
+    wantDeezer ? safe(deezerSearchArtists(q, 8), 3500) : Promise.resolve([]),
+    wantAudius ? safe(audiusSearch(q, 25), 4000) : Promise.resolve([]),
+    wantYT ? safe(youtubeSearch(q, 20), 9000) : Promise.resolve([])
   ]);
-  console.log('[search] soundcloud:', scTracks.length, 'audius:', audiusTracks.length, 'deezer:', deezerTracks.length, 'youtube:', ytTracks.length);
+  console.log('[search] source:', source, '| soundcloud:', scTracks.length, 'audius:', audiusTracks.length, 'deezer:', deezerTracks.length, 'youtube:', ytTracks.length);
 
   const candidates = [...scTracks, ...audiusTracks, ...deezerTracks, ...ytTracks];
   const deduped = dedupeTracks(candidates);
@@ -1058,7 +1069,7 @@ api.get('/api/search', searchRateLimit, async (req, res) => {
     .map(x => x.t);
 
   const payload = {
-    query: q, results: scored, artists: deezerArtists,
+    query: q, source, results: scored, artists: deezerArtists,
     counts: { tracks: scored.length, artists: deezerArtists.length }
   };
   searchCache.set(ck, { time: Date.now(), data: payload });
