@@ -1827,11 +1827,15 @@
     el.songInfoCover.style.display = track.cover ? 'block' : 'none';
     el.songInfoTitle.textContent = track.title || 'Без названия';
     el.songInfoArtist.innerHTML = artistsHtml(track.artist);
-    el.songInfoAlbum.textContent = track.album || '—';
+    el.songInfoAlbum.textContent = track.album || (track.provider === 'soundcloud' ? 'Single' : '—');
     el.songInfoAlbum.style.cursor = track.albumId ? 'pointer' : 'default';
     el.songInfoAlbum.onclick = () => { if (track.albumId) { closeSongInfo(); showAlbum(track.albumId); } };
     el.songInfoMeta.textContent = [track.duration ? formatTime(track.duration) : '', track.releaseDate?.slice(0, 4)].filter(Boolean).join(' · ') || '—';
-    el.songInfoSource.textContent = track.provider || 'CATALOG';
+    const providerLabel = { soundcloud: 'SoundCloud', audius: 'Audius', deezer: 'Deezer', youtube: 'YouTube', local: 'Локальный файл' }[track.provider]
+      || String(track.provider || track.source || 'CATALOG').toUpperCase();
+    el.songInfoSource.innerHTML = track.sourceUrl
+      ? `Провайдер: <a href="${escapeHtml(track.sourceUrl)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline">${escapeHtml(providerLabel)} ↗</a>`
+      : `Провайдер: ${escapeHtml(providerLabel)}`;
     el.songInfoFavorite.textContent = isFavorite(track) ? '♥ В избранном' : '♡ В избранное';
     el.songInfoModal.classList.add('open');
     el.songInfoModal.setAttribute('aria-hidden', 'false');
