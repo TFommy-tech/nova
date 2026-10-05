@@ -288,7 +288,16 @@
     return String(n);
   }
   function trackKey(t) { return [t.provider || t.source || '', t.providerId || t.id || '', t.title || '', t.artist || ''].join('|'); }
-  function coverFor(t) { return t?.cover || ''; }
+  const COVER_PROXY_HOSTS = /(\.|^)(sndcdn\.com|dzcdn\.net|ytimg\.com|audius\.co)$/i;
+  function coverUrl(u) {
+    const s = String(u || '');
+    if (!s || s.startsWith('data:') || s.startsWith('blob:')) return s;
+    let host = '';
+    try { host = new URL(s, location.href).hostname; } catch { return s; }
+    if (!COVER_PROXY_HOSTS.test(host)) return s;
+    return apiBase() + '/api/cover-proxy?url=' + encodeURIComponent(s);
+  }
+  function coverFor(t) { return coverUrl(t?.cover || ''); }
   function normalizeSearch(v) {
     return String(v || '').toLowerCase().replace(/[’'`´]/g, '').replace(/ё/g, 'е')
       .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -719,7 +728,7 @@
     const img = document.createElement('img');
     img.className = 'home-mini-cover';
     img.alt = '';
-    img.src = track.cover || placeholderCover();
+    img.src = coverUrl(track.cover) || placeholderCover();
     img.onerror = () => { img.src = placeholderCover(); };
     const t = document.createElement('div');
     t.className = 'home-mini-title';
@@ -898,7 +907,7 @@
       card.className = 'home-mini-card';
       const img = document.createElement('img');
       img.className = 'home-mini-cover';
-      img.src = a.picture || placeholderCover(); img.alt = '';
+      img.src = coverUrl(a.picture) || placeholderCover(); img.alt = '';
       img.onerror = () => { img.src = placeholderCover(); };
       const t = document.createElement('div');
       t.className = 'home-mini-title'; t.textContent = a.name;
@@ -996,7 +1005,7 @@
     lastPlaybackError = '';
     resetProgressUI();
     updateMiniPlayer(); updatePlayerView(); updatePlayButtons();
-    updateAmbientFromCover(track.cover);
+    updateAmbientFromCover(coverUrl(track.cover));
     addRecentToShuffleHistory(track);
 
     initAudioGraph();
@@ -1507,7 +1516,7 @@
       }
       if (!artistId) {
         el.artistHeroName.textContent = name || 'Исполнитель';
-        if (picture) el.artistHeroImage.src = picture;
+        if (picture) el.artistHeroImage.src = coverUrl(picture);
         el.artistTracks.innerHTML = '<div class="empty">Точных совпадений не найдено</div>';
         return;
       }
@@ -1517,7 +1526,7 @@
       const artist = d.artist || {};
       const pic = artist.picture || picture || '';
       el.artistHeroName.textContent = artist.name || name || 'Исполнитель';
-      if (pic) el.artistHeroImage.src = pic;
+      if (pic) el.artistHeroImage.src = coverUrl(pic);
       const meta = [];
       if (artist.nbFan) meta.push(`<span>${formatNumber(artist.nbFan)} фанатов</span>`);
       if (d.top_tracks?.length) meta.push(`<span>${d.top_tracks.length} треков</span>`);
@@ -1571,7 +1580,7 @@
       el.albumHeroArtist.textContent = d.artist?.name || '—';
       el.albumHeroType.textContent = (d.recordType || 'album').toUpperCase();
       el.albumHeroMeta.textContent = [d.releaseDate?.slice?.(0, 4), raw.length ? `${raw.length} треков` : ''].filter(Boolean).join(' · ') || '—';
-      if (d.cover) el.albumHeroImage.src = d.cover;
+      if (d.cover) el.albumHeroImage.src = coverUrl(d.cover);
       const tracks = raw.map(normalizeTrack).filter(Boolean);
       el.albumTracks.innerHTML = '';
       if (!tracks.length) { el.albumTracks.innerHTML = '<div class="empty">Пустой альбом</div>'; return; }
@@ -1625,8 +1634,8 @@
       card.className = 'playlist-card';
       const cover = document.createElement('div');
       cover.className = 'playlist-card-cover';
-      const firstCover = pl.tracks?.find(t => t.cover)?.cover || '';
-      if (pl.cover) cover.style.backgroundImage = `url("${pl.cover}")`;
+      const firstCover = coverUrl(pl.tracks?.find(t => t.cover)?.cover || '');
+      if (pl.cover) cover.style.backgroundImage = `url("${coverUrl(pl.cover)}")`;
       else if (firstCover) cover.style.backgroundImage = `url("${firstCover}")`;
       const body = document.createElement('div');
       body.className = 'playlist-card-body';
@@ -1642,7 +1651,7 @@
     showView('playlist');
     el.playlistHeroName.textContent = pl.name;
     el.playlistHeroMeta.textContent = `${pl.tracks?.length || 0} треков${pl.description ? ' · ' + pl.description : ''}`;
-    const firstCover = pl.cover || pl.tracks?.find(t => t.cover)?.cover || '';
+    const firstCover = coverUrl(pl.cover || pl.tracks?.find(t => t.cover)?.cover || '');
     el.playlistHeroImage.src = firstCover || placeholderCover();
     const box = el.playlistTracks;
     box.innerHTML = '';
@@ -1814,7 +1823,7 @@
   function openSongInfo(track) {
     if (!track) return;
     songInfoCurrent = track;
-    el.songInfoCover.src = track.cover || placeholderCover();
+    el.songInfoCover.src = coverUrl(track.cover) || placeholderCover();
     el.songInfoCover.style.display = track.cover ? 'block' : 'none';
     el.songInfoTitle.textContent = track.title || 'Без названия';
     el.songInfoArtist.innerHTML = artistsHtml(track.artist);
@@ -2020,7 +2029,7 @@
         store.set('nova_accent', a);
         c.querySelectorAll('.accent-preset').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
-        if (state.currentTrack?.cover) updateAmbientFromCover(state.currentTrack.cover);
+        if (state.currentTrack?.cover) updateAmbientFromCover(coverUrl(state.currentTrack.cover));
         notify('Цвет: ' + a);
       });
       c.appendChild(b);
@@ -2718,7 +2727,7 @@
         s.className = 'suggestion';
         s.style.animationDelay = (i * 25) + 'ms';
         const fb = placeholderCover();
-        s.innerHTML = `<img src="${escapeHtml(item.cover || fb)}" alt=""><div class="suggestion-main"><div class="suggestion-title">${escapeHtml(item.title || '')}</div><div class="suggestion-artist">${escapeHtml(item.artist || '—')}</div></div><span class="suggestion-badge">${escapeHtml(item.provider || 'CATALOG')}</span>`;
+        s.innerHTML = `<img src="${escapeHtml(coverUrl(item.cover) || fb)}" alt=""><div class="suggestion-main"><div class="suggestion-title">${escapeHtml(item.title || '')}</div><div class="suggestion-artist">${escapeHtml(item.artist || '—')}</div></div><span class="suggestion-badge">${escapeHtml(item.provider || 'CATALOG')}</span>`;
         s.addEventListener('mousedown', e => {
           e.preventDefault();
           input.value = [item.title, item.artist].filter(Boolean).join(' ');
