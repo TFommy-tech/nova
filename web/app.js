@@ -40,6 +40,19 @@
     { id: 'midnight', name: 'Midnight', bg: '#050508', accent: '#a855f7' },
     { id: 'dawn',     name: 'Dawn',     bg: '#1a1510', accent: '#f0a868' }
   ];
+  // «Своя тема»: 8 редактируемых токенов (значения храним вида '#rrggbb').
+  // --glow всегда производится из accent; --surface не редактируется (см. TODO в style.css).
+  const CUSTOM_THEME_KEY = 'nova_custom_theme';
+  const CUSTOM_TOKENS = [
+    { key: 'bg',      token: '--bg',      label: 'Фон' },
+    { key: 'text',    token: '--text',    label: 'Текст' },
+    { key: 'text2',   token: '--text-2',  label: 'Мутный текст' },
+    { key: 'text3',   token: '--text-3',  label: 'Второстепенный' },
+    { key: 'text4',   token: '--text-4',  label: 'Приглушённый' },
+    { key: 'accent',  token: '--accent',  label: 'Акцент' },
+    { key: 'border',  token: '--border',  label: 'Бордер' },
+    { key: 'border2', token: '--border-2',label: 'Бордер-2' }
+  ];
   const savedCursor = store.get('nova_cursor', 'ring');
   const initialCursor = CURSOR_VARIANTS.includes(savedCursor) ? savedCursor : 'ring';
   document.documentElement.setAttribute('data-cursor', initialCursor);
@@ -81,7 +94,7 @@
     theme: store.get('nova_theme', 'dark'),
     themePreset: (() => {
       const v = store.get('nova_theme_preset', 'dark');
-      return THEME_PRESETS.includes(v) ? v : 'dark';
+      return (THEME_PRESETS.includes(v) || v === 'custom') ? v : 'dark';
     })(),
     notifications: store.get('nova_notifications', '1') === '1',
     hotkeys: store.get('nova_hotkeys', '1') === '1',
@@ -129,7 +142,8 @@
     'nowTitle','nowArtist','nowChips','progress','currentTime','duration',
     'downloadBtn','repeatBtn','prevBtn','largePlayBtn','largePlayIcon','nextBtn','shuffleBtn','favoriteBtn','queueToggleBtn','moreBtn',
     'volumeLarge','equalizerBtn','similarBtn',
-    'themeToggle','cursorToggle','accentPresets','themePresets','backgroundBtn','backgroundResetBtn','bgPresets','settingsVolumeValue',
+    'themeToggle','cursorToggle','accentPresets','themePresets','customThemeEditor','customEditorGrid','customBaseLabel',
+    'customApplyBtn','customResetBtn','customExportBtn','customImportBtn','customImportInput','backgroundBtn','backgroundResetBtn','bgPresets','settingsVolumeValue',
     'autoplayToggle','notificationsToggle','hotkeysToggle','defaultSource','settingsOpenFileBtn',
     'settingsAccountName','settingsAccountHint','settingsAccountBtn',
     'clearHistory2','clearFavorites2','clearCacheBtn','diagnostics','settingsView','settingsClose',
@@ -2091,24 +2105,39 @@
     store.set('nova_theme', settings.theme);
   }
   function applyThemePreset(name, userPick = false) {
-    const n = THEME_PRESETS.includes(name) ? name : 'dark';
+    const n = (THEME_PRESETS.includes(name) || name === 'custom') ? name : 'dark';
     settings.themePreset = n;
     document.documentElement.setAttribute('data-theme-preset', n);
     store.set('nova_theme_preset', n);
-    // Синхронизация с существующей light/dark-темой: «Светлая» включает правила
-    // html[data-theme="light"], остальные пресеты гасят их — иначе светлые
-    // переопределения протекут в цветные схемы.
-    settings.theme = n === 'light' ? 'light' : 'dark';
-    applyTheme();
     // Ручной выбор пресета сбрасывает ручной акцент (персистентно, чтобы после
     // reload не «воскрес»). init/renderSettingsUi сюда не попадают.
+    // Для «Своей» — ДО применения цветов: иначе правило пикера на мгновение
+    // перебьёт инлайн-акцент черновика.
     if (userPick) {
       document.documentElement.removeAttribute('data-accent');
       store.remove('nova_accent');
       if (el.accentPresets) el.accentPresets.querySelectorAll('.accent-preset').forEach(x => x.classList.remove('active'));
-      notify('Пресет: ' + name);
     }
+    if (n === 'custom') {
+      customEditorOpen = true;
+      ensureCustomDraft();
+      applyCustomTheme();   // setProperty ×8 + glow + data-theme по luminance(bg)
+    } else {
+      if (userPick) customEditorOpen = false;
+      clearCustomThemeInline();
+      // Синхронизация с существующей light/dark-темой: «Светлая» включает правила
+      // html[data-theme="light"], остальные пресеты гасят их — иначе светлые
+      // переопределения протекут в цветные схемы. У «Своей» фон любой — там синк
+      // идёт по luminance внутри applyCustomTheme (syncThemeByBg).
+      settings.theme = n === 'light' ? 'light' : 'dark';
+      applyTheme();
+      // Черновик-превью живёт, пока открыт редактор (переоткрытие настроек
+      // не затирает его). Явный выбор пресета (userPick) закрыл редактор выше.
+      if (customEditorOpen && customThemeStore()) applyCustomTheme();
+    }
+    if (userPick) notify('Пресет: ' + (n === 'custom' ? 'Своя тема' : n));
     document.querySelectorAll('.theme-preset').forEach(p => p.classList.toggle('active', p.dataset.preset === n));
+    syncCustomEditor();
   }
   function renderThemePresets() {
     const c = el.themePresets; if (!c) return;
@@ -2127,7 +2156,251 @@
       b.addEventListener('click', () => applyThemePreset(t.id, true));
       c.appendChild(b);
     });
+    // 9-я плитка: «Своя тема». Клик открывает редактор и не активирует пресет —
+    // активация только кнопкой «Применить» (иначе клик по гриду терял бы
+    // стандартный пресет ради черновика).
+    const custom = document.createElement('button');
+    custom.className = 'theme-preset' + (settings.themePreset === 'custom' ? ' active' : '');
+    custom.dataset.preset = 'custom'; custom.title = 'Своя тема';
+    const cDot = document.createElement('div');
+    cDot.className = 'theme-preset-dot';
+    const cNm = document.createElement('div');
+    cNm.className = 'theme-preset-name'; cNm.textContent = 'Своя тема';
+    custom.append(cDot, cNm);
+    custom.addEventListener('click', () => {
+      ensureCustomDraft();
+      customEditorOpen = true;
+      syncCustomEditor(); renderCustomPreview();
+    });
+    c.appendChild(custom);
+    renderCustomPreview();
   }
+  // ——— Своя тема: черновик цветов (draft), применение, редактор ———
+  let customEditorOpen = false;   // редактор открыт как черновик при НЕ-активном custom
+
+  function customThemeStore() {   // null, если данных нет или они битые
+    try {
+      const raw = JSON.parse(store.get(CUSTOM_THEME_KEY, ''));
+      if (!raw || typeof raw !== 'object' || !raw.seed || typeof raw.seed !== 'object') return null;
+      if (CUSTOM_TOKENS.some(t => !normalizeHexInput(raw[t.key]) || !normalizeHexInput(raw.seed[t.key]))) return null;
+      raw.base = (THEME_PRESETS.includes(raw.base) || raw.base === 'custom') ? raw.base : 'custom';
+      return raw;
+    } catch { return null; }
+  }
+  function saveCustomTheme(draft) { store.set(CUSTOM_THEME_KEY, JSON.stringify(draft)); }
+
+  function normalizeHexInput(v) {          // '#abc'→'#aabbcc'; пустое/мусор → null (ничего не применяется)
+    let s = String(v == null ? '' : v).trim().toLowerCase().replace(/^#?/, '');
+    if (/^[0-9a-f]{3}$/.test(s)) s = s.split('').map(ch => ch + ch).join('');
+    return /^[0-9a-f]{6}$/.test(s) ? '#' + s : null;
+  }
+  function parseCssColor(v) {              // '#rgb' | '#rrggbb' | 'rgb()' | 'rgba()' → {r,g,b,a} | null
+    const s = String(v == null ? '' : v).trim().toLowerCase();
+    let m = s.match(/^#([0-9a-f]{3})$/);
+    if (m) return { r: parseInt(m[1][0] + m[1][0], 16), g: parseInt(m[1][1] + m[1][1], 16), b: parseInt(m[1][2] + m[1][2], 16), a: 1 };
+    m = s.match(/^#([0-9a-f]{6})$/);
+    if (m) return { r: parseInt(m[1].slice(0, 2), 16), g: parseInt(m[1].slice(2, 4), 16), b: parseInt(m[1].slice(4, 6), 16), a: 1 };
+    m = s.match(/^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+)\s*)?\)$/);
+    if (m) return { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : Math.min(1, Math.max(0, +m[4])) };
+    return null;
+  }
+  function rgbToHex(c) {
+    const h = n => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0');
+    return '#' + h(c.r) + h(c.g) + h(c.b);
+  }
+  function hexToRgb(hex) {
+    const h = normalizeHexInput(hex);
+    if (!h) return { r: 0, g: 0, b: 0 };
+    return { r: parseInt(h.slice(1, 3), 16), g: parseInt(h.slice(3, 5), 16), b: parseInt(h.slice(5, 7), 16) };
+  }
+  function hexToGlow(hex) {                // '#7a5cff' → '122,92,255' для rgba(var(--glow), α)
+    const h = normalizeHexInput(hex); if (!h) return null;
+    const c = hexToRgb(h);
+    return c.r + ',' + c.g + ',' + c.b;
+  }
+  function bgLuminance(hex) {              // 0.2126*R + 0.7152*G + 0.0722*B (R,G,B нормализованы в 0..1)
+    const h = normalizeHexInput(hex); if (!h) return 0;
+    const c = hexToRgb(h);
+    return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255;
+  }
+  function syncThemeByBg(bg) {             // > 0.5 → light: блок html[data-theme="light"] перекрывает хардкод rgba(255,255,255,…)
+    const next = bgLuminance(bg) > 0.5 ? 'light' : 'dark';
+    if (settings.theme !== next) { settings.theme = next; applyTheme(); }
+  }
+  function customSeedSnapshot() {          // hex-зеркало текущих значений; rgba (напр. --text-2) — композит поверх фона
+    const cs = getComputedStyle(document.documentElement);
+    const bg = parseCssColor(cs.getPropertyValue('--bg')) || { r: 0, g: 0, b: 0, a: 1 };
+    const seed = {};
+    CUSTOM_TOKENS.forEach(t => {
+      const c = parseCssColor(cs.getPropertyValue(t.token));
+      if (!c) { seed[t.key] = '#000000'; return; }
+      seed[t.key] = c.a < 1
+        ? rgbToHex({ r: c.a * c.r + (1 - c.a) * bg.r, g: c.a * c.g + (1 - c.a) * bg.g, b: c.a * c.b + (1 - c.a) * bg.b })
+        : rgbToHex(c);
+    });
+    return seed;
+  }
+  function ensureCustomDraft() {           // seed+base фиксируются при первом открытии редактора
+    let draft = customThemeStore();
+    if (!draft) {
+      const seed = customSeedSnapshot();
+      draft = { base: settings.themePreset === 'custom' ? 'custom' : settings.themePreset, seed };
+      CUSTOM_TOKENS.forEach(t => { draft[t.key] = seed[t.key]; });
+      saveCustomTheme(draft);
+    }
+    return draft;
+  }
+  function applyCustomTheme() {
+    const draft = customThemeStore(); if (!draft) return;
+    const manual = !!document.documentElement.getAttribute('data-accent');  // '' при init = не ручной
+    CUSTOM_TOKENS.forEach(t => {
+      if (manual && t.key === 'accent') return;   // ручной пикер сильнее — правило в CSS победит
+      document.documentElement.style.setProperty(t.token, draft[t.key]);
+    });
+    if (manual) {
+      document.documentElement.style.removeProperty('--accent');
+      document.documentElement.style.removeProperty('--glow');
+    } else {
+      const glow = hexToGlow(draft.accent);
+      if (glow) document.documentElement.style.setProperty('--glow', glow);
+    }
+    syncThemeByBg(draft.bg);
+  }
+  function clearCustomThemeInline() {
+    CUSTOM_TOKENS.forEach(t => document.documentElement.style.removeProperty(t.token));
+    document.documentElement.style.removeProperty('--glow');
+  }
+  function renderCustomPreview() {         // превью 9-й плитки = черновик (или --bg)
+    const tile = el.themePresets.querySelector('.theme-preset[data-preset="custom"]');
+    if (!tile) return;
+    const draft = customThemeStore();
+    if (!draft) { tile.style.background = 'var(--bg)'; return; }
+    tile.style.background = 'linear-gradient(135deg, ' + draft.bg + ', ' + draft.accent + ')';
+    const dot = tile.querySelector('.theme-preset-dot');
+    if (dot) { dot.style.background = draft.accent; dot.style.color = draft.accent; }
+  }
+  function renderCustomEditor() {          // сетка из 8 полей; обработчики вешаем один раз
+    if (el.customEditorGrid.dataset.ready) return;
+    el.customEditorGrid.dataset.ready = '1';
+    CUSTOM_TOKENS.forEach(t => {
+      const row = document.createElement('div'); row.className = 'custom-field';
+      const label = document.createElement('label'); label.className = 'custom-field-label'; label.textContent = t.label;
+      const color = document.createElement('input');
+      color.type = 'color'; color.dataset.token = t.key;
+      const hex = document.createElement('input');
+      hex.type = 'text'; hex.className = 'custom-hex'; hex.maxLength = 7;
+      hex.spellcheck = false; hex.dataset.token = t.key; hex.placeholder = '#000000';
+      const reset = document.createElement('button');
+      reset.type = 'button'; reset.className = 'custom-field-reset'; reset.dataset.token = t.key;
+      reset.title = 'Вернуть цвет базы'; reset.textContent = '×';
+      row.append(label, color, hex, reset);
+      el.customEditorGrid.append(row);
+    });
+    el.customEditorGrid.addEventListener('input', onCustomEditorInput);
+    el.customEditorGrid.addEventListener('change', onCustomEditorInput);
+    // Пустой/битый hex: не применяется, поле подсвечивается; на blur возврат к валидному
+    el.customEditorGrid.addEventListener('blur', e => {
+      const t = e.target;
+      if (!(t instanceof HTMLInputElement) || t.type !== 'text' || !t.dataset.token) return;
+      const draft = customThemeStore();
+      if (draft && t.dataset.token in draft) { t.value = draft[t.dataset.token].toUpperCase(); t.classList.remove('invalid'); }
+    }, true);
+    el.customEditorGrid.addEventListener('click', e => {
+      const btn = e.target.closest('.custom-field-reset'); if (!btn) return;
+      const draft = ensureCustomDraft();
+      draft[btn.dataset.token] = draft.seed[btn.dataset.token];
+      saveCustomTheme(draft);
+      applyCustomTheme();                              // живое применение (draft и custom)
+      syncCustomEditor(); renderCustomPreview();
+    });
+  }
+  function onCustomEditorInput(e) {
+    const t = e.target;
+    if (!(t instanceof HTMLInputElement) || !t.dataset.token) return;
+    const key = t.dataset.token;
+    if (!CUSTOM_TOKENS.some(x => x.key === key)) return;
+    const value = normalizeHexInput(t.value);
+    if (!value) { if (t.type === 'text') t.classList.add('invalid'); return; }   // пустое — ничего не трогаем
+    t.classList.remove('invalid');
+    const draft = ensureCustomDraft();
+    draft[key] = value;
+    saveCustomTheme(draft);                                    // автосохранение
+    if (key === 'accent') {                                    // правка акцента = ручной выбор
+      document.documentElement.removeAttribute('data-accent'); // ДО apply: иначе правило пикера
+      store.remove('nova_accent');                             // перебьёт инлайн-акцент
+      renderAccentPicker();
+    }
+    applyCustomTheme();                                        // живое применение (draft и custom)
+    if (t.type === 'text') t.value = value.toUpperCase();
+    syncCustomEditor(); renderCustomPreview();
+  }
+  function syncCustomEditor() {
+    const open = settings.themePreset === 'custom' || customEditorOpen;
+    el.customThemeEditor.classList.toggle('hidden', !open);
+    const draft = customThemeStore();
+    if (!draft) { el.customBaseLabel.textContent = ''; return; }
+    CUSTOM_TOKENS.forEach(t => {
+      const color = el.customEditorGrid.querySelector('input[type="color"][data-token="' + t.key + '"]');
+      const hex = el.customEditorGrid.querySelector('input.custom-hex[data-token="' + t.key + '"]');
+      if (color) color.value = draft[t.key];
+      if (hex && document.activeElement !== hex) {              // не перетираем то, что печатает юзер
+        hex.value = draft[t.key].toUpperCase();
+        hex.classList.remove('invalid');
+      }
+    });
+    // Индикатор базы: от какого пресета снят seed (имена — из THEMES)
+    const baseName = draft.base === 'custom' ? 'Своя тема'
+      : ((THEMES.find(x => x.id === draft.base) || {}).name || 'Своя тема');
+    el.customBaseLabel.textContent = 'База: ' + baseName;
+  }
+  // Футер редактора: Применить / Сбросить / Экспорт / Импорт
+  on(el.customApplyBtn, 'click', () => {
+    ensureCustomDraft();
+    customEditorOpen = true;
+    applyThemePreset('custom', true);   // userPick: сброс ручного акцента + notify «Пресет: Своя тема»
+  });
+  on(el.customResetBtn, 'click', () => {
+    const draft = ensureCustomDraft();
+    CUSTOM_TOKENS.forEach(t => { draft[t.key] = draft.seed[t.key]; });
+    saveCustomTheme(draft);
+    applyCustomTheme();                                  // живое применение (draft и custom)
+    syncCustomEditor(); renderCustomPreview();
+  });
+  on(el.customExportBtn, 'click', () => {
+    const draft = customThemeStore();
+    if (!draft) { notify('Нет данных для экспорта', 'error'); return; }
+    const url = URL.createObjectURL(new Blob([JSON.stringify(draft, null, 2)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url; a.download = 'nova-theme.noverset';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    notify('Тема экспортирована');
+  });
+  on(el.customImportBtn, 'click', () => el.customImportInput.click());
+  on(el.customImportInput, 'change', async () => {
+    const file = el.customImportInput.files && el.customImportInput.files[0];
+    el.customImportInput.value = '';
+    if (!file) return;
+    try {
+      const raw = JSON.parse(await file.text());
+      if (!raw || typeof raw !== 'object' || !raw.seed || typeof raw.seed !== 'object') throw new Error('bad');
+      const clean = {
+        base: (THEME_PRESETS.includes(raw.base) || raw.base === 'custom') ? raw.base : 'custom',
+        seed: {}
+      };
+      let bad = 0;
+      CUSTOM_TOKENS.forEach(t => {
+        const s = normalizeHexInput(raw.seed[t.key]); const v = normalizeHexInput(raw[t.key]);
+        if (!s || !v) bad++;
+        clean.seed[t.key] = s || '#000000';
+        clean[t.key] = v || clean.seed[t.key];
+      });
+      saveCustomTheme(clean);
+      if (settings.themePreset === 'custom') applyCustomTheme(); else clearCustomThemeInline();
+      syncCustomEditor(); renderCustomPreview();
+      notify(bad ? 'Импортировано, невалидных полей: ' + bad : 'Тема импортирована');
+    } catch { notify('Не удалось импортировать файл', 'error'); }
+  });
   function applyToggle(btn, on) {
     if (!btn) return;
     btn.textContent = on ? 'Вкл' : 'Выкл';
@@ -2158,6 +2431,12 @@
       b.addEventListener('click', () => {
         document.documentElement.setAttribute('data-accent', a);
         store.set('nova_accent', a);
+        // «Своя тема»: инлайн-акцент (JS setProperty) сильнее селекторного правила —
+        // снимаем его, чтобы выбор пикера реально победил.
+        if (settings.themePreset === 'custom') {
+          document.documentElement.style.removeProperty('--accent');
+          document.documentElement.style.removeProperty('--glow');
+        }
         c.querySelectorAll('.accent-preset').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
         if (state.currentTrack?.cover) updateAmbientFromCover(coverUrl(state.currentTrack.cover));
@@ -2973,6 +3252,7 @@
   updateMiniPlayer();
   updateQueue();
   renderAccentPicker();
+  renderCustomEditor();
   renderThemePresets();
   applyThemePreset(settings.themePreset);
   renderBgPresets();

@@ -761,6 +761,20 @@
             <div class="theme-presets" id="themePresets"></div>
           </div>
           <div class="settings-subsection">
+            <div class="setting-label" style="margin-bottom:8px">Своя тема</div>
+            <div class="custom-editor hidden" id="customThemeEditor">
+              <div class="custom-editor-grid" id="customEditorGrid"></div>
+              <div class="custom-editor-footer">
+                <span class="custom-base" id="customBaseLabel"></span>
+                <button id="customApplyBtn" class="settings-action primary">Применить</button>
+                <button id="customResetBtn" class="settings-action">Сбросить</button>
+                <button id="customExportBtn" class="settings-action">Экспорт</button>
+                <button id="customImportBtn" class="settings-action">Импорт</button>
+                <input type="file" id="customImportInput" accept=".json,.noverset,application/json" hidden>
+              </div>
+            </div>
+          </div>
+          <div class="settings-subsection">
             <div class="setting-label" style="margin-bottom:8px">Цвет акцента</div>
             <div class="accent-presets" id="accentPresets"></div>
           </div>
