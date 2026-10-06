@@ -117,7 +117,7 @@
     'themeToggle','cursorToggle','accentPresets','backgroundBtn','backgroundResetBtn','bgPresets','settingsVolumeValue',
     'autoplayToggle','notificationsToggle','hotkeysToggle','defaultSource','settingsOpenFileBtn',
     'settingsAccountName','settingsAccountHint','settingsAccountBtn',
-    'clearHistory2','clearFavorites2','clearCacheBtn','diagnostics',
+    'clearHistory2','clearFavorites2','clearCacheBtn','diagnostics','settingsView','settingsClose',
     'workshopModal','workshopModalClose','workshopGrid','workshopSearch','workshopPublish','workshopCategories',
     'workshopPublishModal','workshopPublishClose','workshopNameInput','workshopCategorySelect','workshopPublishSubmit',
     'queuePanel','queueClear','queueClose','queueContent',
@@ -1865,6 +1865,29 @@
     el.songInfoModal.setAttribute('aria-hidden', 'true');
   }
 
+  const SETTINGS_TABS = ['general', 'interface', 'playback', 'account', 'data'];
+  function setSettingsTab(tab) {
+    const t = SETTINGS_TABS.includes(tab) ? tab : 'general';
+    document.querySelectorAll('.settings-nav-btn').forEach(b =>
+      b.classList.toggle('active', b.dataset.settingsTab === t));
+    document.querySelectorAll('.settings-panel').forEach(p =>
+      p.classList.toggle('hidden', p.dataset.settingsPanel !== t));
+    store.set('nova_settings_tab', t);
+  }
+  function openSettings() {
+    if (el.settingsView.classList.contains('open')) return;
+    renderSettingsUi();
+    refreshDiagnostics();
+    setSettingsTab(store.get('nova_settings_tab', 'general'));
+    el.settingsView.classList.add('open');
+    el.settingsView.setAttribute('aria-hidden', 'false');
+  }
+  function closeSettings() {
+    if (!el.settingsView.classList.contains('open')) return;
+    el.settingsView.classList.remove('open');
+    el.settingsView.setAttribute('aria-hidden', 'true');
+  }
+
   let lyricsTimer = null, lyricsLines = [], lyricsActiveIndex = -1, lyricsRetried = false;
 
   function parseLrc(lrc) {
@@ -1997,7 +2020,7 @@
     const map = {
       home: $('homeView'), search: $('searchView'), library: $('libraryView'),
       favorites: $('favoritesView'), playlists: $('playlistsView'), playlist: $('playlistView'),
-      settings: $('settingsView'), player: $('playerView'), artist: $('artistView'), album: $('albumView')
+      player: $('playerView'), artist: $('artistView'), album: $('albumView')
     };
     Object.entries(map).forEach(([k, node]) => { if (node) node.classList.toggle('hidden', k !== view); });
     document.querySelectorAll('.nav-btn').forEach(b => {
@@ -2012,7 +2035,6 @@
     if (view === 'library') { renderHistory(); renderLocal(); }
     if (view === 'favorites') renderFavorites();
     if (view === 'playlists') { loadPlaylists(); renderPlaylists(); }
-    if (view === 'settings') { renderSettingsUi(); refreshDiagnostics(); }
     if (view === 'player') { updatePlayerView(); updateQueue(); }
   }
   function goBack() {
@@ -2419,7 +2441,7 @@
     btn.addEventListener('click', () => {
       const v = btn.dataset.view;
       if (v === 'workshop') { openWorkshop(); return; }
-      if (v === 'settings') { showView('settings'); return; }
+      if (v === 'settings') { openSettings(); return; }
       if (v === 'search') { showView('search'); el.searchInput.focus(); return; }
       showView(v);
     });
@@ -2679,6 +2701,11 @@
 
   on(el.workshopModalClose, 'click', closeWorkshop);
   on(el.workshopModal, 'click', e => { if (e.target === el.workshopModal) closeWorkshop(); });
+  on(el.settingsClose, 'click', closeSettings);
+  on(el.settingsView, 'click', e => { if (e.target === el.settingsView) closeSettings(); });
+  document.querySelectorAll('.settings-nav-btn').forEach(btn => {
+    btn.addEventListener('click', () => setSettingsTab(btn.dataset.settingsTab));
+  });
   on(el.workshopSearch, 'input', e => {
     workshopQuery = e.target.value.trim();
     clearTimeout(workshopSearchTimer);
@@ -2745,6 +2772,7 @@
       else if (el.workshopModal.classList.contains('open')) closeWorkshop();
       else if (el.playlistPickerModal.classList.contains('open')) closePlaylistPicker();
       else if (el.playlistCreateModal.classList.contains('open')) closePlaylistCreate();
+      else if (el.settingsView.classList.contains('open')) closeSettings();
       else if (el.queuePanel.classList.contains('open')) { el.queuePanel.classList.remove('open'); el.queuePanel.setAttribute('aria-hidden', 'true'); }
       hideContextMenu();
       return;
