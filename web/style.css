@@ -648,6 +648,8 @@ body.has-background #backgroundLayer { opacity: 1; }
 .theme-preset.active::after { content: '✓'; position: absolute; top: 6px; right: 6px;
   width: 18px; height: 18px; display: grid; place-items: center;
   background: #fff; color: #000; border-radius: 50%; font-size: 11px; font-weight: 700; }
+/* Имя плитки: по умолчанию белое с тёмной тенью; для светлых фонов
+   («Светлая», светлый черновик «Своей») JS ставит inline color:#000 + светлую тень */
 .theme-preset-name { position: absolute; bottom: 8px; left: 10px; color: #fff; font-size: 11px; font-weight: 600;
   text-shadow: 0 1px 3px rgba(0,0,0,.65); }
 .theme-preset-dot { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 10px currentColor; }
@@ -688,8 +690,12 @@ body.has-background #backgroundLayer { opacity: 1; }
 .diag-val { color: #ccc; text-align: right; max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
 
 /* SETTINGS MODAL */
+/* grid-template-rows: minmax(0,1fr) — ряд сжимается под max-height карточки,
+   иначе .settings-body растягивается по контенту, обрезается overflow:hidden
+   модалки и скролл не работает (контент ниже 660px был недоступен) */
 .settings-modal-card {
   display: grid; grid-template-columns: 220px 1fr;
+  grid-template-rows: minmax(0, 1fr);
   width: min(880px, 100%); max-height: min(660px, calc(100vh - 40px)); overflow: hidden; }
 .settings-sidebar { padding: 24px 14px 18px; border-right: 1px solid rgba(255,255,255,.07);
   background: rgba(255,255,255,.02); overflow-y: auto; }
@@ -1058,7 +1064,7 @@ html[data-theme="light"] .nova-cursor-ring.hover { border-color: rgba(0,0,0,.7);
   .source-select-wrap { display: none; }
 }
 @media (max-width: 720px) {
-  .settings-modal-card { grid-template-columns: 1fr; max-height: calc(100vh - 24px); }
+  .settings-modal-card { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); max-height: calc(100vh - 24px); }
   .settings-sidebar { border-right: 0; border-bottom: 1px solid rgba(255,255,255,.07); padding: 18px 14px 12px; }
   .settings-nav { flex-direction: row; overflow-x: auto; margin-top: 12px; padding-bottom: 2px; }
   .settings-nav-btn { flex: 0 0 auto; text-align: center; height: 32px; }

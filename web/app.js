@@ -2139,6 +2139,14 @@
     document.querySelectorAll('.theme-preset').forEach(p => p.classList.toggle('active', p.dataset.preset === n));
     syncCustomEditor();
   }
+  // Имя плитки — адаптивно к luminance её фона: чёрный текст на светлых
+  // пресетах («Светлая» #f5f5f5), белый на тёмных; тень зеркально.
+  function applyTileNameColor(nameEl, bgCss) {
+    const p = parseCssColor(bgCss);
+    const light = p ? bgLuminance(rgbToHex(p)) > 0.5 : false;
+    nameEl.style.color = light ? '#000' : '#fff';
+    nameEl.style.textShadow = light ? '0 1px 3px rgba(255,255,255,.7)' : '';
+  }
   function renderThemePresets() {
     const c = el.themePresets; if (!c) return;
     c.innerHTML = '';
@@ -2152,6 +2160,7 @@
       dot.style.background = t.accent; dot.style.color = t.accent;
       const nm = document.createElement('div');
       nm.className = 'theme-preset-name'; nm.textContent = t.name;
+      applyTileNameColor(nm, t.bg);
       b.append(dot, nm);
       b.addEventListener('click', () => applyThemePreset(t.id, true));
       c.appendChild(b);
@@ -2273,9 +2282,15 @@
   function renderCustomPreview() {         // превью 9-й плитки = черновик (или --bg)
     const tile = el.themePresets.querySelector('.theme-preset[data-preset="custom"]');
     if (!tile) return;
+    const name = tile.querySelector('.theme-preset-name');
     const draft = customThemeStore();
-    if (!draft) { tile.style.background = 'var(--bg)'; return; }
+    if (!draft) {
+      tile.style.background = 'var(--bg)';
+      if (name) applyTileNameColor(name, getComputedStyle(document.documentElement).getPropertyValue('--bg'));
+      return;
+    }
     tile.style.background = 'linear-gradient(135deg, ' + draft.bg + ', ' + draft.accent + ')';
+    if (name) applyTileNameColor(name, draft.bg);   // якорь — bg: он же задаёт light/dark тему
     const dot = tile.querySelector('.theme-preset-dot');
     if (dot) { dot.style.background = draft.accent; dot.style.color = draft.accent; }
   }
