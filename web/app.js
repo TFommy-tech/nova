@@ -29,10 +29,21 @@
 
   const CURSOR_VARIANTS = ['dot', 'ring', 'glow', 'system'];
   const CURSOR_LABELS = { dot: 'Точка', ring: 'Кольцо', glow: 'Свечение', system: 'Системный' };
+  const THEME_PRESETS = ['dark','devblog','light','ocean','sunset','forest','midnight','dawn'];
+  const THEMES = [
+    { id: 'dark',     name: 'Тёмная',   bg: '#0a0a0a', accent: '#ffffff' },
+    { id: 'devblog',  name: 'Devblog',  bg: '#0a0e14', accent: '#5ba3f5' },
+    { id: 'light',    name: 'Светлая',  bg: '#f5f5f5', accent: '#000000' },
+    { id: 'ocean',    name: 'Океан',    bg: '#0a0a1e', accent: '#7a5cff' },
+    { id: 'sunset',   name: 'Закат',    bg: '#1a0a08', accent: '#ff6b4a' },
+    { id: 'forest',   name: 'Forest',   bg: '#0a140a', accent: '#4ade80' },
+    { id: 'midnight', name: 'Midnight', bg: '#050508', accent: '#a855f7' },
+    { id: 'dawn',     name: 'Dawn',     bg: '#1a1510', accent: '#f0a868' }
+  ];
   const savedCursor = store.get('nova_cursor', 'ring');
   const initialCursor = CURSOR_VARIANTS.includes(savedCursor) ? savedCursor : 'ring';
   document.documentElement.setAttribute('data-cursor', initialCursor);
-  document.documentElement.setAttribute('data-accent', store.get('nova_accent', 'purple'));
+  document.documentElement.setAttribute('data-accent', store.get('nova_accent', ''));
 
   const _v = Number(store.get('nova_volume', '100'));
   const initialVolume = Number.isFinite(_v) && _v >= 0 && _v <= 100 ? Math.round(_v) : 100;
@@ -68,6 +79,10 @@
 
   const settings = {
     theme: store.get('nova_theme', 'dark'),
+    themePreset: (() => {
+      const v = store.get('nova_theme_preset', 'dark');
+      return THEME_PRESETS.includes(v) ? v : 'dark';
+    })(),
     notifications: store.get('nova_notifications', '1') === '1',
     hotkeys: store.get('nova_hotkeys', '1') === '1',
     autoplay: store.get('nova_autoplay', '1') === '1',
@@ -114,7 +129,7 @@
     'nowTitle','nowArtist','nowChips','progress','currentTime','duration',
     'downloadBtn','repeatBtn','prevBtn','largePlayBtn','largePlayIcon','nextBtn','shuffleBtn','favoriteBtn','queueToggleBtn','moreBtn',
     'volumeLarge','equalizerBtn','similarBtn',
-    'themeToggle','cursorToggle','accentPresets','backgroundBtn','backgroundResetBtn','bgPresets','settingsVolumeValue',
+    'themeToggle','cursorToggle','accentPresets','themePresets','backgroundBtn','backgroundResetBtn','bgPresets','settingsVolumeValue',
     'autoplayToggle','notificationsToggle','hotkeysToggle','defaultSource','settingsOpenFileBtn',
     'settingsAccountName','settingsAccountHint','settingsAccountBtn',
     'clearHistory2','clearFavorites2','clearCacheBtn','diagnostics','settingsView','settingsClose',
@@ -2075,6 +2090,44 @@
     if (el.themeToggle) el.themeToggle.textContent = settings.theme === 'dark' ? 'Тёмная' : 'Светлая';
     store.set('nova_theme', settings.theme);
   }
+  function applyThemePreset(name, userPick = false) {
+    const n = THEME_PRESETS.includes(name) ? name : 'dark';
+    settings.themePreset = n;
+    document.documentElement.setAttribute('data-theme-preset', n);
+    store.set('nova_theme_preset', n);
+    // Синхронизация с существующей light/dark-темой: «Светлая» включает правила
+    // html[data-theme="light"], остальные пресеты гасят их — иначе светлые
+    // переопределения протекут в цветные схемы.
+    settings.theme = n === 'light' ? 'light' : 'dark';
+    applyTheme();
+    // Ручной выбор пресета сбрасывает ручной акцент (персистентно, чтобы после
+    // reload не «воскрес»). init/renderSettingsUi сюда не попадают.
+    if (userPick) {
+      document.documentElement.removeAttribute('data-accent');
+      store.remove('nova_accent');
+      if (el.accentPresets) el.accentPresets.querySelectorAll('.accent-preset').forEach(x => x.classList.remove('active'));
+      notify('Пресет: ' + name);
+    }
+    document.querySelectorAll('.theme-preset').forEach(p => p.classList.toggle('active', p.dataset.preset === n));
+  }
+  function renderThemePresets() {
+    const c = el.themePresets; if (!c) return;
+    c.innerHTML = '';
+    THEMES.forEach(t => {
+      const b = document.createElement('button');
+      b.className = 'theme-preset' + (t.id === settings.themePreset ? ' active' : '');
+      b.dataset.preset = t.id; b.title = t.name;
+      b.style.background = t.bg;
+      const dot = document.createElement('div');
+      dot.className = 'theme-preset-dot';
+      dot.style.background = t.accent; dot.style.color = t.accent;
+      const nm = document.createElement('div');
+      nm.className = 'theme-preset-name'; nm.textContent = t.name;
+      b.append(dot, nm);
+      b.addEventListener('click', () => applyThemePreset(t.id, true));
+      c.appendChild(b);
+    });
+  }
   function applyToggle(btn, on) {
     if (!btn) return;
     btn.textContent = on ? 'Вкл' : 'Выкл';
@@ -2090,13 +2143,14 @@
       el.defaultSource.value = settings.defaultSource;
     if (el.settingsVolumeValue) el.settingsVolumeValue.textContent = state.volume + '%';
     if (el.cursorToggle) el.cursorToggle.textContent = CURSOR_LABELS[state.cursor] || 'Кольцо';
-    renderAccentPicker(); renderBgPresets(); renderUser();
+    renderAccentPicker(); renderThemePresets(); applyThemePreset(settings.themePreset);
+    renderBgPresets(); renderUser();
   }
   function renderAccentPicker() {
     const c = el.accentPresets; if (!c) return;
     c.innerHTML = '';
     const list = ['purple','blue','cyan','teal','green','lime','yellow','orange','red','pink','rose','magenta','indigo','white'];
-    const cur = document.documentElement.getAttribute('data-accent') || 'purple';
+    const cur = document.documentElement.getAttribute('data-accent');
     list.forEach(a => {
       const b = document.createElement('button');
       b.className = 'accent-preset' + (a === cur ? ' active' : '');
@@ -2555,8 +2609,7 @@
   on(el.continueAsGuest, 'click', closeLoginModal);
 
   on(el.themeToggle, 'click', () => {
-    settings.theme = settings.theme === 'dark' ? 'light' : 'dark';
-    applyTheme();
+    applyThemePreset(settings.theme === 'dark' ? 'light' : 'dark', true);
   });
   on(el.cursorToggle, 'click', () => {
     const idx = CURSOR_VARIANTS.indexOf(state.cursor);
@@ -2920,6 +2973,8 @@
   updateMiniPlayer();
   updateQueue();
   renderAccentPicker();
+  renderThemePresets();
+  applyThemePreset(settings.themePreset);
   renderBgPresets();
   refreshDiagnostics();
 
