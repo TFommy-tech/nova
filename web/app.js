@@ -40,8 +40,6 @@
     { id: 'midnight', name: 'Midnight', bg: '#050508', accent: '#a855f7' },
     { id: 'dawn',     name: 'Dawn',     bg: '#1a1510', accent: '#f0a868' }
   ];
-  // «Своя тема»: 8 редактируемых токенов (значения храним вида '#rrggbb').
-  // --glow всегда производится из accent; --surface не редактируется (см. TODO в style.css).
   const CUSTOM_THEME_KEY = 'nova_custom_theme';
   const CUSTOM_TOKENS = [
     { key: 'bg',      token: '--bg',      label: 'Фон' },
@@ -73,7 +71,6 @@
     background: { src: '' }, queue: [],
     albumContext: null, playlists: [], currentPlaylistId: null,
     searchFilter: 'all', lastSearchArtists: [],
-    // Фильтр источника поиска (all | soundcloud | audius | deezer | youtube)
     sourceFilter: (() => {
       const v = String(store.get('nova_source_filter', 'all')).toLowerCase();
       return ['all', 'soundcloud', 'audius', 'deezer', 'youtube'].includes(v) ? v : 'all';
@@ -99,8 +96,6 @@
     notifications: store.get('nova_notifications', '1') === '1',
     hotkeys: store.get('nova_hotkeys', '1') === '1',
     autoplay: store.get('nova_autoplay', '1') === '1',
-    // Дефолтный источник поиска. Deezer/YouTube сознательно не предлагаем:
-    // на Render они не воспроизводятся.
     defaultSource: (() => {
       const v = String(store.get('nova_default_source', 'all')).toLowerCase();
       return ['all', 'soundcloud', 'audius'].includes(v) ? v : 'all';
@@ -142,7 +137,7 @@
     'nowTitle','nowArtist','nowChips','progress','currentTime','duration',
     'downloadBtn','repeatBtn','prevBtn','largePlayBtn','largePlayIcon','nextBtn','shuffleBtn','favoriteBtn','queueToggleBtn','moreBtn',
     'volumeLarge','equalizerBtn','similarBtn',
-    'themeToggle','cursorToggle','accentPresets','themePresets','customThemeEditor','customEditorGrid','customBaseLabel',
+    'themeToggle','cursorToggle','accentPresets','themePresets','fontSelect','customThemeEditor','customEditorGrid','customBaseLabel',
     'customApplyBtn','customResetBtn','customExportBtn','customImportBtn','customImportInput','backgroundBtn','backgroundResetBtn','bgPresets','settingsVolumeValue',
     'autoplayToggle','notificationsToggle','hotkeysToggle','defaultSource','settingsOpenFileBtn',
     'settingsAccountName','settingsAccountHint','settingsAccountBtn',
@@ -894,8 +889,6 @@
         const badge = document.createElement('div');
         badge.className = 'source-badge';
         if (track._metaOnly && (track.provider === 'deezer' || track.provider === 'youtube')) {
-          // Если выбран именно этот источник, пользователь и так знает, что треки
-          // неиграбельные, — длинная плашка «только метаданные» не нужна.
           const srcNow = state.sourceFilter || 'all';
           if (srcNow === track.provider) {
             badge.textContent = track.provider;
@@ -911,7 +904,7 @@
           badge.style.background = '#ff5500';
           badge.style.borderColor = '#ff5500';
           badge.style.color = '#fff';
-          badge.style.textTransform = 'none'; // иначе CSS сделает «SOUNDCLOUD»
+          badge.style.textTransform = 'none';
         } else {
           badge.textContent = track.provider;
         }
@@ -1534,9 +1527,7 @@
       row.addEventListener('mouseenter', () => prefetchTrack(track), { once: true });
       container.appendChild(row);
     });
-  }
-
-  async function showArtist(id, name) {
+  }  async function showArtist(id, name) {
     showView('artist');
     el.artistHeroName.textContent = name || 'Исполнитель';
     el.artistHeroImage.removeAttribute('src');
@@ -1903,30 +1894,26 @@
     const panels = [...document.querySelectorAll('.settings-panel')];
     const next = panels.find(p => p.dataset.settingsPanel === t);
     const current = panels.find(p => !p.classList.contains('hidden') && !p.classList.contains('leaving'));
-    // мгновенно завершаем незавершённые анимации прошлого переключения (быстрые клики)
     if (settingsTabTimer) { clearTimeout(settingsTabTimer); settingsTabTimer = null; }
     panels.forEach(p => {
       if (p.classList.contains('leaving')) { p.classList.remove('leaving'); p.classList.add('hidden'); }
       p.classList.remove('entering');
     });
     if (!animate || !next || !current || current === next) {
-      // та же вкладка — без анимации
       panels.forEach(p => p.classList.toggle('hidden', p !== next));
     } else {
       const dir = SETTINGS_TABS.indexOf(t) > SETTINGS_TABS.indexOf(current.dataset.settingsPanel) ? 1 : -1;
       current.style.setProperty('--dir', dir);
       next.style.setProperty('--dir', dir);
-      // старая панель: уход + сдвиг, скрывается через 200мс
       current.classList.add('leaving');
       settingsTabTimer = setTimeout(() => {
         current.classList.remove('leaving');
         current.classList.add('hidden');
         settingsTabTimer = null;
       }, 200);
-      // новая панель: вход с противоположным сдвигом
       next.classList.remove('hidden');
       next.classList.add('entering');
-      void next.offsetHeight; // форсируем reflow — фиксируем стартовое состояние
+      void next.offsetHeight;
       next.classList.remove('entering');
     }
     store.set('nova_settings_tab', t);
@@ -2000,7 +1987,6 @@
     try {
       const r = await fetch(apiBase() + '/api/lyrics?' + params);
       const d = await r.json().catch(() => ({}));
-      // F2: трек сменился, пока грузился текст — чужой ответ не трогаем
       if (box.dataset.trackKey !== trackKey(track)) return;
       if (!r.ok || !d?.found) {
         if (!lyricsRetried) {
@@ -2109,10 +2095,6 @@
     settings.themePreset = n;
     document.documentElement.setAttribute('data-theme-preset', n);
     store.set('nova_theme_preset', n);
-    // Ручной выбор пресета сбрасывает ручной акцент (персистентно, чтобы после
-    // reload не «воскрес»). init/renderSettingsUi сюда не попадают.
-    // Для «Своей» — ДО применения цветов: иначе правило пикера на мгновение
-    // перебьёт инлайн-акцент черновика.
     if (userPick) {
       document.documentElement.removeAttribute('data-accent');
       store.remove('nova_accent');
@@ -2121,26 +2103,30 @@
     if (n === 'custom') {
       customEditorOpen = true;
       ensureCustomDraft();
-      applyCustomTheme();   // setProperty ×8 + glow + data-theme по luminance(bg)
+      applyCustomTheme();
     } else {
       if (userPick) customEditorOpen = false;
       clearCustomThemeInline();
-      // Синхронизация с существующей light/dark-темой: «Светлая» включает правила
-      // html[data-theme="light"], остальные пресеты гасят их — иначе светлые
-      // переопределения протекут в цветные схемы. У «Своей» фон любой — там синк
-      // идёт по luminance внутри applyCustomTheme (syncThemeByBg).
       settings.theme = n === 'light' ? 'light' : 'dark';
       applyTheme();
-      // Черновик-превью живёт, пока открыт редактор (переоткрытие настроек
-      // не затирает его). Явный выбор пресета (userPick) закрыл редактор выше.
       if (customEditorOpen && customThemeStore()) applyCustomTheme();
     }
     if (userPick) notify('Пресет: ' + (n === 'custom' ? 'Своя тема' : n));
     document.querySelectorAll('.theme-preset').forEach(p => p.classList.toggle('active', p.dataset.preset === n));
     syncCustomEditor();
   }
-  // Имя плитки — адаптивно к luminance её фона: чёрный текст на светлых
-  // пресетах («Светлая» #f5f5f5), белый на тёмных; тень зеркально.
+
+  // ⬇⬇⬇ ДОБАВЛЕНО: функция выбора шрифта приложения ⬇⬇⬇
+  function applyFont(name) {
+    const v = String(name || 'Inter');
+    document.documentElement.style.setProperty('--font-app',
+      v === 'system-ui'
+        ? 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif'
+        : '"' + v + '", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif');
+    store.set('nova_font', v);
+  }
+  // ⬆⬆⬆ КОНЕЦ добавленного ⬆⬆⬆
+
   function applyTileNameColor(nameEl, bgCss) {
     const p = parseCssColor(bgCss);
     const light = p ? bgLuminance(rgbToHex(p)) > 0.5 : false;
@@ -2165,9 +2151,6 @@
       b.addEventListener('click', () => applyThemePreset(t.id, true));
       c.appendChild(b);
     });
-    // 9-я плитка: «Своя тема». Клик открывает редактор и не активирует пресет —
-    // активация только кнопкой «Применить» (иначе клик по гриду терял бы
-    // стандартный пресет ради черновика).
     const custom = document.createElement('button');
     custom.className = 'theme-preset' + (settings.themePreset === 'custom' ? ' active' : '');
     custom.dataset.preset = 'custom'; custom.title = 'Своя тема';
@@ -2184,10 +2167,9 @@
     c.appendChild(custom);
     renderCustomPreview();
   }
-  // ——— Своя тема: черновик цветов (draft), применение, редактор ———
-  let customEditorOpen = false;   // редактор открыт как черновик при НЕ-активном custom
+  let customEditorOpen = false;
 
-  function customThemeStore() {   // null, если данных нет или они битые
+  function customThemeStore() {
     try {
       const raw = JSON.parse(store.get(CUSTOM_THEME_KEY, ''));
       if (!raw || typeof raw !== 'object' || !raw.seed || typeof raw.seed !== 'object') return null;
@@ -2198,12 +2180,12 @@
   }
   function saveCustomTheme(draft) { store.set(CUSTOM_THEME_KEY, JSON.stringify(draft)); }
 
-  function normalizeHexInput(v) {          // '#abc'→'#aabbcc'; пустое/мусор → null (ничего не применяется)
+  function normalizeHexInput(v) {
     let s = String(v == null ? '' : v).trim().toLowerCase().replace(/^#?/, '');
     if (/^[0-9a-f]{3}$/.test(s)) s = s.split('').map(ch => ch + ch).join('');
     return /^[0-9a-f]{6}$/.test(s) ? '#' + s : null;
   }
-  function parseCssColor(v) {              // '#rgb' | '#rrggbb' | 'rgb()' | 'rgba()' → {r,g,b,a} | null
+  function parseCssColor(v) {
     const s = String(v == null ? '' : v).trim().toLowerCase();
     let m = s.match(/^#([0-9a-f]{3})$/);
     if (m) return { r: parseInt(m[1][0] + m[1][0], 16), g: parseInt(m[1][1] + m[1][1], 16), b: parseInt(m[1][2] + m[1][2], 16), a: 1 };
@@ -2222,21 +2204,21 @@
     if (!h) return { r: 0, g: 0, b: 0 };
     return { r: parseInt(h.slice(1, 3), 16), g: parseInt(h.slice(3, 5), 16), b: parseInt(h.slice(5, 7), 16) };
   }
-  function hexToGlow(hex) {                // '#7a5cff' → '122,92,255' для rgba(var(--glow), α)
+  function hexToGlow(hex) {
     const h = normalizeHexInput(hex); if (!h) return null;
     const c = hexToRgb(h);
     return c.r + ',' + c.g + ',' + c.b;
   }
-  function bgLuminance(hex) {              // 0.2126*R + 0.7152*G + 0.0722*B (R,G,B нормализованы в 0..1)
+  function bgLuminance(hex) {
     const h = normalizeHexInput(hex); if (!h) return 0;
     const c = hexToRgb(h);
     return (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255;
   }
-  function syncThemeByBg(bg) {             // > 0.5 → light: блок html[data-theme="light"] перекрывает хардкод rgba(255,255,255,…)
+  function syncThemeByBg(bg) {
     const next = bgLuminance(bg) > 0.5 ? 'light' : 'dark';
     if (settings.theme !== next) { settings.theme = next; applyTheme(); }
   }
-  function customSeedSnapshot() {          // hex-зеркало текущих значений; rgba (напр. --text-2) — композит поверх фона
+  function customSeedSnapshot() {
     const cs = getComputedStyle(document.documentElement);
     const bg = parseCssColor(cs.getPropertyValue('--bg')) || { r: 0, g: 0, b: 0, a: 1 };
     const seed = {};
@@ -2249,7 +2231,7 @@
     });
     return seed;
   }
-  function ensureCustomDraft() {           // seed+base фиксируются при первом открытии редактора
+  function ensureCustomDraft() {
     let draft = customThemeStore();
     if (!draft) {
       const seed = customSeedSnapshot();
@@ -2261,9 +2243,9 @@
   }
   function applyCustomTheme() {
     const draft = customThemeStore(); if (!draft) return;
-    const manual = !!document.documentElement.getAttribute('data-accent');  // '' при init = не ручной
+    const manual = !!document.documentElement.getAttribute('data-accent');
     CUSTOM_TOKENS.forEach(t => {
-      if (manual && t.key === 'accent') return;   // ручной пикер сильнее — правило в CSS победит
+      if (manual && t.key === 'accent') return;
       document.documentElement.style.setProperty(t.token, draft[t.key]);
     });
     if (manual) {
@@ -2279,7 +2261,7 @@
     CUSTOM_TOKENS.forEach(t => document.documentElement.style.removeProperty(t.token));
     document.documentElement.style.removeProperty('--glow');
   }
-  function renderCustomPreview() {         // превью 9-й плитки = черновик (или --bg)
+  function renderCustomPreview() {
     const tile = el.themePresets.querySelector('.theme-preset[data-preset="custom"]');
     if (!tile) return;
     const name = tile.querySelector('.theme-preset-name');
@@ -2290,11 +2272,11 @@
       return;
     }
     tile.style.background = 'linear-gradient(135deg, ' + draft.bg + ', ' + draft.accent + ')';
-    if (name) applyTileNameColor(name, draft.bg);   // якорь — bg: он же задаёт light/dark тему
+    if (name) applyTileNameColor(name, draft.bg);
     const dot = tile.querySelector('.theme-preset-dot');
     if (dot) { dot.style.background = draft.accent; dot.style.color = draft.accent; }
   }
-  function renderCustomEditor() {          // сетка из 8 полей; обработчики вешаем один раз
+  function renderCustomEditor() {
     if (el.customEditorGrid.dataset.ready) return;
     el.customEditorGrid.dataset.ready = '1';
     CUSTOM_TOKENS.forEach(t => {
@@ -2313,7 +2295,6 @@
     });
     el.customEditorGrid.addEventListener('input', onCustomEditorInput);
     el.customEditorGrid.addEventListener('change', onCustomEditorInput);
-    // Пустой/битый hex: не применяется, поле подсвечивается; на blur возврат к валидному
     el.customEditorGrid.addEventListener('blur', e => {
       const t = e.target;
       if (!(t instanceof HTMLInputElement) || t.type !== 'text' || !t.dataset.token) return;
@@ -2325,7 +2306,7 @@
       const draft = ensureCustomDraft();
       draft[btn.dataset.token] = draft.seed[btn.dataset.token];
       saveCustomTheme(draft);
-      applyCustomTheme();                              // живое применение (draft и custom)
+      applyCustomTheme();
       syncCustomEditor(); renderCustomPreview();
     });
   }
@@ -2335,17 +2316,17 @@
     const key = t.dataset.token;
     if (!CUSTOM_TOKENS.some(x => x.key === key)) return;
     const value = normalizeHexInput(t.value);
-    if (!value) { if (t.type === 'text') t.classList.add('invalid'); return; }   // пустое — ничего не трогаем
+    if (!value) { if (t.type === 'text') t.classList.add('invalid'); return; }
     t.classList.remove('invalid');
     const draft = ensureCustomDraft();
     draft[key] = value;
-    saveCustomTheme(draft);                                    // автосохранение
-    if (key === 'accent') {                                    // правка акцента = ручной выбор
-      document.documentElement.removeAttribute('data-accent'); // ДО apply: иначе правило пикера
-      store.remove('nova_accent');                             // перебьёт инлайн-акцент
+    saveCustomTheme(draft);
+    if (key === 'accent') {
+      document.documentElement.removeAttribute('data-accent');
+      store.remove('nova_accent');
       renderAccentPicker();
     }
-    applyCustomTheme();                                        // живое применение (draft и custom)
+    applyCustomTheme();
     if (t.type === 'text') t.value = value.toUpperCase();
     syncCustomEditor(); renderCustomPreview();
   }
@@ -2358,27 +2339,25 @@
       const color = el.customEditorGrid.querySelector('input[type="color"][data-token="' + t.key + '"]');
       const hex = el.customEditorGrid.querySelector('input.custom-hex[data-token="' + t.key + '"]');
       if (color) color.value = draft[t.key];
-      if (hex && document.activeElement !== hex) {              // не перетираем то, что печатает юзер
+      if (hex && document.activeElement !== hex) {
         hex.value = draft[t.key].toUpperCase();
         hex.classList.remove('invalid');
       }
     });
-    // Индикатор базы: от какого пресета снят seed (имена — из THEMES)
     const baseName = draft.base === 'custom' ? 'Своя тема'
       : ((THEMES.find(x => x.id === draft.base) || {}).name || 'Своя тема');
     el.customBaseLabel.textContent = 'База: ' + baseName;
   }
-  // Футер редактора: Применить / Сбросить / Экспорт / Импорт
   on(el.customApplyBtn, 'click', () => {
     ensureCustomDraft();
     customEditorOpen = true;
-    applyThemePreset('custom', true);   // userPick: сброс ручного акцента + notify «Пресет: Своя тема»
+    applyThemePreset('custom', true);
   });
   on(el.customResetBtn, 'click', () => {
     const draft = ensureCustomDraft();
     CUSTOM_TOKENS.forEach(t => { draft[t.key] = draft.seed[t.key]; });
     saveCustomTheme(draft);
-    applyCustomTheme();                                  // живое применение (draft и custom)
+    applyCustomTheme();
     syncCustomEditor(); renderCustomPreview();
   });
   on(el.customExportBtn, 'click', () => {
@@ -2433,6 +2412,7 @@
     if (el.cursorToggle) el.cursorToggle.textContent = CURSOR_LABELS[state.cursor] || 'Кольцо';
     renderAccentPicker(); renderThemePresets(); applyThemePreset(settings.themePreset);
     renderBgPresets(); renderUser();
+    if (el.fontSelect) el.fontSelect.value = store.get('nova_font', 'Inter');
   }
   function renderAccentPicker() {
     const c = el.accentPresets; if (!c) return;
@@ -2446,8 +2426,6 @@
       b.addEventListener('click', () => {
         document.documentElement.setAttribute('data-accent', a);
         store.set('nova_accent', a);
-        // «Своя тема»: инлайн-акцент (JS setProperty) сильнее селекторного правила —
-        // снимаем его, чтобы выбор пикера реально победил.
         if (settings.themePreset === 'custom') {
           document.documentElement.style.removeProperty('--accent');
           document.documentElement.style.removeProperty('--glow');
@@ -2825,7 +2803,6 @@
   on(el.logoBtn, 'click', () => showView('home'));
   on(el.topbarBack, 'click', goBack);
 
-  // Ставит значение селекта в UI (и data-active для индикации на узких экранах)
   function syncSourceSelect() {
     if (!el.sourceFilter) return;
     const v = state.sourceFilter || 'all';
@@ -2836,18 +2813,14 @@
     const raw = String(el.sourceFilter.value || 'all').toLowerCase();
     const valid = ['all', 'soundcloud', 'audius', 'deezer', 'youtube'].includes(raw) ? raw : 'all';
     state.sourceFilter = valid;
-    state.sourceFilterTouched = true; // ручной выбор приоритетнее дефолта из настроек
+    state.sourceFilterTouched = true;
     store.set('nova_source_filter', valid);
     store.set('nova_source_filter_set', '1');
     syncSourceSelect();
-    // Перезапускаем поиск, только если запрос реально был — пустой поиск не гоним
     if (state.query) doSearch(state.query);
   });
   syncSourceSelect();
 
-  // Дефолт из настроек применяется, только пока пользователь не трогал фильтр руками.
-  // ВАЖНО: функция НЕ запускает поиск — её вызывает showView('search'),
-  // а doSearch() сам зовёт showView('search'), так что запуск отсюда дал бы цепочку.
   function applyDefaultSource() {
     if (state.sourceFilterTouched) return false;
     const def = settings.defaultSource || 'all';
@@ -3270,6 +3243,9 @@
   renderCustomEditor();
   renderThemePresets();
   applyThemePreset(settings.themePreset);
+  applyFont(store.get('nova_font', 'Inter'));
+  if (el.fontSelect) el.fontSelect.value = store.get('nova_font', 'Inter');
+  on(el.fontSelect, 'change', () => applyFont(el.fontSelect.value));
   renderBgPresets();
   refreshDiagnostics();
 
