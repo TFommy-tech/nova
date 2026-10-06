@@ -1866,19 +1866,47 @@
   }
 
   const SETTINGS_TABS = ['general', 'interface', 'playback', 'account', 'data'];
-  function setSettingsTab(tab) {
+  let settingsTabTimer = null;
+  function setSettingsTab(tab, animate = true) {
     const t = SETTINGS_TABS.includes(tab) ? tab : 'general';
     document.querySelectorAll('.settings-nav-btn').forEach(b =>
       b.classList.toggle('active', b.dataset.settingsTab === t));
-    document.querySelectorAll('.settings-panel').forEach(p =>
-      p.classList.toggle('hidden', p.dataset.settingsPanel !== t));
+    const panels = [...document.querySelectorAll('.settings-panel')];
+    const next = panels.find(p => p.dataset.settingsPanel === t);
+    const current = panels.find(p => !p.classList.contains('hidden') && !p.classList.contains('leaving'));
+    // мгновенно завершаем незавершённые анимации прошлого переключения (быстрые клики)
+    if (settingsTabTimer) { clearTimeout(settingsTabTimer); settingsTabTimer = null; }
+    panels.forEach(p => {
+      if (p.classList.contains('leaving')) { p.classList.remove('leaving'); p.classList.add('hidden'); }
+      p.classList.remove('entering');
+    });
+    if (!animate || !next || !current || current === next) {
+      // та же вкладка — без анимации
+      panels.forEach(p => p.classList.toggle('hidden', p !== next));
+    } else {
+      const dir = SETTINGS_TABS.indexOf(t) > SETTINGS_TABS.indexOf(current.dataset.settingsPanel) ? 1 : -1;
+      current.style.setProperty('--dir', dir);
+      next.style.setProperty('--dir', dir);
+      // старая панель: уход + сдвиг, скрывается через 200мс
+      current.classList.add('leaving');
+      settingsTabTimer = setTimeout(() => {
+        current.classList.remove('leaving');
+        current.classList.add('hidden');
+        settingsTabTimer = null;
+      }, 200);
+      // новая панель: вход с противоположным сдвигом
+      next.classList.remove('hidden');
+      next.classList.add('entering');
+      void next.offsetHeight; // форсируем reflow — фиксируем стартовое состояние
+      next.classList.remove('entering');
+    }
     store.set('nova_settings_tab', t);
   }
   function openSettings() {
     if (el.settingsView.classList.contains('open')) return;
     renderSettingsUi();
     refreshDiagnostics();
-    setSettingsTab(store.get('nova_settings_tab', 'general'));
+    setSettingsTab(store.get('nova_settings_tab', 'general'), false);
     el.settingsView.classList.add('open');
     el.settingsView.setAttribute('aria-hidden', 'false');
   }
