@@ -1433,6 +1433,33 @@ api.get('/api/audio/soundcloud/:id', async (req, res) => {
         // только в metadata, а сам резолвер возвращает 404 — рабочие рендишены зашифрованы DRM
         // (SAMPLE-AES: cbcs/FairPlay, cenc/Widevine) и без CDM не воспроизводятся.
         console.log('[sc-stream] progressive 404 (likely DRM-only), id=', id, 'status=', rq.status);
+        // Фоллбэк на YouTube: ищем трек по «название + автор», редиректим на YouTube-поток.
+        // 307 сохраняет метод и Range-заголовки. Лучше неточная замена (миксы/ремиксы), чем пустота.
+        let ytRes = [];
+        try {
+          const scTitle = String(t?.title || '').trim();
+          const scArtist = String(t?.user?.username || '').trim();
+          const deadline = Date.now() + 9000; // общий бюджет на обе попытки
+          const tryQ = async (query) => {
+            if (!query) return [];
+            const budget = Math.max(1500, deadline - Date.now());
+            const r = await Promise.race([
+              youtubeSearch(query, 1),
+              new Promise(resolve => setTimeout(() => resolve([]), budget))
+            ]);
+            return Array.isArray(r) ? r : [];
+          };
+          ytRes = await tryQ(`${scTitle} ${scArtist}`.trim());
+          // Релакс-повтор: YouTube часто не находит точную длинную строку из SC,
+          // но находит по «артист + первое слово названия».
+          if (!ytRes[0]?.videoId && scTitle) {
+            const firstWord = scTitle.split(/\s+/)[0];
+            ytRes = await tryQ(`${scArtist} ${firstWord}`.trim());
+          }
+        } catch {}
+        const ytId = ytRes?.[0]?.videoId || '';
+        console.log('[sc-stream] drm fallback to youtube id=', id, 'yt=', ytId || 'none');
+        if (ytId) return res.redirect(307, '/api/audio/youtube/' + encodeURIComponent(ytId));
         return res.status(404).json({
           error: 'drm_only',
           message: 'Этот трек защищён DRM (Widevine/FairPlay) и не может быть воспроизведён на этом хостинге. Попробуй найти этот трек через поиск — там могут быть альтернативные версии.'
