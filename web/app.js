@@ -2119,10 +2119,15 @@
   // ⬇⬇⬇ ДОБАВЛЕНО: функция выбора шрифта приложения ⬇⬇⬇
   function applyFont(name) {
     const v = String(name || 'Inter');
-    document.documentElement.style.setProperty('--font-app',
-      v === 'system-ui'
-        ? 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif'
-        : '"' + v + '", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif');
+    let stack;
+    if (v === 'system-ui') {
+      stack = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
+    } else if (v === 'SF Pro') {
+      stack = '"Manrope", "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
+    } else {
+      stack = '"' + v + '", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif';
+    }
+    document.documentElement.style.setProperty('--font-app', stack);
     store.set('nova_font', v);
   }
   // ⬆⬆⬆ КОНЕЦ добавленного ⬆⬆⬆
