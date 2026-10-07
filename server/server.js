@@ -1405,10 +1405,16 @@ api.get('/api/audio/soundcloud/:id', async (req, res) => {
       const rt = await jsonFetch(`https://api-v2.soundcloud.com/tracks/${id}?client_id=${cid}`, {}, 7000);
       const t = await readJson(rt);
       const trs = Array.isArray(t?.media?.transcodings) ? t.media.transcodings : [];
+      console.log('[sc-stream] track fetch', id, 'ok=', rt.ok, 'transcodings=', trs.length, 'protocols=', trs.map(x => x?.format?.protocol).join(','));
+      // readJson иногда возвращает не трек, а { errors: [...] } — логируем для диагностики 502
+      if (Array.isArray(t?.errors) || !t?.media) {
+        let raw = ''; try { raw = JSON.stringify(t) || ''; } catch {}
+        console.log('[sc-stream] unusual track response', id, raw.slice(0, 300));
+      }
       const auth = t?.track_authorization || '';
       const prog = trs.find(x => x?.format?.protocol === 'progressive' && x.url);
       if (!prog) {
-        console.log('[soundcloud] no progressive, id=', id, 'protocols=', trs.map(x => x?.format?.protocol).join(','));
+        console.log('[sc-stream] NO progressive for', id, 'available=', JSON.stringify(trs.map(x => ({ protocol: x?.format?.protocol, preset: x?.preset }))));
         return res.status(404).json({
           error: 'hls_only',
           message: 'Трек доступен только через HLS, требуется hls.js на клиенте'
@@ -1431,6 +1437,7 @@ api.get('/api/audio/soundcloud/:id', async (req, res) => {
     const headers = {};
     if (req.headers.range) headers.Range = req.headers.range;
     const up = await fetch(url, { headers, redirect: 'follow', timeout: 20000 });
+    console.log('[sc-stream] cdn fetch', id, 'status=', up.status, 'ct=', up.headers.get('content-type'), 'ok=', up.ok);
     if (!up.ok || !up.body) {
       if (scStreamCache.has(id)) scStreamCache.delete(id); // закэшированный URL протух — сброс
       return res.status(502).end();
@@ -1442,7 +1449,10 @@ api.get('/api/audio/soundcloud/:id', async (req, res) => {
     res.status(up.status);
     up.body.pipe(res);
     req_onclose(res, up);
-  } catch { if (!res.headersSent) res.status(502).end(); }
+  } catch (e) {
+    console.log('[sc-stream] error', id, e?.name || 'Error', e?.message || '');
+    if (!res.headersSent) res.status(502).end();
+  }
 });
 
 // ---------- YouTube stream: Invidious → Piped → youtubei.js ----------
