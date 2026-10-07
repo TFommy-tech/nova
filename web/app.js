@@ -1181,6 +1181,7 @@
   async function playTrack(index, opts = {}) {
     if (!Number.isInteger(index) || index < 0 || index >= state.queue.length) return;
     const track = state.queue[index];
+    if (track._drmOnly) { notify('Трек защищён DRM — недоступен на этом хостинге', 'error'); return; }
     const isSame = state.currentTrack && trackKey(track) === trackKey(state.currentTrack);
     const isActive = userIntent === 'playing' || userIntent === 'paused' || userIntent === 'loading';
     if (isSame && isActive && !opts.force) { openSongInfo(state.currentTrack); return; }
@@ -1268,7 +1269,12 @@
     userIntent = 'error';
     lastPlaybackError = e.message || String(e);
     updatePlayButtons();
-    notify('Не удалось воспроизвести: ' + lastPlaybackError, 'error');
+    if (e.drmOnly && state.currentTrack) {
+      state.currentTrack._drmOnly = true;
+      notify('Трек защищён DRM — недоступен на этом хостинге', 'error');
+    } else {
+      notify('Не удалось воспроизвести: ' + lastPlaybackError, 'error');
+    }
     refreshDiagnostics();
   }
   async function playUrl(url, myId) {
@@ -1286,7 +1292,20 @@
       let done = false;
       const cleanup = () => { el.audio.removeEventListener('playing', ok); el.audio.removeEventListener('error', bad); clearInterval(tick); };
       const ok = () => { if (done) return; done = true; cleanup(); resolve(); };
-      const bad = () => { if (done) return; done = true; cleanup(); reject(new Error('audio error ' + (el.audio.error?.code || ''))); };
+      const bad = async () => {
+        if (done) return; done = true; cleanup();
+        let err = new Error('audio error ' + (el.audio.error?.code || ''));
+        if (url.includes('/api/audio/soundcloud/')) {
+          try {
+            const r = await fetch(url, { headers: { Range: 'bytes=0-0', Accept: 'application/json' } });
+            if (r.status === 404) {
+              const j = await r.json().catch(() => null);
+              if (j && j.error === 'drm_only') { err = new Error(j.message || 'Трек защищён DRM'); err.drmOnly = true; }
+            }
+          } catch {}
+        }
+        reject(err);
+      };
       el.audio.addEventListener('playing', ok, { once: true });
       el.audio.addEventListener('error', bad, { once: true });
       setTimeout(() => { if (done) return; done = true; cleanup(); reject(new Error('timeout')); }, 25000);

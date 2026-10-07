@@ -1424,8 +1424,20 @@ api.get('/api/audio/soundcloud/:id', async (req, res) => {
         console.log('[soundcloud] no track_authorization, id=', id);
         return res.status(404).json({ error: 'no_track_authorization', message: 'SoundCloud не вернул track_authorization' });
       }
-      // Шаг 2: transcoding → финальный CDN-URL
-      const rq = await jsonFetch(`${prog.url}?client_id=${cid}&track_authorization=${encodeURIComponent(auth)}`, {}, 7000);
+      // Шаг 2: transcoding → финальный CDN-URL (склейка ?/& на случай, если в prog.url уже есть query)
+      const sep = prog.url.includes('?') ? '&' : '?';
+      const fullUrl = `${prog.url}${sep}client_id=${cid}&track_authorization=${encodeURIComponent(auth)}`;
+      const rq = await jsonFetch(fullUrl, {}, 7000);
+      if (!rq.ok) {
+        // Новые треки SoundCloud (загрузки после ~06/2026) отдают progressive/hls-mp3 рендишен
+        // только в metadata, а сам резолвер возвращает 404 — рабочие рендишены зашифрованы DRM
+        // (SAMPLE-AES: cbcs/FairPlay, cenc/Widevine) и без CDM не воспроизводятся.
+        console.log('[sc-stream] progressive 404 (likely DRM-only), id=', id, 'status=', rq.status);
+        return res.status(404).json({
+          error: 'drm_only',
+          message: 'Этот трек защищён DRM (Widevine/FairPlay) и не может быть воспроизведён на этом хостинге. Попробуй найти этот трек через поиск — там могут быть альтернативные версии.'
+        });
+      }
       const q = await readJson(rq);
       url = q?.url || '';
       if (!url) {
