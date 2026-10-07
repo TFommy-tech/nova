@@ -572,7 +572,8 @@ async function soundcloudUserPlaylists(userId, limit = 20) {
     return list.map(p => ({
       provider: 'soundcloud', providerId: 'scpl_' + String(p.id),
       title: p.title || '',
-      cover: scCover(p.artwork_url || p.tracks?.[0]?.artwork_url || '')
+      cover: scCover(p.artwork_url || p.tracks?.[0]?.artwork_url || ''),
+      trackCount: Number(p.track_count || p.tracks?.length || 0)
     }));
   } catch { return []; }
 }
@@ -1171,12 +1172,15 @@ async function artistFromSoundCloud(user, name) {
     soundcloudUserPlaylists(user.id, 20)
   ]);
   if (!tracks.length) return null; // SoundCloud пуст → Audius fallback
+  // Плейлисты: ≥4 треков = альбом, 1–3 = сингл/EP. Без плейлистов фронт покажет заглушки.
+  const albums = playlists.filter(p => (p.trackCount || 0) >= 4);
+  const singles = playlists.filter(p => (p.trackCount || 0) >= 1 && (p.trackCount || 0) < 4);
   return {
     source: 'soundcloud',
     artist: { name: user.name, picture: user.picture, nbFan: user.nbFan },
     top_tracks: tracks.slice(0, 60),
-    albums: playlists,
-    singles: []
+    albums,
+    singles
   };
 }
 async function artistFromAudius(name) {
