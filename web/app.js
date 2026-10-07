@@ -1703,23 +1703,18 @@
 
     if (!name && !id) { el.artistTracks.innerHTML = '<div class="empty">Нет данных</div>'; return; }
     try {
+      // Сервер сам ищет: id вида name:<имя> / sc_<uid> / dz_<id>; ?name= — подсказка.
       let artistId = id, picture = '';
-      if (!artistId && name) {
-        try {
-          const sr = await fetch(apiBase() + '/api/artist-search?q=' + encodeURIComponent(name));
-          const sd = await sr.json().catch(() => ({}));
-          if (sr.ok && sd?.id) { artistId = sd.id; picture = sd.picture || ''; }
-        } catch {}
-      }
+      if (!artistId && name) artistId = 'name:' + name;
       if (!artistId) {
         el.artistHeroName.textContent = name || 'Исполнитель';
-        if (picture) el.artistHeroImage.src = coverUrl(picture);
-        el.artistTracks.innerHTML = '<div class="empty">Точных совпадений не найдено</div>';
+        el.artistTracks.innerHTML = '<div class="empty">Нет данных</div>';
         return;
       }
-      const r = await fetch(apiBase() + '/api/artist/' + encodeURIComponent(artistId));
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'unavailable');
+      const qs = name ? '?name=' + encodeURIComponent(name) : '';
+      const r = await fetch(apiBase() + '/api/artist/' + encodeURIComponent(artistId) + qs);
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw Object.assign(new Error(d.error || 'unavailable'), { status: r.status });
       const artist = d.artist || {};
       const pic = artist.picture || picture || '';
       el.artistHeroName.textContent = artist.name || name || 'Исполнитель';
@@ -1733,7 +1728,7 @@
       const allTracks = (d.top_tracks || []).map(normalizeTrack).filter(Boolean);
       let expanded = false; const INITIAL = 5;
       const drawTop = () => {
-        if (!allTracks.length) { el.artistTracks.innerHTML = '<div class="empty">У этого артиста пока нет доступных треков</div>'; return; }
+        if (!allTracks.length) { el.artistTracks.innerHTML = '<div class="empty">Артист не найден в SoundCloud/Audius. Попробуй поиск</div>'; return; }
         renderList(el.artistTracks, expanded ? allTracks : allTracks.slice(0, INITIAL), { context: 'artist' });
       };
       drawTop();
@@ -1748,21 +1743,24 @@
       }
       setTimeout(() => prefetchTracks(allTracks.slice(0, 3)), 200);
       const albums = d.albums || [];
-      el.artistAlbums.innerHTML = '';
-      el.artistAlbumsSection.style.display = albums.length ? '' : 'none';
+      el.artistAlbumsSection.style.display = '';
+      el.artistAlbums.innerHTML = albums.length ? '' : '<div class="empty">Альбомы недоступны для этого артиста</div>';
       albums.forEach(a => el.artistAlbums.appendChild(makeMiniCard({
         id: a.providerId, albumId: a.providerId, album: a.title,
         title: a.title, artist: artist.name || name, cover: a.cover
       }, 'album')));
       const singles = d.singles || [];
-      el.artistSingles.innerHTML = '';
-      el.artistSinglesSection.style.display = singles.length ? '' : 'none';
+      el.artistSinglesSection.style.display = '';
+      el.artistSingles.innerHTML = singles.length ? '' : '<div class="empty">Синглы недоступны для этого артиста</div>';
       singles.forEach(a => el.artistSingles.appendChild(makeMiniCard({
         id: a.providerId, albumId: a.providerId, album: a.title,
         title: a.title, artist: artist.name || name, cover: a.cover
       }, 'album')));
-    } catch {
-      el.artistTracks.innerHTML = '<div class="empty">Не удалось загрузить данные артиста</div>';
+    } catch (e) {
+      el.artistTracks.innerHTML = '<div class="empty">' +
+        (e && e.status === 404
+          ? 'Артист не найден в SoundCloud/Audius. Попробуй поиск'
+          : 'Не удалось загрузить данные артиста') + '</div>';
     }
   }
   async function showAlbum(id) {

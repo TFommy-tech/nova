@@ -369,7 +369,7 @@ function deezerToNorm(t) {
   return {
     provider: 'deezer', providerId: String(t.id), id: String(t.id),
     title: title || t.title_short || t.title || '',
-    artist, artistId: t.artist?.id ? String(t.artist.id) : '',
+    artist, artistId: t.artist?.id ? 'dz_' + String(t.artist.id) : '',
     album: t.album?.title || '', albumId: t.album?.id ? String(t.album.id) : '',
     cover: t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '',
     duration: Number(t.duration || 0),
@@ -390,7 +390,7 @@ async function deezerSearchArtists(q, limit = 10) {
     const r = await jsonFetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(q)}&limit=${limit}`, {}, 6000);
     const d = await readJson(r);
     return (d?.data || []).map(a => ({
-      provider: 'deezer', providerId: String(a.id),
+      provider: 'deezer', providerId: 'dz_' + String(a.id),
       name: a.name, picture: a.picture_xl || a.picture_big || a.picture_medium || '',
       nbFan: a.nb_fan || 0
     }));
@@ -463,7 +463,7 @@ function audiusNorm(t) {
   return {
     provider: 'audius', providerId: String(t.id), id: String(t.id),
     title: t.title || '', artist: t.user?.name || '',
-    artistId: t.user?.id ? String(t.user.id) : '',
+    artistId: t.user?.id ? 'au_' + String(t.user.id) : '',
     album: '', albumId: '', cover: firstImage(t.artwork),
     duration: Number(t.duration || 0),
     popularity: Number(t.play_count || 0) + Number(t.favorite_count || 0) * 5,
@@ -503,7 +503,7 @@ function soundcloudNorm(t) {
   return {
     provider: 'soundcloud', providerId: String(t.id), id: String(t.id),
     title: t.title || '', artist: t.user?.username || '',
-    artistId: t.user?.id ? String(t.user.id) : '',
+    artistId: t.user?.id ? 'sc_' + String(t.user.id) : '',
     album: '', albumId: '',
     cover: String(t.artwork_url || '').replace(/-large\./, '-t500x500.'),
     duration: Math.round(Number(t.duration || 0) / 1000), // SoundCloud отдаёт мс
@@ -523,6 +523,72 @@ async function soundcloudSearch(q, limit = 30) {
       .map(soundcloudNorm)
       .filter(Boolean);
   } catch { return []; }
+}
+
+// --- Страница артиста: SoundCloud — основной источник ---
+function scCover(url) {
+  return String(url || '').replace(/-large\./, '-t500x500.');
+}
+async function soundcloudFindUser(name) {
+  try {
+    const params = new URLSearchParams({ q: name, client_id: SOUNDCLOUD_CLIENT_ID, limit: '5' });
+    const r = await jsonFetch(`https://api-v2.soundcloud.com/search/users?${params}`, {}, 7000);
+    const d = await readJson(r);
+    const list = Array.isArray(d?.collection) ? d.collection : [];
+    if (!list.length) return null;
+    const norm = normalize(name);
+    const u = list.find(x => normalize(x.username) === norm) || list[0];
+    return {
+      id: String(u.id), name: u.username || name,
+      picture: scCover(u.avatar_url), nbFan: Number(u.followers_count || 0)
+    };
+  } catch { return null; }
+}
+async function soundcloudUserById(userId) {
+  try {
+    const r = await jsonFetch(`https://api-v2.soundcloud.com/users/${encodeURIComponent(userId)}?client_id=${encodeURIComponent(SOUNDCLOUD_CLIENT_ID)}`, {}, 7000);
+    const d = await readJson(r);
+    if (!d?.id) return null;
+    return {
+      id: String(d.id), name: d.username || '',
+      picture: scCover(d.avatar_url), nbFan: Number(d.followers_count || 0)
+    };
+  } catch { return null; }
+}
+async function soundcloudUserTracks(userId, limit = 50) {
+  try {
+    const params = new URLSearchParams({ client_id: SOUNDCLOUD_CLIENT_ID, limit: String(limit), linked_partitioning: '1' });
+    const r = await jsonFetch(`https://api-v2.soundcloud.com/users/${encodeURIComponent(userId)}/tracks?${params}`, {}, 8000);
+    const d = await readJson(r);
+    return (Array.isArray(d?.collection) ? d.collection : []).map(soundcloudNorm).filter(Boolean);
+  } catch { return []; }
+}
+async function soundcloudUserPlaylists(userId, limit = 20) {
+  try {
+    const params = new URLSearchParams({ client_id: SOUNDCLOUD_CLIENT_ID, limit: String(limit) });
+    const r = await jsonFetch(`https://api-v2.soundcloud.com/users/${encodeURIComponent(userId)}/playlists?${params}`, {}, 8000);
+    const d = await readJson(r);
+    const list = Array.isArray(d) ? d : (Array.isArray(d?.collection) ? d.collection : []);
+    return list.map(p => ({
+      provider: 'soundcloud', providerId: 'scpl_' + String(p.id),
+      title: p.title || '',
+      cover: scCover(p.artwork_url || p.tracks?.[0]?.artwork_url || '')
+    }));
+  } catch { return []; }
+}
+async function soundcloudGetPlaylist(plId) {
+  try {
+    const r = await jsonFetch(`https://api-v2.soundcloud.com/playlists/${encodeURIComponent(plId)}?client_id=${encodeURIComponent(SOUNDCLOUD_CLIENT_ID)}`, {}, 7000);
+    const d = await readJson(r);
+    if (!d?.id) return null;
+    return {
+      provider: 'soundcloud', providerId: 'scpl_' + String(d.id), id: 'scpl_' + String(d.id),
+      title: d.title || '', cover: scCover(d.artwork_url || d.tracks?.[0]?.artwork_url || ''),
+      releaseDate: '', recordType: 'album',
+      artist: d.user ? { id: 'sc_' + String(d.user.id), name: d.user.username || '' } : null,
+      tracks: (Array.isArray(d.tracks) ? d.tracks : []).map(soundcloudNorm).filter(Boolean)
+    };
+  } catch { return null; }
 }
 
 // ============================================================================
@@ -1097,9 +1163,83 @@ api.get('/api/search', searchRateLimit, async (req, res) => {
 // ============================================================================
 // ARTIST / ALBUM
 // ============================================================================
+async function artistFromSoundCloud(user, name) {
+  if (!user && name) user = await soundcloudFindUser(name);
+  if (!user) return null;
+  const [tracks, playlists] = await Promise.all([
+    soundcloudUserTracks(user.id, 50),
+    soundcloudUserPlaylists(user.id, 20)
+  ]);
+  if (!tracks.length) return null; // SoundCloud пуст → Audius fallback
+  return {
+    source: 'soundcloud',
+    artist: { name: user.name, picture: user.picture, nbFan: user.nbFan },
+    top_tracks: tracks.slice(0, 60),
+    albums: playlists,
+    singles: []
+  };
+}
+async function artistFromAudius(name) {
+  if (!name) return null;
+  const all = await audiusSearch(name, 40);
+  const mine = all.filter(t => normalize(t.artist) === normalize(name));
+  if (!mine.length) return null;
+  return {
+    source: 'audius',
+    artist: { name, picture: mine.find(t => t.cover)?.cover || '', nbFan: 0 },
+    top_tracks: mine.slice(0, 60),
+    albums: [], singles: []
+  };
+}
+async function deezerArtistMeta(dzId, name) {
+  if (dzId) { const m = await deezerGetArtist(dzId); if (m) return m; }
+  if (name) {
+    const list = await deezerSearchArtists(name, 10);
+    const norm = normalize(name);
+    const exact = list.filter(a => normalize(a.name) === norm);
+    exact.sort((a, b) => (b.nbFan || 0) - (a.nbFan || 0));
+    if (exact.length) return exact[0];
+  }
+  return null;
+}
+// Порядок источников: SoundCloud → Audius (fallback) → Deezer только метаданные.
+async function resolveArtist(rawId, fallbackName = '') {
+  let scId = '', dzId = '', name = '';
+  if (rawId.startsWith('sc_')) scId = rawId.slice(3);
+  else if (rawId.startsWith('dz_')) dzId = rawId.slice(3);
+  else if (rawId.startsWith('name:')) name = rawId.slice(5);
+  else if (rawId.startsWith('au_')) name = fallbackName; // Audius: резолв по имени
+  else dzId = rawId; // legacy: голый числовой id = Deezer
+
+  const scUser = scId ? await soundcloudUserById(scId) : null;
+  if (scUser && !name) name = scUser.name;
+  if (!name && dzId) { const m = await deezerGetArtist(dzId); if (m) name = m.name; }
+  if (!name) name = fallbackName;
+  if (!name) return null;
+
+  let payload = await artistFromSoundCloud(scUser, name);
+  if (!payload) payload = await artistFromAudius(name);
+  const meta = await deezerArtistMeta(dzId, name);
+  if (payload) {
+    if (meta) {
+      if (!payload.artist.picture) payload.artist.picture = meta.picture;
+      if (!payload.artist.nbFan) payload.artist.nbFan = meta.nbFan;
+    }
+    return payload;
+  }
+  if (meta) return {
+    source: 'deezer-meta',
+    artist: { name: meta.name, picture: meta.picture, nbFan: meta.nbFan },
+    top_tracks: [], albums: [], singles: []
+  };
+  return null;
+}
 api.get('/api/artist-search', searchRateLimit, async (req, res) => {
   const q = String(req.query.q || '').trim().slice(0, 200); // B15: глубина запроса тоже режется
   if (!q) return res.status(400).json({ error: 'empty' });
+  // Сначала SoundCloud — страница артиста живёт на нём; Deezer только fallback.
+  const sc = await soundcloudFindUser(q);
+  if (sc) return res.json({ id: 'sc_' + sc.id, name: sc.name, picture: sc.picture, nb_fan: sc.nbFan });
   const list = await deezerSearchArtists(q, 10);
   if (!list.length) return res.status(404).json({ error: 'not found' });
   const norm = normalize(q);
@@ -1111,26 +1251,23 @@ api.get('/api/artist-search', searchRateLimit, async (req, res) => {
 });
 api.get('/api/artist/:id', async (req, res) => {
   const id = String(req.params.id);
-  const ck = 'artist:v3:' + id;
+  const fallbackName = String(req.query.name || '').trim().slice(0, 200);
+  // Ключ уже содержит источник (sc_/dz_/au_/name:) — кэши источников не смешиваются.
+  const ck = 'artist:v4:' + id;
   const hit = artistCache.get(ck);
   if (hit && Date.now() - hit.time < (hit.ttl || ARTIST_TTL)) return res.json(hit.data);
-  const artist = await deezerGetArtist(id);
-  if (!artist) return res.status(404).json({ error: 'not found' });
-  const [top, albums] = await Promise.all([deezerArtistTop(id), deezerArtistAlbums(id)]);
-  const sortByDate = arr => arr.slice().sort((a, b) =>
-    String(b.releaseDate || '').localeCompare(String(a.releaseDate || '')));
-  const payload = {
-    artist,
-    top_tracks: top.slice(0, 60),
-    albums: sortByDate(albums.filter(a => a.recordType !== 'single')),
-    singles: sortByDate(albums.filter(a => a.recordType === 'single'))
-  };
+  const payload = await resolveArtist(id, fallbackName);
+  if (!payload) return res.status(404).json({ error: 'not found' });
   const isEmpty = !payload.top_tracks.length && !payload.albums.length && !payload.singles.length;
   artistCache.set(ck, { time: Date.now(), data: payload, ttl: isEmpty ? ARTIST_EMPTY_TTL : ARTIST_TTL });
   res.json(payload);
 });
 api.get('/api/album/:id', async (req, res) => {
-  const d = await deezerGetAlbum(req.params.id);
+  const id = String(req.params.id);
+  // Плейлист SoundCloud приходит со страницы артиста как «альбом» (scpl_…).
+  const d = id.startsWith('scpl_')
+    ? await soundcloudGetPlaylist(id.slice(5))
+    : await deezerGetAlbum(id);
   if (!d) return res.status(404).json({ error: 'not found' });
   res.json(d);
 });
