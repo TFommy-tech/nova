@@ -665,6 +665,22 @@
   </div>
 
   <div id="contextMenu" class="context-menu hidden" aria-hidden="true"></div>
+  <div id="imagePickerModal" class="song-info-modal" aria-hidden="true">
+    <div class="song-info-card image-picker-card">
+      <button id="imagePickerClose" class="song-info-close">×</button>
+      <div class="settings-section-title" id="imagePickerTitle">Выбрать из библиотеки</div>
+      <div class="image-picker-preview hidden" id="imagePickerPreview">
+        <div class="image-picker-preview-img" id="imagePickerPreviewImg"></div>
+        <div class="image-picker-preview-actions">
+          <button class="settings-action" data-act="cover">Обложка</button>
+          <button class="settings-action" data-act="bg">Фон</button>
+          <button class="settings-action" data-act="del">Удалить</button>
+        </div>
+      </div>
+      <div class="image-library-grid image-picker-grid" id="imagePickerGrid"></div>
+    </div>
+  </div>
+
   <div id="toast" class="toast"></div>
 
   <input id="backgroundInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
@@ -798,7 +814,10 @@
                 <div class="setting-label">Фоновое изображение</div>
                 <div class="setting-hint">JPG, PNG, WEBP, GIF.</div>
               </div>
-              <div class="setting-value"><button id="backgroundBtn" class="settings-action">Выбрать</button></div>
+              <div class="setting-value" style="display:flex;align-items:center;gap:10px">
+                <div class="bg-preview" id="bgPreview" title="Текущий фон"></div>
+                <button id="backgroundBtn" class="settings-action">Выбрать</button>
+              </div>
             </div>
             <div class="setting">
               <div class="setting-copy">
@@ -809,6 +828,29 @@
             </div>
           </div>
           <div class="bg-presets" id="bgPresets"></div>
+        </div>
+        <div class="settings-section">
+          <div class="settings-section-title">Кастомизация</div>
+          <div class="settings-subsection">
+            <div class="setting-label" style="margin-bottom:8px">Обложка трека</div>
+            <div class="custom-cover-row">
+              <div class="custom-cover-preview" id="customCoverPreview"></div>
+              <div class="custom-cover-actions">
+                <button id="customCoverChoose" class="settings-action">Выбрать из библиотеки</button>
+                <button id="customCoverReset" class="settings-action">Сбросить</button>
+              </div>
+            </div>
+          </div>
+          <div class="settings-subsection">
+            <div class="setting-label" style="margin-bottom:8px">Библиотека изображений</div>
+            <div class="image-library-input">
+              <input id="imageLibUrl" class="login-input" type="text" placeholder="URL картинки или GIF" style="padding-left:14px">
+              <button id="imageLibAddUrl" class="settings-action">Добавить URL</button>
+              <button id="imageLibAddFile" class="settings-action">Загрузить файл</button>
+              <input id="imageLibFileInput" type="file" accept="image/*" hidden>
+            </div>
+            <div class="image-library-grid" id="imageLibraryGrid"></div>
+          </div>
         </div>
       </section>
 

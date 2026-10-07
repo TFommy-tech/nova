@@ -139,6 +139,9 @@
     'volumeLarge','equalizerBtn','similarBtn',
     'themeToggle','cursorToggle','accentPresets','themePresets','fontSelect','customThemeEditor','customEditorGrid','customBaseLabel',
     'customApplyBtn','customResetBtn','customExportBtn','customImportBtn','customImportInput','backgroundBtn','backgroundResetBtn','bgPresets','settingsVolumeValue',
+    'customCoverPreview','customCoverChoose','customCoverReset','bgPreview',
+    'imageLibUrl','imageLibAddUrl','imageLibAddFile','imageLibFileInput','imageLibraryGrid',
+    'imagePickerModal','imagePickerClose','imagePickerTitle','imagePickerPreview','imagePickerPreviewImg','imagePickerGrid',
     'autoplayToggle','notificationsToggle','hotkeysToggle','defaultSource','settingsOpenFileBtn',
     'settingsAccountName','settingsAccountHint','settingsAccountBtn',
     'clearHistory2','clearFavorites2','clearCacheBtn','diagnostics','settingsView','settingsClose',
@@ -334,6 +337,156 @@
     return apiBase() + '/api/cover-proxy?url=' + encodeURIComponent(s);
   }
   function coverFor(t) { return coverUrl(t?.cover || ''); }
+
+  /* ===== CUSTOM COVER + IMAGE LIBRARY ===== */
+  function customCoverFor(t) { return t ? store.get('nova_custom_cover_' + trackKey(t), '') : ''; }
+  function applyCustomCover(t, url) {
+    if (!t) return;
+    store.set('nova_custom_cover_' + trackKey(t), url || '');
+    renderCustomCoverPreview(); updateMiniPlayer(); updatePlayerView();
+  }
+  function resetCustomCover(t) {
+    if (!t) return;
+    store.set('nova_custom_cover_' + trackKey(t), '');
+    renderCustomCoverPreview(); updateMiniPlayer(); updatePlayerView();
+  }
+  function renderCustomCoverPreview() {
+    const box = el.customCoverPreview; if (!box) return;
+    const t = state.currentTrack;
+    const url = customCoverFor(t);
+    if (url) {
+      box.textContent = '';
+      box.style.backgroundImage = `url("${url.replace(/"/g, '\\"')}")`;
+      box.title = 'Обложка переопределена';
+    } else {
+      box.style.backgroundImage = 'none';
+      box.textContent = !t ? 'Ничего не играет' : 'Обложка не выбрана';
+      box.title = '';
+    }
+  }
+
+  const IMAGE_LIB_LIMIT = 50;
+  function newImageId() {
+    return (crypto.randomUUID ? crypto.randomUUID() : ('img_' + Date.now() + '_' + Math.random().toString(36).slice(2)));
+  }
+  function getImageLibrary() {
+    try { const a = JSON.parse(store.get('nova_image_library', '[]')); return Array.isArray(a) ? a : []; }
+    catch { return []; }
+  }
+  function saveImageLibrary(list) { store.set('nova_image_library', JSON.stringify(list)); }
+  function addImageToLibrary(entry) {
+    const list = getImageLibrary();
+    if (list.length >= IMAGE_LIB_LIMIT) { notify('Лимит библиотеки: 50 изображений', 'error'); return null; }
+    const item = { id: newImageId(), type: entry.type, value: entry.value, addedAt: Date.now() };
+    list.unshift(item); saveImageLibrary(list);
+    renderImageLibrary(); renderImagePickerGrid();
+    return item;
+  }
+  function removeImageFromLibrary(id) {
+    saveImageLibrary(getImageLibrary().filter(x => x.id !== id));
+    renderImageLibrary(); renderImagePickerGrid();
+  }
+  function libGridRender(container, withActions) {
+    if (!container) return;
+    const list = getImageLibrary();
+    if (!list.length) {
+      container.innerHTML = '<div class="image-library-empty">Библиотека пуста</div>';
+      return;
+    }
+    container.innerHTML = '';
+    list.forEach(item => {
+      const cell = document.createElement('div');
+      cell.className = 'image-library-item';
+      cell.dataset.id = item.id;
+      const v = String(item.value || '');
+      const ok = item.type === 'data' ? v.startsWith('data:') : /^https?:\/\//i.test(v);
+      cell.style.backgroundImage = ok ? `url("${v.replace(/"/g, '\\"')}")` : 'none';
+      if (withActions) {
+        const bar = document.createElement('div');
+        bar.className = 'image-library-item-actions';
+        bar.innerHTML = '<button data-act="cover" title="Сделать обложкой текущего трека">Обложка</button>'
+          + '<button data-act="bg" title="Сделать фоном приложения">Фон</button>'
+          + '<button data-act="del" title="Удалить из библиотеки">×</button>';
+        cell.appendChild(bar);
+      }
+      container.appendChild(cell);
+    });
+  }
+  function renderImageLibrary() { libGridRender(el.imageLibraryGrid, true); }
+  function renderImagePickerGrid() { libGridRender(el.imagePickerGrid, false); }
+  function libItemFromEvent(e) {
+    const cell = e.target.closest && e.target.closest('.image-library-item');
+    if (!cell) return null;
+    return getImageLibrary().find(x => x.id === cell.dataset.id) || null;
+  }
+  function handleLibAction(act, item) {
+    if (!item) return;
+    if (act === 'cover') {
+      if (!state.currentTrack) return notify('Ничего не играет', 'error');
+      applyCustomCover(state.currentTrack, item.value);
+      notify('Обложка обновлена');
+    } else if (act === 'bg') {
+      state.background.src = item.value;
+      saveBgData(item.value).catch(() => {});
+      applyBackground(item.value);
+      notify('Фон изменён');
+    } else if (act === 'del') {
+      removeImageFromLibrary(item.id);
+      if (state.currentTrack && customCoverFor(state.currentTrack) === item.value) resetCustomCover(state.currentTrack);
+      if (imagePickerViewId === item.id) hideImageView();
+      notify('Удалено из библиотеки');
+    }
+  }
+  let imagePickerCb = null;
+  let imagePickerViewId = null;
+  function openImagePicker(cb) {
+    imagePickerCb = cb || null;
+    el.imagePickerTitle.textContent = 'Выбрать из библиотеки';
+    hideImageView();
+    renderImagePickerGrid();
+    el.imagePickerModal.classList.add('open');
+    el.imagePickerModal.setAttribute('aria-hidden', 'false');
+  }
+  function openImageView(id) {
+    imagePickerCb = null;
+    el.imagePickerTitle.textContent = 'Просмотр изображения';
+    renderImagePickerGrid();
+    showImageView(id);
+    el.imagePickerModal.classList.add('open');
+    el.imagePickerModal.setAttribute('aria-hidden', 'false');
+  }
+  function showImageView(id) {
+    const item = getImageLibrary().find(x => x.id === id);
+    if (!item) return hideImageView();
+    imagePickerViewId = id;
+    const v = String(item.value || '');
+    const ok = item.type === 'data' ? v.startsWith('data:') : /^https?:\/\//i.test(v);
+    el.imagePickerPreviewImg.style.backgroundImage = ok ? `url("${v.replace(/"/g, '\\"')}")` : 'none';
+    el.imagePickerPreview.classList.remove('hidden');
+  }
+  function hideImageView() {
+    imagePickerViewId = null;
+    if (el.imagePickerPreview) el.imagePickerPreview.classList.add('hidden');
+  }
+  function closeImagePicker() {
+    imagePickerCb = null;
+    hideImageView();
+    el.imagePickerModal.classList.remove('open');
+    el.imagePickerModal.setAttribute('aria-hidden', 'true');
+  }
+  function renderBgPreview() {
+    const box = el.bgPreview; if (!box) return;
+    const src = String(state.background.src || '');
+    if (!src) { box.style.backgroundImage = 'none'; box.style.backgroundColor = '#0a0a0a'; box.title = 'Фон не выбран'; return; }
+    if (src.startsWith('url(') || src.startsWith('data:') || src.startsWith('http') || src.startsWith('/')) {
+      box.style.backgroundImage = src.startsWith('url(') ? src : `url("${src.replace(/"/g, '\\"')}")`;
+      box.style.backgroundColor = '#0a0a0a';
+    } else {
+      box.style.backgroundImage = 'none';
+      box.style.backgroundColor = src;
+    }
+    box.title = 'Текущий фон';
+  }
   function normalizeSearch(v) {
     return String(v || '').toLowerCase().replace(/[’'`´]/g, '').replace(/ё/g, 'е')
       .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
@@ -609,6 +762,7 @@
       el.backgroundLayer.style.backgroundImage = 'none';
       el.backgroundLayer.style.background = '#000';
       el.backgroundLayer.style.opacity = '0';
+      renderBgPreview();
       return;
     }
     document.body.classList.add('has-background');
@@ -620,6 +774,7 @@
       el.backgroundLayer.style.background = src;
     }
     el.backgroundLayer.style.opacity = '1';
+    renderBgPreview();
   }
   async function loadSavedBackground() {
     const src = await loadBgData();
@@ -1300,7 +1455,8 @@
     }
     el.miniTitle.textContent = t.title || 'Без названия';
     el.miniArtist.innerHTML = artistsHtml(t.artist);
-    if (coverFor(t)) el.miniCover.src = coverFor(t); else el.miniCover.removeAttribute('src');
+    const miniCov = customCoverFor(t) || coverFor(t);
+    if (miniCov) el.miniCover.src = miniCov; else el.miniCover.removeAttribute('src');
     el.miniPlayer.classList.add('visible');
     el.miniFavorite.classList.toggle('fav-active', isFavorite(t));
     updatePlayButtons();
@@ -1332,11 +1488,12 @@
     if (t.explicit) chips.push('Explicit');
     if (t.provider) chips.push(t.provider);
     el.nowChips.innerHTML = chips.map(c => `<span class="now-chip">${escapeHtml(c)}</span>`).join('');
-    if (coverFor(t)) {
+    const coverSrc = customCoverFor(t) || coverFor(t);
+    if (coverSrc) {
       const img = new Image();
-      img.onload = () => { if (state.currentTrack === t) el.bigCover.src = coverFor(t); };
+      img.onload = () => { if (state.currentTrack === t) el.bigCover.src = coverSrc; };
       img.onerror = () => { if (state.currentTrack === t) el.bigCover.src = placeholder; };
-      img.src = coverFor(t);
+      img.src = coverSrc;
     } else el.bigCover.src = placeholder;
     el.favoriteBtn.classList.toggle('active', isFavorite(t));
     updateQueue(); updatePlayButtons();
@@ -2418,6 +2575,7 @@
     renderAccentPicker(); renderThemePresets(); applyThemePreset(settings.themePreset);
     renderBgPresets(); renderUser();
     if (el.fontSelect) el.fontSelect.value = store.get('nova_font', 'Inter');
+    renderCustomCoverPreview();
   }
   function renderAccentPicker() {
     const c = el.accentPresets; if (!c) return;
@@ -2907,6 +3065,49 @@
   on(el.backgroundBtn, 'click', () => el.backgroundInput.click());
   on(el.backgroundResetBtn, 'click', resetBackground);
   on(el.backgroundInput, 'change', e => saveSelectedBackground(e.target.files?.[0]));
+  on(el.customCoverChoose, 'click', () => {
+    if (!state.currentTrack) return notify('Ничего не играет', 'error');
+    openImagePicker(url => { applyCustomCover(state.currentTrack, url); notify('Обложка обновлена'); });
+  });
+  on(el.customCoverReset, 'click', () => {
+    if (!state.currentTrack) return notify('Ничего не играет', 'error');
+    resetCustomCover(state.currentTrack); notify('Обложка сброшена');
+  });
+  on(el.imageLibAddUrl, 'click', () => {
+    const v = (el.imageLibUrl.value || '').trim();
+    if (!/^https?:\/\/\S+/i.test(v)) return notify('Введи корректный URL (http/https)', 'error');
+    if (addImageToLibrary({ type: 'url', value: v })) { el.imageLibUrl.value = ''; notify('Добавлено в библиотеку'); }
+  });
+  on(el.imageLibAddFile, 'click', () => el.imageLibFileInput.click());
+  on(el.imageLibFileInput, 'change', e => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) return notify('Файл больше 2 МБ. Используй URL.', 'error');
+    if (!/^image\//i.test(f.type)) return notify('Нужен файл изображения', 'error');
+    const reader = new FileReader();
+    reader.onload = () => { if (addImageToLibrary({ type: 'data', value: String(reader.result || '') })) notify('Добавлено в библиотеку'); };
+    reader.onerror = () => notify('Не удалось прочитать файл', 'error');
+    reader.readAsDataURL(f);
+  });
+  on(el.imagePickerClose, 'click', closeImagePicker);
+  on(el.imagePickerModal, 'click', e => { if (e.target === el.imagePickerModal) closeImagePicker(); });
+  on(el.imageLibraryGrid, 'click', e => {
+    const item = libItemFromEvent(e); if (!item) return;
+    const btn = e.target.closest('[data-act]');
+    if (btn) return handleLibAction(btn.dataset.act, item);
+    openImageView(item.id);
+  });
+  on(el.imagePickerGrid, 'click', e => {
+    const item = libItemFromEvent(e); if (!item) return;
+    if (imagePickerCb) { const cb = imagePickerCb; closeImagePicker(); cb(item.value); return; }
+    showImageView(item.id);
+  });
+  on(el.imagePickerPreview, 'click', e => {
+    const btn = e.target.closest('[data-act]'); if (!btn) return;
+    const item = getImageLibrary().find(x => x.id === imagePickerViewId);
+    handleLibAction(btn.dataset.act, item);
+  });
   on(el.settingsOpenFileBtn, 'click', localAudioPicker);
   on(el.settingsAccountBtn, 'click', () => { if (state.user) logout(); else openLoginModal(); });
   on(el.clearHistory2, 'click', () => {
@@ -3252,6 +3453,9 @@
   if (el.fontSelect) el.fontSelect.value = store.get('nova_font', 'Inter');
   on(el.fontSelect, 'change', () => applyFont(el.fontSelect.value));
   renderBgPresets();
+  renderImageLibrary();
+  renderCustomCoverPreview();
+  renderBgPreview();
   refreshDiagnostics();
 
   const wasCallback = checkLoginCallback();

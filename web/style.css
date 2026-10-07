@@ -683,6 +683,57 @@ body.has-background #backgroundLayer { opacity: 1; }
 .bg-preset { height: 70px; border-radius: var(--radius); border: 1px solid var(--border-2); cursor: pointer;
   transition: all var(--dur) var(--ease); }
 .bg-preset:hover { transform: translateY(-2px); border-color: #4a4a4a; }
+
+/* CUSTOMIZATION / IMAGE LIBRARY */
+.bg-preview { width: 60px; height: 60px; flex: 0 0 auto; border-radius: 10px;
+  border: 1px solid var(--border); background-color: #0a0a0a;
+  background-position: center; background-size: cover; background-repeat: no-repeat; }
+.custom-cover-row { display: flex; align-items: center; gap: 14px; }
+.custom-cover-preview { width: 72px; height: 72px; flex: 0 0 auto; border-radius: var(--radius-md);
+  border: 1px solid var(--border); background-color: #0a0a0a;
+  background-position: center; background-size: cover; background-repeat: no-repeat;
+  display: grid; place-items: center; overflow: hidden; padding: 6px;
+  color: var(--text-4); font-size: 10px; text-align: center;
+  transition: border-color var(--dur) var(--ease); }
+.custom-cover-preview:hover { border-color: var(--border-2); }
+.custom-cover-actions { display: flex; flex-direction: column; gap: 8px; }
+.image-library-input { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.image-library-input .login-input { flex: 1 1 220px; height: 32px; padding-left: 14px; }
+.image-library-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 8px; }
+.image-library-empty { grid-column: 1 / -1; padding: 18px 12px; text-align: center;
+  color: var(--text-4); font-size: 12px; background: #0a0a0a;
+  border: 1px dashed var(--border-2); border-radius: var(--radius-md); }
+.image-library-item { position: relative; aspect-ratio: 1 / 1; border-radius: var(--radius-md);
+  border: 1px solid var(--border); background-color: #0a0a0a;
+  background-position: center; background-size: cover; cursor: pointer; overflow: hidden;
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease); }
+.image-library-item:hover { border-color: var(--border-2); transform: translateY(-2px); }
+.image-library-item-actions { position: absolute; inset: auto 0 0 0; display: none; gap: 4px;
+  padding: 4px; background: rgba(0,0,0,.72);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.image-library-item:hover .image-library-item-actions { display: flex; }
+.image-library-item-actions button { flex: 1; min-width: 0; height: 22px; padding: 0 4px;
+  border-radius: 6px; border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.08); color: #fff; font-size: 9.5px; font-weight: 700;
+  cursor: pointer; transition: background var(--dur-fast) var(--ease); }
+.image-library-item-actions button:hover { background: rgba(255,255,255,.18); }
+.image-picker-card { width: min(520px, 100%); text-align: left; }
+.image-picker-card .settings-section-title { text-align: left; }
+.image-picker-preview { margin-bottom: 12px; }
+.image-picker-preview.hidden { display: none; }
+.image-picker-preview-img { width: 100%; height: 200px; border-radius: var(--radius-md);
+  border: 1px solid var(--border); background-color: #0a0a0a;
+  background-position: center; background-size: cover; }
+.image-picker-preview-actions { display: flex; gap: 8px; margin-top: 10px; }
+html[data-theme="light"] .bg-preview,
+html[data-theme="light"] .custom-cover-preview,
+html[data-theme="light"] .image-library-item,
+html[data-theme="light"] .image-library-empty { background-color: #fff; border-color: var(--border); }
+html[data-theme="light"] .image-library-empty { color: rgba(0,0,0,.5); }
+html[data-theme="light"] .image-library-item-actions { background: rgba(255,255,255,.85); }
+html[data-theme="light"] .image-library-item-actions button {
+  color: #000; border-color: rgba(0,0,0,.14); background: rgba(0,0,0,.06); }
+html[data-theme="light"] .image-library-item-actions button:hover { background: rgba(0,0,0,.12); }
 .diagnostics { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 11px; line-height: 1.7;
   color: var(--text-3); padding: 14px 16px; background: #080808; border: 1px solid var(--border);
   border-radius: var(--radius-md); white-space: pre-wrap; word-break: break-all; }
