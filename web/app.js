@@ -154,8 +154,12 @@
     'songInfoModal','songInfoClose','songInfoCover','songInfoSource','songInfoTitle','songInfoArtist','songInfoAlbum','songInfoMeta',
     'songInfoPlay','songInfoFavorite','songInfoQueue','songInfoDownload',
     'equalizerModal','equalizerClose','equalizerPresets','equalizerBands','eqNotice',
-    'profileModal','profileModalClose','profileAvatarBig','profileName','profileTag','profileSummaryTitle',
-    'statTracks','statArtists','statPlaylists','profileTopArtists','profileTopTracks',
+    'profileModal','profileModalClose','profileBanner','profileAvatarBig','profileName','profileTags','profileTag',
+    'profileBio','profileSocials',
+    'profileNow','profileNowEmpty','profileNowBody','profileNowProvider','profileNowCover','profileNowTitle',
+    'profileNowArtist','profileNowCur','profileNowFill','profileNowDur','profileNowBtn','profileNowPlayIcon',
+    'statTracks','statArtists','statPlaylists','statFavorites',
+    'profileTopTracks','profileTopArtists','profilePlaylists',
     'playlistPickerModal','playlistPickerClose','playlistPickerList','playlistPickerNew',
     'playlistCreateModal','playlistCreateClose','playlistNameInput','playlistDescInput','playlistCreateSubmit',
     'contextMenu','toast',
@@ -2682,36 +2686,114 @@
     el.equalizerModal.setAttribute('aria-hidden', 'true');
   }
 
+  const PROFILE_TAG_META = {
+    owner: { label: 'Owner', icon: '<path d="M5 16 4 6l5 4 3-6 3 6 5-4-1 10z"/>' },
+    admin: { label: 'Admin', icon: '<path d="M12 2l8 3v6c0 5-3.5 8.4-8 10-4.5-1.6-8-5-8-10V5z"/>' },
+    artist: { label: 'Artist', icon: '<path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11z"/>' },
+    verified: { label: 'Verified', icon: '<path d="M9 16.2 5.5 12.7 4 14.2l5 5L20 8l-1.4-1.4z"/>' },
+    vip: { label: 'VIP', icon: '<path d="M12 2l2.9 6.3 6.9.8-5 4.8 1.3 6.9L12 18l-6.1 3.8 1.3-6.9L2.2 9.1l6.9-.8z"/>' },
+    moderator: { label: 'Moderator', icon: '<path d="M12 2l8 3v6c0 5-3.5 8.4-8 10-4.5-1.6-8-5-8-10V5z"/>' }
+  };
+  function profileTagPill(t) {
+    const m = PROFILE_TAG_META[t] || { label: t, icon: '<circle cx="12" cy="12" r="6"/>' };
+    const icon = `<svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true">${m.icon}</svg>`;
+    return `<span class="profile-tag-pill t-${escapeHtml(t)}">${icon}${escapeHtml(m.label)}</span>`;
+  }
+  const SOCIAL_META = {
+    telegram: { title: 'Telegram', icon: '<path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>' },
+    youtube: { title: 'YouTube', icon: '<path d="M23 12s0-3.5-.46-5.19a2.78 2.78 0 0 0-1.94-1.96C18.88 4.4 12 4.4 12 4.4s-6.88 0-8.6.45A2.78 2.78 0 0 0 1.46 6.8C1 8.5 1 12 1 12s0 3.5.46 5.2a2.78 2.78 0 0 0 1.94 1.95c1.72.45 8.6.45 8.6.45s6.88 0 8.6-.45a2.78 2.78 0 0 0 1.94-1.95C23 15.5 23 12 23 12zM9.75 15.02V8.98L15.5 12z"/>' },
+    spotify: { title: 'Spotify', icon: '<path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm4.59 14.43a.75.75 0 0 1-1.03.25c-2.82-1.72-6.37-2.11-10.56-1.15a.75.75 0 1 1-.33-1.46c4.58-1.05 8.5-.6 11.67 1.33.35.21.46.68.25 1.03zm1.22-2.72a.94.94 0 0 1-1.29.31c-3.23-1.98-8.15-2.56-11.97-1.4a.94.94 0 1 1-.55-1.8c4.36-1.32 9.78-.68 13.5 1.6.44.27.58.85.31 1.29zm.11-2.84C14.83 8.9 9.4 8.7 5.75 9.75a1.12 1.12 0 1 1-.65-2.15C9.2 6.4 15.2 6.64 19.34 9.2a1.12 1.12 0 1 1-1.14 1.93z"/>' }
+  };
+  function renderProfileSocials(s) {
+    const out = [];
+    for (const [k, meta] of Object.entries(SOCIAL_META)) {
+      const v = s && s[k]; if (!v) continue;
+      let href = '';
+      if (/^https?:\/\//i.test(v)) href = v;
+      else if (k === 'telegram') href = 'https://t.me/' + String(v).replace(/^@/, '');
+      else continue;
+      out.push(`<a class="profile-social-link" href="${escapeHtml(href)}" target="_blank" rel="noopener" title="${meta.title}" aria-label="${meta.title}"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">${meta.icon}</svg></a>`);
+    }
+    return out.join('');
+  }
+  function updateProfileNow() {
+    if (!el.profileNow) return;
+    const t = state.currentTrack;
+    if (!t) { el.profileNow.hidden = true; return; }
+    el.profileNow.hidden = false;
+    el.profileNowEmpty.hidden = true;
+    el.profileNowBody.hidden = false;
+    el.profileNowProvider.textContent = String(t.source || t.provider || 'CATALOG').toUpperCase();
+    el.profileNowCover.src = coverFor(t) || placeholderCover();
+    el.profileNowTitle.textContent = t.title || '—';
+    el.profileNowArtist.textContent = t.artist || '—';
+    const dur = Number.isFinite(el.audio.duration) && el.audio.duration > 0 ? el.audio.duration : (Number(t.duration) || 0);
+    const cur = el.audio.currentTime || 0;
+    el.profileNowCur.textContent = formatTime(cur);
+    el.profileNowDur.textContent = formatTime(dur);
+    el.profileNowFill.style.width = (dur > 0 ? Math.min(100, Math.max(0, (cur / dur) * 100)) : 0) + '%';
+    const playing = userIntent === 'playing';
+    el.profileNowPlayIcon.innerHTML = playing
+      ? '<rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/>'
+      : '<path d="M8 5v14l11-7z"/>';
+  }
+  function setProfileTab(tab) {
+    el.profileModal?.querySelectorAll('.profile-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    el.profileModal?.querySelectorAll('.profile-panel').forEach(p => { p.hidden = p.dataset.panel !== tab; });
+  }
+  function renderProfilePlaylists() {
+    if (!el.profilePlaylists) return;
+    const pls = state.playlists || [];
+    if (!pls.length) { el.profilePlaylists.innerHTML = '<div class="profile-panel-empty">Нет плейлистов</div>'; return; }
+    el.profilePlaylists.innerHTML = pls.map((pl, i) =>
+      `<div class="profile-panel-item" data-pl="${escapeHtml(pl.id)}"><div class="profile-panel-num">${i + 1}</div><div class="profile-panel-info"><div class="profile-panel-title">${escapeHtml(pl.name)}</div><div class="profile-panel-sub">${pl.tracks?.length || 0} треков</div></div></div>`
+    ).join('');
+    el.profilePlaylists.querySelectorAll('.profile-panel-item').forEach(it => it.addEventListener('click', () => {
+      const id = it.dataset.pl; closeProfile(); openPlaylist(id);
+    }));
+  }
+
+
   async function openProfile() {
     console.log('[profile] openProfile() start; user=', state.user ? state.user.username : 'guest', '; modalEl=', !!el.profileModal, '; inDom=', document.contains(el.profileModal));
     el.profileModal.classList.add('open');
     el.profileModal.setAttribute('aria-hidden', 'false');
     const u = state.user;
     if (u) {
-      const url = u.provider === 'discord' ? avatarUrl(u) : defaultAvatarSvg();
+      if (u.banner) { el.profileBanner.style.backgroundImage = `url("${u.banner}")`; el.profileBanner.style.backgroundColor = ''; }
+      else { el.profileBanner.style.backgroundImage = ''; el.profileBanner.style.backgroundColor = u.bannerColor || '#1DB954'; }
+      const url = u.provider === 'discord' ? avatarUrl(u) : (u.avatar ? u.avatar : defaultAvatarSvg());
       el.profileAvatarBig.innerHTML = `<img src="${url}" alt="">`;
       el.profileName.textContent = u.username || 'User';
+      el.profileTags.innerHTML = (u.tags || []).map(profileTagPill).join('');
       el.profileTag.textContent = '@' + (u.username || 'user').toLowerCase();
+      el.profileBio.textContent = u.bio || '';
+      el.profileSocials.innerHTML = renderProfileSocials(u.socials || {});
     } else {
-      el.profileAvatarBig.textContent = 'G';
+      el.profileBanner.style.backgroundImage = ''; el.profileBanner.style.backgroundColor = '#1DB954';
+      el.profileAvatarBig.innerHTML = `<img src="${defaultAvatarSvg()}" alt="">`;
       el.profileName.textContent = 'Гость';
+      el.profileTags.innerHTML = '';
       el.profileTag.textContent = '@guest';
+      el.profileBio.textContent = '';
+      el.profileSocials.innerHTML = '';
     }
+    updateProfileNow();
+    setProfileTab('tracks');
     if (!u || !authToken) {
-      el.statTracks.textContent = '0'; el.statArtists.textContent = '0'; el.statPlaylists.textContent = '0';
-      el.profileSummaryTitle.textContent = 'Войди, чтобы увидеть статистику';
+      el.statTracks.textContent = '0'; el.statArtists.textContent = '0'; el.statPlaylists.textContent = '0'; el.statFavorites.textContent = '0';
       el.profileTopArtists.innerHTML = '<div class="profile-panel-empty">Нет данных</div>';
       el.profileTopTracks.innerHTML = '<div class="profile-panel-empty">Нет данных</div>';
+      renderProfilePlaylists();
       return;
     }
-    el.profileSummaryTitle.textContent = 'Загрузка…';
     try {
       const s = await apiAuth('/api/stats');
       console.log('[profile] stats loaded; tracks=', s.tracks, '; topArtists=', (s.topArtists || []).length);
       el.statTracks.textContent = formatNumber(s.tracks || 0);
       el.statArtists.textContent = formatNumber(s.artists || 0);
       el.statPlaylists.textContent = formatNumber(s.playlists || 0);
-      el.profileSummaryTitle.textContent = (s.tracks || 0) > 0 ? 'Твоя медиатека активна' : 'Пока чистая история';
+      el.statFavorites.textContent = formatNumber(s.favorites || 0);
       if (s.topArtists?.length) {
         el.profileTopArtists.innerHTML = s.topArtists.map((a, i) =>
           `<div class="profile-panel-item" data-artist="${escapeHtml(a.name)}"><div class="profile-panel-num">${i + 1}</div><div class="profile-panel-info"><div class="profile-panel-title">${escapeHtml(a.name)}</div><div class="profile-panel-sub">Артист</div></div><div class="profile-panel-count">${a.count}</div></div>`).join('');
@@ -2728,7 +2810,8 @@
           playFromList([normalizeTrack(tr)], 0, { force: true });
         }));
       } else el.profileTopTracks.innerHTML = '<div class="profile-panel-empty">Нет данных</div>';
-    } catch (e) { console.log('[profile] stats error:', e && e.message); el.profileSummaryTitle.textContent = 'Не удалось загрузить'; }
+      renderProfilePlaylists();
+    } catch (e) { console.log('[profile] stats error:', e && e.message); }
   }
   function closeProfile() {
     el.profileModal.classList.remove('open');
@@ -3308,8 +3391,13 @@
       const a = btn.dataset.action;
       if (a === 'logout') { closeProfile(); logout(); }
       else if (a === 'copy') { if (state.user) { try { navigator.clipboard.writeText(state.user.id); notify('ID скопирован'); } catch {} } else notify('Войди'); }
+      else if (a === 'edit') { notify('Редактирование профиля — скоро', 'info'); }
     });
   });
+  el.profileModal?.querySelectorAll('.profile-tab').forEach(tab => {
+    tab.addEventListener('click', () => setProfileTab(tab.dataset.tab));
+  });
+  on(el.profileNowBtn, 'click', () => { playCurrentOrFirst(); updateProfileNow(); });
 
   on(el.workshopModalClose, 'click', closeWorkshop);
   on(el.workshopModal, 'click', e => { if (e.target === el.workshopModal) closeWorkshop(); });
@@ -3405,6 +3493,7 @@
 
   setInterval(() => {
     if (state.currentTrack && userIntent === 'playing') updateProgress();
+    if (el.profileModal?.classList.contains('open')) updateProfileNow();
   }, 1000);
   setInterval(refreshDiagnostics, 3000);
 

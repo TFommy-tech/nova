@@ -538,46 +538,87 @@
 
   <div id="profileModal" class="profile-modal" aria-hidden="true">
     <div class="profile-card">
-      <aside class="profile-side">
+      <button id="profileModalClose" class="profile-modal-close" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+
+      <div class="profile-banner" id="profileBanner"></div>
+
+      <div class="profile-head">
         <div class="profile-avatar-big" id="profileAvatarBig">G</div>
-        <div class="profile-section-label">ПРОФИЛЬ</div>
-        <div class="profile-name" id="profileName">Гость</div>
-        <div class="profile-tag" id="profileTag">@guest</div>
-        <div class="profile-actions">
-          <button class="profile-action" data-action="copy">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></svg>
-            Скопировать ID
-          </button>
-          <button class="profile-action" data-action="logout">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 4h4v16h-4"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/></svg>
-            Выйти
-          </button>
-        </div>
-      </aside>
-      <main class="profile-main">
-        <div class="profile-main-head">
-          <div class="profile-main-label">СВОДКА МЕДИАТЕКИ</div>
-          <button id="profileModalClose" class="profile-modal-close">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
-          </button>
-        </div>
-        <h2 class="profile-main-title" id="profileSummaryTitle">Пока чистая история</h2>
-        <div class="profile-stats">
-          <div class="profile-stat"><div class="profile-stat-num" id="statTracks">0</div><div class="profile-stat-label">Треки</div></div>
-          <div class="profile-stat"><div class="profile-stat-num" id="statArtists">0</div><div class="profile-stat-label">Артисты</div></div>
-          <div class="profile-stat"><div class="profile-stat-num" id="statPlaylists">0</div><div class="profile-stat-label">Плейлисты</div></div>
-        </div>
-        <div class="profile-panels">
-          <div class="profile-panel">
-            <div class="profile-panel-head"><span>Топ артистов</span></div>
-            <div class="profile-panel-body" id="profileTopArtists"><div class="profile-panel-empty">Нет данных</div></div>
+        <div class="profile-head-info">
+          <div class="profile-name-row">
+            <span class="profile-name" id="profileName">Гость</span>
+            <span class="profile-tags" id="profileTags"></span>
           </div>
-          <div class="profile-panel">
-            <div class="profile-panel-head"><span>Топ треков</span></div>
-            <div class="profile-panel-body" id="profileTopTracks"><div class="profile-panel-empty">Нет данных</div></div>
+          <div class="profile-tag" id="profileTag">@guest</div>
+          <div class="profile-bio" id="profileBio"></div>
+          <div class="profile-socials" id="profileSocials"></div>
+        </div>
+      </div>
+
+      <div class="profile-now" id="profileNow">
+        <div class="profile-now-label">СЕЙЧАС ИГРАЕТ</div>
+        <div class="profile-now-empty" id="profileNowEmpty">Ничего не играет</div>
+        <div class="profile-now-body" id="profileNowBody" hidden>
+          <div class="profile-now-provider" id="profileNowProvider">CATALOG</div>
+          <div class="profile-now-row">
+            <img class="profile-now-cover" id="profileNowCover" alt="">
+            <div class="profile-now-info">
+              <div class="profile-now-title" id="profileNowTitle">—</div>
+              <div class="profile-now-artist" id="profileNowArtist">—</div>
+              <div class="profile-now-progress">
+                <span class="profile-now-time" id="profileNowCur">0:00</span>
+                <div class="profile-now-bar"><div class="profile-now-fill" id="profileNowFill"></div></div>
+                <span class="profile-now-time" id="profileNowDur">0:00</span>
+              </div>
+            </div>
+            <button class="profile-now-btn" id="profileNowBtn" aria-label="Play/Pause">
+              <svg id="profileNowPlayIcon" viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </button>
           </div>
         </div>
-      </main>
+      </div>
+
+      <div class="profile-actions">
+        <button class="profile-action" data-action="copy">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></svg>
+          Скопировать ID
+        </button>
+        <button class="profile-action" data-action="edit">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+          Редактировать
+        </button>
+        <button class="profile-action danger" data-action="logout">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M15 4h4v16h-4"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/></svg>
+          Выйти
+        </button>
+      </div>
+
+      <div class="profile-stats">
+        <div class="profile-stat"><div class="profile-stat-num" id="statTracks">0</div><div class="profile-stat-label">Треки</div></div>
+        <div class="profile-stat"><div class="profile-stat-num" id="statArtists">0</div><div class="profile-stat-label">Артисты</div></div>
+        <div class="profile-stat"><div class="profile-stat-num" id="statPlaylists">0</div><div class="profile-stat-label">Плейлисты</div></div>
+        <div class="profile-stat"><div class="profile-stat-num" id="statFavorites">0</div><div class="profile-stat-label">Избранное</div></div>
+      </div>
+
+      <div class="profile-tabs">
+        <button class="profile-tab active" data-tab="tracks">Топ треки</button>
+        <button class="profile-tab" data-tab="artists">Топ артисты</button>
+        <button class="profile-tab" data-tab="playlists">Плейлисты</button>
+      </div>
+
+      <div class="profile-panels">
+        <div class="profile-panel" data-panel="tracks">
+          <div class="profile-panel-body" id="profileTopTracks"><div class="profile-panel-empty">Нет данных</div></div>
+        </div>
+        <div class="profile-panel" data-panel="artists" hidden>
+          <div class="profile-panel-body" id="profileTopArtists"><div class="profile-panel-empty">Нет данных</div></div>
+        </div>
+        <div class="profile-panel" data-panel="playlists" hidden>
+          <div class="profile-panel-body" id="profilePlaylists"><div class="profile-panel-empty">Нет плейлистов</div></div>
+        </div>
+      </div>
     </div>
   </div>
 
