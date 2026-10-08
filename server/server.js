@@ -56,6 +56,8 @@ const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI ||
 const AUDIUS_API_KEY = process.env.AUDIUS_API_KEY || '';
 // SoundCloud client_id периодически ротируется — на Render добавить в Environment (fallback в коде есть)
 const SOUNDCLOUD_CLIENT_ID = process.env.SOUNDCLOUD_CLIENT_ID || 'dkevB9EsY4jIoSm8RfddPNUKyn6hurXF';
+// Логин владельца: при создании/миграции аккаунта ему автоматически выдаётся тег owner
+const OWNER_USERNAME = (process.env.OWNER_USERNAME || 'pozornik').toLowerCase();
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -67,6 +69,86 @@ function saveJson(p, d) { try { fs.writeFileSync(p, JSON.stringify(d, null, 2));
 let db = loadJson(DB_PATH, {});
 for (const k of ['users', 'favorites', 'history', 'plays', 'playlists']) if (!db[k]) db[k] = {};
 const saveDb = () => saveJson(DB_PATH, db);
+
+// ---------- User profile model (Этап 2) ----------
+const PROFILE_TAGS = ['owner', 'admin', 'artist', 'verified', 'vip', 'moderator'];
+// привилегированные теги нельзя выставить через публичный /api/profile/update — только сервером
+const PRIVILEGED_TAGS = ['owner', 'admin', 'verified', 'vip', 'moderator'];
+const SOCIAL_KEYS = ['telegram', 'youtube', 'spotify'];
+
+// Нормализует юзера под новую модель: гарантирует наличие полей banner/bio/socials/tags.
+// Идемпотентно — можно гонять и на создании, и на миграции старых записей.
+function ensureProfile(u) {
+  if (!u || typeof u !== 'object') return u;
+  if (typeof u.banner !== 'string') u.banner = '';
+  if (typeof u.bannerColor !== 'string') u.bannerColor = '';
+  if (typeof u.bio !== 'string') u.bio = '';
+  if (!u.socials || typeof u.socials !== 'object') u.socials = {};
+  for (const k of SOCIAL_KEYS) if (typeof u.socials[k] !== 'string') u.socials[k] = '';
+  u.tags = validateTags(Array.isArray(u.tags) ? u.tags : []);
+  return u;
+}
+
+// Выдаёт тег owner, если username совпал с OWNER_USERNAME из .env
+function grantOwnerTag(u) {
+  if (!u || typeof u !== 'object') return u;
+  ensureProfile(u);
+  if (OWNER_USERNAME && (u.username || '').toLowerCase() === OWNER_USERNAME && !u.tags.includes('owner'))
+    u.tags.push('owner');
+  return u;
+}
+
+// ---- валидаторы полей профиля (используются в /api/profile/update на Этапе 3) ----
+function validateBanner(v) {
+  const s = typeof v === 'string' ? v.trim() : '';
+  if (!s) return '';
+  if (/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]{10,}$/i.test(s)) return s.slice(0, 3 * 1024 * 1024);
+  if (/^https?:\/\/\S+$/i.test(s) && s.length <= 2048) return s;
+  return '';
+}
+function validateColor(v) {
+  const s = typeof v === 'string' ? v.trim() : '';
+  return /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(s) ? s.toLowerCase() : '';
+}
+function validateBio(v) {
+  return (typeof v === 'string' ? v.replace(/[\r\n\t]+/g, ' ').trim() : '').slice(0, 300);
+}
+function validateSocial(v) {
+  const s = typeof v === 'string' ? v.trim() : '';
+  if (!s) return '';
+  // допускаем ссылки http(s) и «хендлы» вида @name / t.me/name / имя канала
+  if (/^https?:\/\/\S+$/i.test(s)) return s.slice(0, 300);
+  if (/^@?[A-Za-z0-9._/-]{2,64}$/.test(s)) return s.slice(0, 300);
+  return '';
+}
+function validateSocials(obj) {
+  const out = { telegram: '', youtube: '', spotify: '' };
+  if (obj && typeof obj === 'object') for (const k of SOCIAL_KEYS) out[k] = validateSocial(obj[k]);
+  return out;
+}
+// Теги: только из белого списка, без дублей, приведение к нижнему регистру
+function validateTags(list) {
+  const arr = Array.isArray(list) ? list : (list == null ? [] : [list]);
+  const out = [];
+  for (const raw of arr) {
+    const t = String(raw || '').trim().toLowerCase();
+    if (PROFILE_TAGS.includes(t) && !out.includes(t)) out.push(t);
+  }
+  return out;
+}
+
+// Миграция: подтянуть модель на все существующие аккаунты + выдать owner по OWNER_USERNAME
+(() => {
+  let touched = false;
+  for (const u of Object.values(db.users)) {
+    const before = JSON.stringify(u);
+    ensureProfile(u);
+    grantOwnerTag(u);
+    if (JSON.stringify(u) !== before) touched = true;
+  }
+  if (touched) { saveDb(); console.log(`[auth] profile migration applied; owner=${OWNER_USERNAME}`); }
+})();
+
 let workshop = loadJson(WORKSHOP_PATH, { items: [] });
 if (!Array.isArray(workshop.items)) workshop.items = [];
 const saveWorkshop = () => saveJson(WORKSHOP_PATH, workshop);
@@ -798,10 +880,11 @@ function registerHandler(req, res) {
     return res.status(409).json({ error: 'Логин занят' });
   const id = 'local_' + crypto.randomBytes(8).toString('hex');
   const salt = crypto.randomBytes(16).toString('hex');
-  db.users[id] = {
+  db.users[id] = ensureProfile({
     id, username, avatar: '', provider: 'local',
     passwordHash: hashPassword(password, salt), passwordSalt: salt, createdAt: Date.now()
-  };
+  });
+  grantOwnerTag(db.users[id]);
   db.favorites[id] = []; db.history[id] = []; db.plays[id] = {}; db.playlists[id] = [];
   saveDb();
   const token = jwt.sign({ id, username }, JWT_SECRET, { expiresIn: '30d' });
@@ -851,9 +934,10 @@ api.get('/api/auth/discord/callback', async (req, res) => {
     const ur = await fetch('https://discord.com/api/users/@me', { headers: { Authorization: 'Bearer ' + td.access_token } });
     const user = await ur.json();
     const id = user.id;
-    db.users[id] = db.users[id] || { id, createdAt: Date.now(), provider: 'discord' };
+    db.users[id] = ensureProfile(db.users[id] || { id, createdAt: Date.now(), provider: 'discord' });
     db.users[id].username = user.username;
     db.users[id].avatar = user.avatar || '';
+    grantOwnerTag(db.users[id]);
     db.favorites[id] = db.favorites[id] || []; db.history[id] = db.history[id] || [];
     db.plays[id] = db.plays[id] || {}; db.playlists[id] = db.playlists[id] || [];
     saveDb();
