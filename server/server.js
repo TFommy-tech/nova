@@ -57,7 +57,7 @@ const AUDIUS_API_KEY = process.env.AUDIUS_API_KEY || '';
 // SoundCloud client_id периодически ротируется — на Render добавить в Environment (fallback в коде есть)
 const SOUNDCLOUD_CLIENT_ID = process.env.SOUNDCLOUD_CLIENT_ID || 'dkevB9EsY4jIoSm8RfddPNUKyn6hurXF';
 // Логин владельца: при создании/миграции аккаунта ему автоматически выдаётся тег owner
-const OWNER_USERNAME = (process.env.OWNER_USERNAME || 'pozornik').toLowerCase();
+const OWNER_USERNAME = (process.env.OWNER_USERNAME || 'pozornik').trim().toLowerCase();
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -93,7 +93,10 @@ function ensureProfile(u) {
 function grantOwnerTag(u) {
   if (!u || typeof u !== 'object') return u;
   ensureProfile(u);
-  if (OWNER_USERNAME && (u.username || '').toLowerCase() === OWNER_USERNAME && !u.tags.includes('owner'))
+  const uname = (u.username || '').trim().toLowerCase();
+  const match = !!OWNER_USERNAME && uname === OWNER_USERNAME;
+  console.log('[auth] grantOwnerTag check', { username: u.username, uname, ownerUsername: OWNER_USERNAME, ownerEnvRawLen: (process.env.OWNER_USERNAME || '').length, hasOwnerTag: Array.isArray(u.tags) ? u.tags.includes('owner') : 'no-tags-array', match });
+  if (match && !u.tags.includes('owner'))
     u.tags.push('owner');
   return u;
 }
@@ -152,11 +155,10 @@ function runProfileMigration() {
     ensureProfile(u);
     grantOwnerTag(u);
     if (JSON.stringify(u) !== before) touched = true;
-    if (u.tags && u.tags.includes('owner'))
-      owners.push(`${u.username || id} [match=${(u.username || '').toLowerCase() === OWNER_USERNAME}]`);
+    owners.push(`${u.username} [match=${(u.username || '').trim().toLowerCase() === OWNER_USERNAME}]`);
   }
   if (touched) saveDb();
-  console.log(`[auth] migration done, touched: ${touched}, owners: [${owners.join(', ')}]`);
+  console.log(`[auth] migration done, touched: ${touched}, users: [${owners.join(', ')}]`);
 }
 
 let workshop = loadJson(WORKSHOP_PATH, { items: [] });
