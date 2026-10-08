@@ -137,17 +137,27 @@ function validateTags(list) {
   return out;
 }
 
-// Миграция: подтянуть модель на все существующие аккаунты + выдать owner по OWNER_USERNAME
-(() => {
+// Миграция: подтянуть модель профиля на все существующие аккаунты + выдать owner по OWNER_USERNAME.
+// Вызывается в api.listen() после старта сервера (БД уже загружена на стр. loadJson).
+// Идемпотентно. Всегда пишет диагностические логи, не полагаясь на touched.
+function runProfileMigration() {
+  const ids = Object.keys(db.users);
+  console.log(`[auth] migration start, users: ${ids.length}, owner=${OWNER_USERNAME}`);
   let touched = false;
-  for (const u of Object.values(db.users)) {
+  const owners = [];
+  for (const id of ids) {
+    const u = db.users[id];
+    if (!u || typeof u !== 'object') continue;
     const before = JSON.stringify(u);
     ensureProfile(u);
     grantOwnerTag(u);
     if (JSON.stringify(u) !== before) touched = true;
+    if (u.tags && u.tags.includes('owner'))
+      owners.push(`${u.username || id} [match=${(u.username || '').toLowerCase() === OWNER_USERNAME}]`);
   }
-  if (touched) { saveDb(); console.log(`[auth] profile migration applied; owner=${OWNER_USERNAME}`); }
-})();
+  if (touched) saveDb();
+  console.log(`[auth] migration done, touched: ${touched}, owners: [${owners.join(', ')}]`);
+}
 
 let workshop = loadJson(WORKSHOP_PATH, { items: [] });
 if (!Array.isArray(workshop.items)) workshop.items = [];
@@ -2074,6 +2084,7 @@ function startServer(options = {}) {
       console.log(`[NOVA] DB at ${DB_PATH}`);
       console.log(`[NOVA] resolve debug: ${DEBUG_RESOLVE ? 'ON' : 'off'}`);
       console.log(`[NOVA] users: ${Object.keys(db.users).length}`);
+      runProfileMigration();
       if (IS_PROD && !process.env.DATA_DIR) console.warn('[NOVA] WARNING: DATA_DIR not set');
       console.log('============================================================');
       // Прогреваем youtubei.js в фоне
