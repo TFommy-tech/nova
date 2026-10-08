@@ -2683,6 +2683,7 @@
   }
 
   async function openProfile() {
+    console.log('[profile] openProfile() start; user=', state.user ? state.user.username : 'guest', '; modalEl=', !!el.profileModal, '; inDom=', document.contains(el.profileModal));
     el.profileModal.classList.add('open');
     el.profileModal.setAttribute('aria-hidden', 'false');
     const u = state.user;
@@ -2706,6 +2707,7 @@
     el.profileSummaryTitle.textContent = 'Загрузка…';
     try {
       const s = await apiAuth('/api/stats');
+      console.log('[profile] stats loaded; tracks=', s.tracks, '; topArtists=', (s.topArtists || []).length);
       el.statTracks.textContent = formatNumber(s.tracks || 0);
       el.statArtists.textContent = formatNumber(s.artists || 0);
       el.statPlaylists.textContent = formatNumber(s.playlists || 0);
@@ -2726,7 +2728,7 @@
           playFromList([normalizeTrack(tr)], 0, { force: true });
         }));
       } else el.profileTopTracks.innerHTML = '<div class="profile-panel-empty">Нет данных</div>';
-    } catch { el.profileSummaryTitle.textContent = 'Не удалось загрузить'; }
+    } catch (e) { console.log('[profile] stats error:', e && e.message); el.profileSummaryTitle.textContent = 'Не удалось загрузить'; }
   }
   function closeProfile() {
     el.profileModal.classList.remove('open');
@@ -3042,7 +3044,11 @@
   });
   on(el.userLoginBtn, 'click', () => { toggleUserMenu(false); openLoginModal(); });
   on(el.userLogoutBtn, 'click', () => logout());
-  on(el.openProfileBtn, 'click', () => { toggleUserMenu(false); openProfile(); });
+  on(el.openProfileBtn, 'click', () => {
+    console.log('[profile] menu item clicked; btn=', !!el.openProfileBtn, '; menuOpen=', el.userMenu.classList.contains('open'), '; detached=', !document.contains(el.openProfileBtn));
+    toggleUserMenu(false);
+    openProfile();
+  });
   document.addEventListener('click', e => {
     if (!el.userMenu.contains(e.target) && e.target !== el.avatarBtn) toggleUserMenu(false);
   });
