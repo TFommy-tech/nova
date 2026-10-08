@@ -622,6 +622,60 @@
     </div>
   </div>
 
+  <div id="profileEditModal" class="profile-edit-modal" aria-hidden="true">
+    <div class="profile-edit-card">
+      <button id="profileEditClose" class="login-close" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+      <h2 class="login-title">Редактирование профиля</h2>
+
+      <div class="pe-field">
+        <div class="pe-label">Баннер</div>
+        <div class="pe-banner-preview" id="peBannerPreview"></div>
+        <div class="pe-row">
+          <label class="pe-file-btn" for="peBannerFile">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg>
+            Загрузить
+          </label>
+          <input type="file" id="peBannerFile" accept="image/png,image/jpeg,image/webp" hidden>
+          <label class="pe-color" title="Цвет-фоллбэк">
+            <input type="color" id="peBannerColor" value="#1DB954" aria-label="Цвет баннера">
+            <span>Цвет</span>
+          </label>
+          <button type="button" class="pe-reset" id="peBannerReset">Сбросить</button>
+        </div>
+      </div>
+
+      <div class="pe-field">
+        <div class="pe-label">О себе</div>
+        <textarea id="peBio" class="pe-textarea" rows="3" maxlength="300" placeholder="Расскажи о себе и своих музыкальных вкусах"></textarea>
+        <div class="pe-counter" id="peBioCount">0 / 300</div>
+      </div>
+
+      <div class="pe-field">
+        <div class="pe-label">Соцсети</div>
+        <div class="pe-social">
+          <svg class="pe-social-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/></svg>
+          <input id="peTelegram" class="login-input pe-social-input" type="text" placeholder="Telegram — @username или https://t.me/..." autocomplete="off" spellcheck="false">
+        </div>
+        <div class="pe-social">
+          <svg class="pe-social-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M23 12s0-3.5-.46-5.19a2.78 2.78 0 0 0-1.94-1.96C18.88 4.4 12 4.4 12 4.4s-6.88 0-8.6.45A2.78 2.78 0 0 0 1.46 6.8C1 8.5 1 12 1 12s0 3.5.46 5.2a2.78 2.78 0 0 0 1.94 1.95c1.72.45 8.6.45 8.6.45s6.88 0 8.6-.45a2.78 2.78 0 0 0 1.94-1.95C23 15.5 23 12 23 12zM9.75 15.02V8.98L15.5 12z"/></svg>
+          <input id="peYoutube" class="login-input pe-social-input" type="text" placeholder="YouTube — https://youtube.com/..." autocomplete="off" spellcheck="false">
+        </div>
+        <div class="pe-social">
+          <svg class="pe-social-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm4.59 14.43a.75.75 0 0 1-1.03.25c-2.82-1.72-6.37-2.11-10.56-1.15a.75.75 0 1 1-.33-1.46c4.58-1.05 8.5-.6 11.67 1.33.35.21.46.68.25 1.03zm1.22-2.72a.94.94 0 0 1-1.29.31c-3.23-1.98-8.15-2.56-11.97-1.4a.94.94 0 1 1-.55-1.8c4.36-1.32 9.78-.68 13.5 1.6.44.27.58.85.31 1.29zm.11-2.84C14.83 8.9 9.4 8.7 5.75 9.75a1.12 1.12 0 1 1-.65-2.15C9.2 6.4 15.2 6.64 19.34 9.2a1.12 1.12 0 1 1-1.14 1.93z"/></svg>
+          <input id="peSpotify" class="login-input pe-social-input" type="text" placeholder="Spotify — https://open.spotify.com/..." autocomplete="off" spellcheck="false">
+        </div>
+      </div>
+
+      <div class="pe-actions">
+        <button type="button" class="pe-cancel" id="profileEditCancel">Отмена</button>
+        <button type="button" class="login-submit pe-save" id="profileEditSave">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+
   <div id="workshopModal" class="workshop-modal" aria-hidden="true">
     <div class="workshop-card">
       <div class="workshop-hero">

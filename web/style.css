@@ -827,6 +827,57 @@ select.login-input { background-image: url("data:image/svg+xml;charset=UTF-8,%3C
 .login-submit:disabled { opacity: .55; cursor: default; }
 .login-guest { margin-top: 14px; color: var(--text-3); font-size: 12px; }
 .login-guest:hover { color: #fff; }
+/* PROFILE EDIT MODAL */
+.profile-edit-modal { position: fixed; inset: 0; z-index: 1001; display: grid; place-items: center;
+  background: rgba(0,0,0,.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  opacity: 0; visibility: hidden; transition: opacity .25s var(--ease-out), visibility .25s var(--ease-out);
+  padding: 20px; }
+.profile-edit-modal.open { opacity: 1; visibility: visible; }
+.profile-edit-card { position: relative; width: min(460px, 100%); max-height: 92vh; overflow-y: auto;
+  padding: 28px 26px 22px; background: rgba(20,20,20,.9);
+  -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px);
+  border: 1px solid rgba(255,255,255,.08); border-radius: 20px; box-shadow: 0 40px 100px rgba(0,0,0,.85);
+  transform: translateY(16px) scale(.97); opacity: 0;
+  transition: transform .3s var(--ease-spring), opacity .25s var(--ease-out); }
+.profile-edit-modal.open .profile-edit-card { transform: translateY(0) scale(1); opacity: 1; }
+.profile-edit-card .login-title { margin-bottom: 22px; }
+html[data-theme="light"] .profile-edit-card { background: #fff; border-color: var(--border); }
+.pe-field { text-align: left; margin-bottom: 18px; }
+.pe-label { font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--text-4); margin-bottom: 8px; }
+.pe-banner-preview { height: 110px; border-radius: var(--radius-md); background: #1DB954 center/cover no-repeat;
+  border: 1px solid rgba(255,255,255,.08); margin-bottom: 10px; }
+.pe-row { display: flex; align-items: center; gap: 10px; }
+.pe-file-btn { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px;
+  border-radius: var(--radius); border: 1px solid var(--border-2); background: #0d0d0d; color: #ccc;
+  font-size: 12.5px; font-weight: 600; cursor: pointer; transition: all var(--dur-fast) var(--ease); }
+.pe-file-btn:hover { color: #fff; background: #151515; border-color: #383838; }
+.pe-color { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 12px;
+  border-radius: var(--radius); border: 1px solid var(--border-2); background: #0d0d0d;
+  color: var(--text-3); font-size: 12px; font-weight: 600; cursor: pointer; }
+.pe-color input[type="color"] { width: 26px; height: 26px; padding: 0; border: 1px solid var(--border-2);
+  border-radius: 6px; background: transparent; cursor: pointer; }
+.pe-color input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.pe-color input[type="color"]::-webkit-color-swatch { border: 0; border-radius: 4px; }
+.pe-reset { margin-left: auto; height: 36px; padding: 0 12px; border-radius: var(--radius);
+  color: #f87171; font-size: 12px; font-weight: 600; transition: background var(--dur-fast) var(--ease); }
+.pe-reset:hover { background: rgba(248,113,113,.08); }
+.pe-textarea { width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px;
+  background: rgba(255,255,255,.05); color: #fff; font-size: 13px; font-family: inherit; line-height: 1.5;
+  resize: vertical; outline: 0; transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease); }
+.pe-textarea:focus { border-color: rgba(255,255,255,.16); background: rgba(255,255,255,.08); }
+.pe-counter { text-align: right; font-size: 10.5px; color: var(--text-4); margin-top: 5px; font-variant-numeric: tabular-nums; }
+.pe-counter.over { color: #f87171; }
+.pe-social { position: relative; display: flex; align-items: center; margin-bottom: 8px; }
+.pe-social-icon { position: absolute; left: 14px; width: 15px; height: 15px; color: var(--text-4); pointer-events: none; }
+.pe-social-input { height: 42px; padding-left: 38px; }
+.pe-actions { display: flex; gap: 10px; margin-top: 22px; }
+.pe-cancel { flex: 1; height: 44px; border-radius: var(--radius-md); border: 1px solid var(--border-2);
+  background: #0d0d0d; color: #ccc; font-size: 13px; font-weight: 600; transition: all var(--dur) var(--ease); }
+.pe-cancel:hover { color: #fff; background: #151515; border-color: #383838; }
+.pe-save { flex: 1; }
+
+
 
 .song-info-card { width: min(420px, 100%); padding: 26px 22px; text-align: center; }
 .song-info-cover { width: 160px; height: 160px; border-radius: var(--radius-md); object-fit: cover; margin: 0 auto 14px; border: 1px solid var(--border); }

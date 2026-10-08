@@ -162,6 +162,9 @@
     'profileTopTracks','profileTopArtists','profilePlaylists',
     'playlistPickerModal','playlistPickerClose','playlistPickerList','playlistPickerNew',
     'playlistCreateModal','playlistCreateClose','playlistNameInput','playlistDescInput','playlistCreateSubmit',
+    'profileEditModal','profileEditClose','profileEditCancel','profileEditSave',
+    'peBannerPreview','peBannerFile','peBannerColor','peBannerReset','peBio','peBioCount',
+    'peTelegram','peYoutube','peSpotify',
     'contextMenu','toast',
     'audio'
   ].forEach(id => { el[id] = safeEl(id); });
@@ -2754,6 +2757,87 @@
   }
 
 
+  let profileEditBanner = null; // null = не меняли; '' = сбросить; data-url = новый баннер
+  function peCounter() {
+    const v = el.peBio.value.replace(/[\r\n\t]+/g, ' ');
+    if (v !== el.peBio.value) el.peBio.value = v;
+    const n = v.length;
+    el.peBioCount.textContent = n + ' / 300';
+    el.peBioCount.classList.toggle('over', n > 280);
+  }
+  function openProfileEdit() {
+    const u = state.user; if (!u) return notify('Войди', 'error');
+    profileEditBanner = null;
+    if (u.banner) { el.peBannerPreview.style.backgroundImage = `url("${u.banner}")`; }
+    else { el.peBannerPreview.style.backgroundImage = ''; el.peBannerPreview.style.backgroundColor = u.bannerColor || '#1DB954'; }
+    el.peBannerColor.value = /^#[0-9a-f]{6}$/i.test(u.bannerColor || '') ? u.bannerColor.toLowerCase() : '#1DB954';
+    el.peBio.value = u.bio || '';
+    peCounter();
+    const sc = u.socials || {};
+    el.peTelegram.value = sc.telegram || '';
+    el.peYoutube.value = sc.youtube || '';
+    el.peSpotify.value = sc.spotify || '';
+    el.profileEditModal.classList.add('open');
+    el.profileEditModal.setAttribute('aria-hidden', 'false');
+  }
+  function closeProfileEdit() {
+    el.profileEditModal.classList.remove('open');
+    el.profileEditModal.setAttribute('aria-hidden', 'true');
+    profileEditBanner = null;
+  }
+  function peReadBannerFile(input) {
+    const f = input.files && input.files[0];
+    if (!f) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(f.type)) { notify('Только PNG, JPG или WEBP', 'error'); input.value = ''; return; }
+    if (f.size > 500 * 1024) { notify('Файл больше 500 КБ', 'error'); input.value = ''; return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      profileEditBanner = String(reader.result || '');
+      el.peBannerPreview.style.backgroundImage = `url("${profileEditBanner}")`;
+      notify('Баннер загружен');
+    };
+    reader.onerror = () => notify('Не удалось прочитать файл', 'error');
+    reader.readAsDataURL(f);
+  }
+  async function saveProfileEdit() {
+    const u = state.user; if (!u) return notify('Войди', 'error');
+    const bio = el.peBio.value.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 300);
+    const socials = {
+      telegram: el.peTelegram.value.trim(),
+      youtube: el.peYoutube.value.trim(),
+      spotify: el.peSpotify.value.trim()
+    };
+    const bad = [];
+    if (socials.telegram && !/^(https?:\/\/\S+|@?[A-Za-z0-9._/-]{2,64})$/i.test(socials.telegram)) bad.push('Telegram');
+    if (socials.youtube && !/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\/\S+$/i.test(socials.youtube)) bad.push('YouTube');
+    if (socials.spotify && !/^https?:\/\/open\.spotify\.com\/\S+$/i.test(socials.spotify)) bad.push('Spotify');
+    if (bad.length) return notify('Проверь ссылку: ' + bad.join(', '), 'error');
+    const body = {
+      banner: profileEditBanner === null ? u.banner || '' : profileEditBanner,
+      bannerColor: el.peBannerColor.value,
+      bio,
+      socials
+    };
+    el.profileEditSave.disabled = true;
+    try {
+      const r = await apiAuth('/api/profile/update', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+      });
+      const updated = (r && r.user) || u;
+      state.user = updated;
+      store.set('nova_user', JSON.stringify(updated));
+      notify('Профиль обновлён');
+      closeProfileEdit();
+      openProfile();
+    } catch (e) {
+      notify('Не удалось сохранить профиль', 'error');
+      console.log('[profile] update error:', e && e.message);
+    } finally {
+      el.profileEditSave.disabled = false;
+    }
+  }
+
+
   async function openProfile() {
     console.log('[profile] openProfile() start; user=', state.user ? state.user.username : 'guest', '; modalEl=', !!el.profileModal, '; inDom=', document.contains(el.profileModal));
     el.profileModal.classList.add('open');
@@ -3391,13 +3475,22 @@
       const a = btn.dataset.action;
       if (a === 'logout') { closeProfile(); logout(); }
       else if (a === 'copy') { if (state.user) { try { navigator.clipboard.writeText(state.user.id); notify('ID скопирован'); } catch {} } else notify('Войди'); }
-      else if (a === 'edit') { notify('Редактирование профиля — скоро', 'info'); }
+      else if (a === 'edit') { openProfileEdit(); }
     });
   });
   el.profileModal?.querySelectorAll('.profile-tab').forEach(tab => {
     tab.addEventListener('click', () => setProfileTab(tab.dataset.tab));
   });
   on(el.profileNowBtn, 'click', () => { playCurrentOrFirst(); updateProfileNow(); });
+
+  on(el.profileEditClose, 'click', closeProfileEdit);
+  on(el.profileEditCancel, 'click', closeProfileEdit);
+  on(el.profileEditModal, 'click', e => { if (e.target === el.profileEditModal) closeProfileEdit(); });
+  on(el.profileEditSave, 'click', saveProfileEdit);
+  on(el.peBannerFile, 'change', e => peReadBannerFile(e.target));
+  on(el.peBio, 'input', peCounter);
+  on(el.peBannerColor, 'input', e => { el.peBannerPreview.style.backgroundImage = ''; el.peBannerPreview.style.backgroundColor = e.target.value || '#1DB954'; });
+  on(el.peBannerReset, 'click', () => { profileEditBanner = ''; el.peBannerPreview.style.backgroundImage = ''; notify('Баннер сброшён — используется цвет'); });
 
   on(el.workshopModalClose, 'click', closeWorkshop);
   on(el.workshopModal, 'click', e => { if (e.target === el.workshopModal) closeWorkshop(); });
@@ -3465,7 +3558,8 @@
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
-      if (el.songInfoModal.classList.contains('open')) closeSongInfo();
+      if (el.profileEditModal.classList.contains('open')) closeProfileEdit();
+      else if (el.songInfoModal.classList.contains('open')) closeSongInfo();
       else if (el.equalizerModal.classList.contains('open')) closeEqualizer();
       else if (el.profileModal.classList.contains('open')) closeProfile();
       else if (el.workshopPublishModal.classList.contains('open')) closeWorkshopPublish();
