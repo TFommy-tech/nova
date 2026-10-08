@@ -3041,6 +3041,41 @@
     e.stopPropagation();
     if (!state.user) { openLoginModal(); return; }
     toggleUserMenu();
+    // [диагностика профиля] через 400мс (меню уже открыто) — кто перекрывает пункт «Профиль»
+    setTimeout(() => {
+      const b = el.openProfileBtn;
+      if (!b || !document.contains(b)) { console.log('[profile] diag: button missing/detached'); return; }
+      const r = b.getBoundingClientRect();
+      const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2);
+      const top = document.elementFromPoint(x, y);
+      const stack = (document.elementsFromPoint(x, y) || []).slice(0, 6).map(n =>
+        (n.id ? '#' + n.id : '') + (n.className ? '.' + String(n.className).split(/\s+/).slice(0, 2).join('.') : '') + '<' + n.tagName.toLowerCase() + '>');
+      const menuCs = getComputedStyle(el.userMenu);
+      console.log('[profile] diag avatar-click; btnRect=', JSON.stringify({ x, y, w: Math.round(r.width), h: Math.round(r.height) }),
+        '; menu=', menuCs.visibility + '/' + menuCs.opacity,
+        '; top=', top ? ((top.id ? '#' + top.id : '') + '<' + top.tagName.toLowerCase() + '>') : 'null',
+        '; stack=', stack.join(' >> '));
+      // подробности стекинга: цепочки предков меню и перекрывающего элемента
+      const chain = (n) => {
+        const out = [];
+        while (n && n !== document.documentElement) {
+          const cs = getComputedStyle(n);
+          out.push((n.id ? '#' + n.id : n.className ? '.' + String(n.className).split(/\s+/)[0] : n.tagName.toLowerCase()) +
+            '{pos:' + cs.position + ',z:' + cs.zIndex + ',op:' + cs.overflow + ',anim:' + cs.animationName + ',iso:' + cs.isolation + ',tr:' + (cs.transform !== 'none' ? 'Y' : '-') + '}');
+          n = n.parentElement;
+        }
+        return out.join(' > ');
+      };
+      console.log('[profile] diag MENU chain: ', chain(el.userMenu));
+      if (top) console.log('[profile] diag TOP chain: ', chain(top));
+      const mr = el.userMenu.getBoundingClientRect();
+      const sb = el.sidebar.getBoundingClientRect();
+      console.log('[profile] diag menuRect=', JSON.stringify({ t: Math.round(mr.top), l: Math.round(mr.left), r: Math.round(mr.right), b: Math.round(mr.bottom) }),
+        '; sidebarRect=', JSON.stringify({ t: Math.round(sb.top), l: Math.round(sb.left), r: Math.round(sb.right), b: Math.round(sb.bottom) }),
+        '; sidebarOverflow=', getComputedStyle(el.sidebar).overflow);
+      const su = el.startupScreen, suc = getComputedStyle(su);
+      console.log('[profile] diag startup:', JSON.stringify({ cls: su.className, vis: suc.visibility, op: suc.opacity, pe: suc.pointerEvents }));
+    }, 400);
   });
   on(el.userLoginBtn, 'click', () => { toggleUserMenu(false); openLoginModal(); });
   on(el.userLogoutBtn, 'click', () => logout());

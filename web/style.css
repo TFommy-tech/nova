@@ -125,7 +125,9 @@ body.has-background #backgroundLayer { opacity: 1; }
   align-items: center; width: var(--sidebar-w); padding: 14px 0; gap: 6px;
   background: rgba(255,255,255,.03);
   -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
-  border-right: 1px solid rgba(255,255,255,.06); overflow: hidden; }
+  border-right: 1px solid rgba(255,255,255,.06);
+  /* NB: без overflow:hidden — иначе обрезается .user-menu (240px шире сайдбара 80px),
+     пункт «Профиль» становится некликабельным (баг: профиль не открывался) */ }
 .sidebar .logo { width: 44px; height: 44px; display: grid; place-items: center;
   border: 1px solid rgba(255,255,255,.08); border-radius: var(--radius-md);
   background: rgba(255,255,255,.05); transition: all .2s var(--ease);
