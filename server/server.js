@@ -76,21 +76,18 @@ const searchCache = new Map();
 const resolveCache = new Map();
 const lyricsCache = new Map();
 const artistCache = new Map();
-const coverCache = new Map();
 const SEARCH_TTL = 60 * 1000;
 const RESOLVE_TTL = 25 * 60 * 1000;
 const LYRICS_TTL = 24 * 60 * 60 * 1000;
 const LYRICS_NEG_TTL = 5 * 60 * 1000; // B14: «не найдено» кэшируем на минуты, не на сутки
 const ARTIST_TTL = 10 * 60 * 1000;
 const ARTIST_EMPTY_TTL = 60 * 1000;
-const COVER_PROXY_TTL = 60 * 60 * 1000;
 setInterval(() => {
   const now = Date.now();
   for (const [k, v] of searchCache) if (now - v.time > SEARCH_TTL) searchCache.delete(k);
   for (const [k, v] of resolveCache) if (now - v.time > RESOLVE_TTL) resolveCache.delete(k);
   for (const [k, v] of lyricsCache) if (now - v.time > LYRICS_TTL) lyricsCache.delete(k);
   for (const [k, v] of artistCache) if (now - v.time > (v.ttl || ARTIST_TTL)) artistCache.delete(k);
-  for (const [k, v] of coverCache) if (now - v.time > COVER_PROXY_TTL) coverCache.delete(k);
 }, 5 * 60 * 1000);
 
 // ---------- EXPRESS ----------
@@ -1799,39 +1796,22 @@ api.get('/api/download/youtube/:videoId', async (req, res) => {
 });
 
 // ============================================================================
-// COVER PROXY (i1.sndcdn.com блокирует прямые запросы — отдаём через себя)
+// COVER PROXY — 302 на wsrv.nl (IP VDSina блокирует sndcdn/dzcdn, серверный
+// fetch падал с 502; браузер пользователя сам забирает картинку у wsrv.nl)
 // ============================================================================
 const COVER_ALLOW_HOSTS = [/\.sndcdn\.com$/i, /\.dzcdn\.net$/i, /\.ytimg\.com$/i, /\.audius\.co$/i];
 const coverHostAllowed = h => COVER_ALLOW_HOSTS.some(re => re.test(String(h || '')));
-api.get('/api/cover-proxy', async (req, res) => {
+api.get('/api/cover-proxy', (req, res) => {
   const raw = String(req.query.url || '');
   let u = null;
   try { u = new URL(raw); } catch {}
-  if (!u || (u.protocol !== 'http:' && u.protocol !== 'https:')) return res.status(400).json({ error: 'bad_url' });
-  if (!coverHostAllowed(u.hostname)) return res.status(403).json({ error: 'host_not_allowed' });
-  const send = (buf, type) => {
-    res.setHeader('Content-Type', type);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.send(buf);
-  };
-  const hit = coverCache.get(u.href);
-  if (hit && Date.now() - hit.time < COVER_PROXY_TTL) return send(hit.buf, hit.type);
-  try {
-    const r = await fetch(u.href, { headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*' }, redirect: 'follow', timeout: 10000 });
-    if (r.url) { // после редиректа хост тоже должен быть в allow-list (SSRF)
-      let fu = null; try { fu = new URL(r.url); } catch {}
-      if (!fu || !coverHostAllowed(fu.hostname)) { try { r.body?.destroy(); } catch {} return res.status(403).json({ error: 'redirect_not_allowed' }); }
-    }
-    if (!r.ok) { try { r.body?.destroy?.(); } catch {} return res.status(502).end(); }
-    const buf = Buffer.from(await r.arrayBuffer());
-    const type = String(r.headers.get('content-type') || 'image/jpeg').split(';')[0];
-    coverCache.set(u.href, { buf, type, time: Date.now() });
-    send(buf, type);
-  } catch (e) {
-    console.log('[cover-proxy] fail', u.hostname, e.message);
-    res.status(502).end();
-  }
+  if (!u || (u.protocol !== 'http:' && u.protocol !== 'https:')) return res.status(400).end();
+  if (!coverHostAllowed(u.hostname)) return res.status(403).end();
+  // 302 на wsrv.nl: он сам забирает картинку у CDN, наш сервер не ходит в
+  // заблокированные с его IP хосты и не тратит трафик.
+  const ws = 'https://wsrv.nl/?url=' + encodeURIComponent(raw) + '&w=500&h=500&fit=cover&output=webp';
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.redirect(302, ws);
 });
 
 // ============================================================================
