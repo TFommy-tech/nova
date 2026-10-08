@@ -21,6 +21,8 @@ const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const os = require('os');
+const { spawn } = require('child_process');
 require('dotenv').config();
 
 const PORT = Number(process.env.PORT || 3123);
@@ -1498,7 +1500,7 @@ api.get('/api/audio/soundcloud/:id', async (req, res) => {
   }
 });
 
-// ---------- YouTube stream: youtubei.js → Invidious → Piped ----------
+// ---------- YouTube stream: yt-dlp → Invidious → Piped → youtubei.js ----------
 async function streamViaYoutubei(vid, range, res) {
   // Подготовка до отправки заголовков в res — чтобы таймаут не оборвал начатый стрим
   const prep = (async () => {
@@ -1620,6 +1622,111 @@ async function tryPiped(base, vid, range, res) {
   } catch { return false; }
 }
 
+// yt-dlp — primary для /api/audio/youtube/:videoId: youtubei.js ломается на
+// SABR/decipher ("No valid URL to decipher"), а yt-dlp качает m4a напрямую.
+// Файл кешируется 30 минут — повторные прослушивания не перекачиваются.
+const YT_DLP_BIN = process.env.YT_DLP_BIN || '/usr/local/bin/yt-dlp';
+const YT_DLP_NODE = process.env.YT_DLP_NODE || '/usr/bin/node';
+const YT_DLP_CACHE_MS = 30 * 60 * 1000;
+const YT_DLP_BUDGET_MS = 30000; // внутри общего withTimeout(40000)
+
+function ytDlpFile(vid) {
+  return path.join(os.tmpdir(), `yt-${vid}.m4a`); // на Linux это /tmp/yt-<vid>.m4a
+}
+
+function runYtDlp(vid, file) {
+  return new Promise((resolve) => {
+    let stderr = '';
+    let child;
+    try {
+      child = spawn(YT_DLP_BIN, [
+        '-f', 'bestaudio[ext=m4a]/bestaudio',
+        '--js-runtimes', `node:${YT_DLP_NODE}`,
+        '-o', file,
+        `https://www.youtube.com/watch?v=${vid}`
+      ], { stdio: ['ignore', 'ignore', 'pipe'] });
+    } catch (e) { console.log('[yt-dlp] spawn err:', e.message); resolve(false); return; }
+    const timer = setTimeout(() => {
+      console.log('[yt-dlp] budget', YT_DLP_BUDGET_MS, 'ms exceeded, kill, vid=', vid);
+      try { child.kill('SIGKILL'); } catch {}
+    }, YT_DLP_BUDGET_MS);
+    child.stderr.on('data', d => { if (stderr.length < 4000) stderr += d.toString(); });
+    child.on('error', e => { clearTimeout(timer); console.log('[yt-dlp] error:', e.message); resolve(false); });
+    child.on('close', code => {
+      clearTimeout(timer);
+      if (code === 0) { resolve(true); return; }
+      console.log('[yt-dlp] exit', code, 'vid=', vid, 'stderr:', stderr.slice(-500).replace(/\s+/g, ' '));
+      try { fs.unlinkSync(file); } catch {} // недокачанный файл не оставляем
+      resolve(false);
+    });
+  });
+}
+
+async function streamViaYtDlp(vid, range, res) {
+  const file = ytDlpFile(vid);
+  try {
+    // Кеш 30 минут: свежий файл → без перекачки
+    let fresh = false;
+    try {
+      const st = fs.statSync(file);
+      fresh = st.size > 0 && (Date.now() - st.mtimeMs) < YT_DLP_CACHE_MS;
+    } catch {}
+    if (!fresh) {
+      if (!(await runYtDlp(vid, file))) return false;
+      try { if (fs.statSync(file).size <= 0) return false; } catch { return false; }
+    }
+    const total = fs.statSync(file).size;
+    // Content-Type по первым байтам: EBML(1A45DFA3) = webm/opus, иначе m4a
+    let ct = 'audio/mp4';
+    try {
+      const b = Buffer.alloc(4);
+      const fd = fs.openSync(file, 'r');
+      fs.readSync(fd, b, 0, 4, 0);
+      fs.closeSync(fd);
+      if (b[0] === 0x1A && b[1] === 0x45 && b[2] === 0xDF && b[3] === 0xA3) ct = 'audio/webm';
+    } catch {}
+    // Range: bytes=start-end | bytes=start- | bytes=-suffix
+    let start = 0, end = total - 1, isPartial = false;
+    if (range) {
+      const m = /^bytes=(\d*)-(\d*)$/.exec(String(range).trim());
+      if (m) {
+        if (m[1] === '' && m[2] !== '') start = Math.max(0, total - Math.min(Number(m[2]), total));
+        else {
+          start = m[1] ? Number(m[1]) : 0;
+          if (m[2] !== '') end = Math.min(Number(m[2]), total - 1);
+        }
+        if (start > end || start >= total) {
+          res.status(416);
+          res.setHeader('Content-Range', `bytes */${total}`);
+          res.end();
+          return true;
+        }
+        isPartial = true;
+      }
+    }
+    res.setHeader('Content-Type', ct);
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Length', String(isPartial ? end - start + 1 : total));
+    if (isPartial) {
+      res.setHeader('Content-Range', `bytes ${start}-${end}/${total}`);
+      res.status(206);
+    } else {
+      res.status(200);
+    }
+    const stream = fs.createReadStream(file, { start, end });
+    stream.on('error', () => { try { res.destroy(); } catch {} });
+    try { res.req.on('close', () => stream.destroy()); } catch {}
+    stream.pipe(res);
+    console.log('[yt-dlp] serve', vid, isPartial ? `206 ${start}-${end}/${total}` : `200 ${total}b`);
+    return true;
+  } catch (e) {
+    console.log('[yt-dlp] serve err', vid, e?.message || '');
+    return false;
+  }
+}
+
 api.get('/api/audio/youtube/:videoId', async (req, res) => {
   const vid = String(req.params.videoId || '');
   if (!/^[A-Za-z0-9_-]{6,20}$/.test(vid)) return res.status(400).end();
@@ -1627,8 +1734,8 @@ api.get('/api/audio/youtube/:videoId', async (req, res) => {
 
   try {
     const result = await withTimeout((async () => {
-      // 1. youtubei.js — первым (на VPS работает)
-      if (await streamViaYoutubei(vid, range, res)) return 'youtubei';
+      // 1. yt-dlp — качает m4a во временный файл (~20 с), кеш 30 мин
+      if (await streamViaYtDlp(vid, range, res)) return 'yt-dlp';
       // 2. Invidious
       for (const itag of ['251', '140']) {
         if (await tryInvidious(vid, itag, range, res)) return 'invidious';
@@ -1637,6 +1744,8 @@ api.get('/api/audio/youtube/:videoId', async (req, res) => {
       for (const base of PIPED_INSTANCES) {
         if (await tryPiped(base, vid, range, res)) return 'piped';
       }
+      // 4. youtubei.js — последним (ломается на SABR/decipher)
+      if (await streamViaYoutubei(vid, range, res)) return 'youtubei';
       return null;
     })(), 40000, 'yt_total_timeout');
     if (!result && !res.headersSent) res.status(502).end();
