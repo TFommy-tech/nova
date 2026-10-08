@@ -162,7 +162,7 @@
     'profileTopTracks','profileTopArtists','profilePlaylists',
     'playlistPickerModal','playlistPickerClose','playlistPickerList','playlistPickerNew',
     'playlistCreateModal','playlistCreateClose','playlistNameInput','playlistDescInput','playlistCreateSubmit',
-    'profileEditModal','profileEditClose','profileEditCancel','profileEditSave',
+    'profileEditModal','profileEditClose','profileEditCancel','profileEditSave','profileEditBtn',
     'peBannerPreview','peBannerFile','peBannerColor','peBannerReset','peBio','peBioCount',
     'peTelegram','peYoutube','peSpotify',
     'contextMenu','toast',
@@ -2842,6 +2842,10 @@
     console.log('[profile] openProfile() start; user=', state.user ? state.user.username : 'guest', '; modalEl=', !!el.profileModal, '; inDom=', document.contains(el.profileModal));
     el.profileModal.classList.add('open');
     el.profileModal.setAttribute('aria-hidden', 'false');
+    // Свежие данные пользователя (tags/banner/bio могли измениться после миграции или с другого устройства)
+    if (state.user && authToken) {
+      try { const me = await apiAuth('/api/me'); if (me) { state.user = me; store.set('nova_user', JSON.stringify(me)); } } catch {}
+    }
     const u = state.user;
     if (u) {
       if (u.banner) { el.profileBanner.style.backgroundImage = `url("${u.banner}")`; el.profileBanner.style.backgroundColor = ''; }
@@ -3470,13 +3474,9 @@
 
   on(el.profileModalClose, 'click', closeProfile);
   on(el.profileModal, 'click', e => { if (e.target === el.profileModal) closeProfile(); });
-  el.profileModal?.querySelectorAll('.profile-action').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const a = btn.dataset.action;
-      if (a === 'logout') { closeProfile(); logout(); }
-      else if (a === 'copy') { if (state.user) { try { navigator.clipboard.writeText(state.user.id); notify('ID скопирован'); } catch {} } else notify('Войди'); }
-      else if (a === 'edit') { openProfileEdit(); }
-    });
+  on(el.profileEditBtn, 'click', openProfileEdit);
+  el.profileModal?.querySelectorAll('.profile-icon-btn[data-action="logout"]').forEach(btn => {
+    btn.addEventListener('click', () => { closeProfile(); logout(); });
   });
   el.profileModal?.querySelectorAll('.profile-tab').forEach(tab => {
     tab.addEventListener('click', () => setProfileTab(tab.dataset.tab));
