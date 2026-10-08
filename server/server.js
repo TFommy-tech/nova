@@ -1498,7 +1498,7 @@ api.get('/api/audio/soundcloud/:id', async (req, res) => {
   }
 });
 
-// ---------- YouTube stream: Invidious → Piped → youtubei.js ----------
+// ---------- YouTube stream: youtubei.js → Invidious → Piped ----------
 async function streamViaYoutubei(vid, range, res) {
   // Подготовка до отправки заголовков в res — чтобы таймаут не оборвал начатый стрим
   const prep = (async () => {
@@ -1588,50 +1588,61 @@ async function tryInvidious(vid, itag, range, res) {
   return false;
 }
 
+// Piped — вынесен из роута как tryPiped(base, vid, range, res): используется
+// в цепочке youtubei.js → Invidious → Piped (см. /api/audio/youtube/:videoId)
+async function tryPiped(base, vid, range, res) {
+  try {
+    const r = await fetch(`${base}/streams/${vid}`, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
+    if (!r.ok) return false;
+    const d = await r.json();
+    const streams = Array.isArray(d?.audioStreams) ? d.audioStreams : [];
+    const best = streams.filter(s => s.url && s.mimeType?.includes('audio')).sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+    if (!best?.url) return false;
+    const headers = { 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*' };
+    if (range) headers.Range = range;
+    const up = await fetch(best.proxyUrl || best.url, { headers, redirect: 'follow', timeout: 15000 });
+    if (!up.ok && up.status !== 206) return false;
+    const ct = String(up.headers.get('content-type') || '').toLowerCase();
+    if (!ct.startsWith('audio/') && !ct.startsWith('video/') && !ct.includes('octet-stream')) {
+      try { up.body?.destroy(); } catch {}
+      return false;
+    }
+    res.setHeader('Content-Type', best.mimeType || 'audio/mp4');
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    const cl = up.headers.get('content-length'); if (cl) res.setHeader('Content-Length', cl);
+    const cr = up.headers.get('content-range'); if (cr) res.setHeader('Content-Range', cr);
+    res.status(up.status === 206 ? 206 : 200);
+    up.body.pipe(res);
+    req_onclose(res, up);
+    return true;
+  } catch { return false; }
+}
+
 api.get('/api/audio/youtube/:videoId', async (req, res) => {
   const vid = String(req.params.videoId || '');
   if (!/^[A-Za-z0-9_-]{6,20}$/.test(vid)) return res.status(400).end();
   const range = req.headers.range || '';
 
-  // 1. Invidious
-  for (const itag of ['251', '140']) {
-    if (await tryInvidious(vid, itag, range, res)) return;
-  }
-
-  // 2. Piped
-  for (const base of PIPED_INSTANCES) {
-    try {
-      const r = await fetch(`${base}/streams/${vid}`, { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 8000 });
-      if (!r.ok) continue;
-      const d = await r.json();
-      const streams = Array.isArray(d?.audioStreams) ? d.audioStreams : [];
-      const best = streams.filter(s => s.url && s.mimeType?.includes('audio')).sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
-      if (!best?.url) continue;
-      const headers = { 'User-Agent': 'Mozilla/5.0', 'Accept': '*/*' };
-      if (range) headers.Range = range;
-      const up = await fetch(best.proxyUrl || best.url, { headers, redirect: 'follow', timeout: 15000 });
-      if (!up.ok && up.status !== 206) continue;
-      const ct = String(up.headers.get('content-type') || '').toLowerCase();
-      if (!ct.startsWith('audio/') && !ct.startsWith('video/') && !ct.includes('octet-stream')) {
-        try { up.body?.destroy(); } catch {} continue;
+  try {
+    const result = await withTimeout((async () => {
+      // 1. youtubei.js — первым (на VPS работает)
+      if (await streamViaYoutubei(vid, range, res)) return 'youtubei';
+      // 2. Invidious
+      for (const itag of ['251', '140']) {
+        if (await tryInvidious(vid, itag, range, res)) return 'invidious';
       }
-      res.setHeader('Content-Type', best.mimeType || 'audio/mp4');
-      res.setHeader('Accept-Ranges', 'bytes');
-      res.setHeader('Cache-Control', 'no-store');
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      const cl = up.headers.get('content-length'); if (cl) res.setHeader('Content-Length', cl);
-      const cr = up.headers.get('content-range'); if (cr) res.setHeader('Content-Range', cr);
-      res.status(up.status === 206 ? 206 : 200);
-      up.body.pipe(res);
-      req_onclose(res, up);
-      return;
-    } catch {}
+      // 3. Piped
+      for (const base of PIPED_INSTANCES) {
+        if (await tryPiped(base, vid, range, res)) return 'piped';
+      }
+      return null;
+    })(), 40000, 'yt_total_timeout');
+    if (!result && !res.headersSent) res.status(502).end();
+  } catch (e) {
+    if (!res.headersSent) res.status(504).json({ error: 'timeout', message: 'YouTube недоступен за 40с' });
   }
-
-  // 3. youtubei.js — fallback, жёсткий лимит 10 с
-  if (await streamViaYoutubei(vid, range, res)) return;
-
-  res.status(502).end();
 });
 
 api.get('/api/download/youtube/:videoId', async (req, res) => {
