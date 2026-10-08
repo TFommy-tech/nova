@@ -953,6 +953,69 @@ api.get('/api/me', authMiddleware, (req, res) => {
 });
 
 // ============================================================================
+// PROFILE (Этап 3) — публичный профиль, обновление своего, справочник тегов
+// ============================================================================
+function pubUser(u) { if (!u) return null; const { passwordHash, passwordSalt, ...pub } = u; return pub; }
+function isAdmin(u) { return !!u && (u.tags || []).some(t => t === 'owner' || t === 'admin'); }
+function adminOnly(req, res, next) { if (!isAdmin(db.users[req.user.id])) return res.status(403).json({ error: 'forbidden' }); next(); }
+
+// Публичный профиль по id (без пароля/хешей) — для чужих страниц
+api.get('/api/user/:id', (req, res) => {
+  const u = db.users[String(req.params.id)];
+  if (!u) return res.status(404).json({ error: 'not found' });
+  res.json(pubUser(u));
+});
+
+// Справочник тегов для UI (Этап 5: что можно выставить самому vs только сервером)
+api.get('/api/tags', (_req, res) => res.json({
+  all: PROFILE_TAGS,
+  selfAssignable: PROFILE_TAGS.filter(t => !PRIVILEGED_TAGS.includes(t))
+}));
+
+// Обновление СВОЕГО профиля. Валидаторы из Этапа 2. Привилегированные теги
+// (owner/admin/verified/vip/moderator) себе присвоить нельзя — только через /api/admin/*
+api.post('/api/profile/update', authMiddleware, (req, res) => {
+  const u = db.users[req.user.id];
+  if (!u) return res.status(404).json({ error: 'not found' });
+  ensureProfile(u);
+  const b = req.body || {};
+  if (b.avatar !== undefined) u.avatar = validateBanner(b.avatar);        // http(s) или data:image;*;base64
+  if (b.banner !== undefined) u.banner = validateBanner(b.banner);
+  if (b.bannerColor !== undefined) u.bannerColor = validateColor(b.bannerColor);
+  if (b.bio !== undefined) u.bio = validateBio(b.bio);
+  if (b.socials !== undefined) u.socials = validateSocials(b.socials);
+  if (b.tags !== undefined) {
+    const wanted = validateTags(b.tags).filter(t => !PRIVILEGED_TAGS.includes(t));
+    u.tags = [...(u.tags || []).filter(t => PRIVILEGED_TAGS.includes(t)), ...wanted];
+  }
+  saveDb();
+  res.json({ ok: true, user: pubUser(u) });
+});
+
+// ============================================================================
+// ADMIN (Этап 3) — управление пользователями и тегами. Требует тег owner/admin
+// ============================================================================
+api.get('/api/admin/users', authMiddleware, adminOnly, (req, res) => {
+  const q = String(req.query.q || '').toLowerCase();
+  const users = Object.values(db.users)
+    .map(u => ({ id: u.id, username: u.username, avatar: u.avatar, tags: u.tags || [], provider: u.provider, createdAt: u.createdAt || 0 }))
+    .filter(u => !q || (u.username || '').toLowerCase().includes(q))
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, 200);
+  res.json({ users });
+});
+
+// Установить теги пользователю (админ может выдать любые, включая привилегированные)
+api.patch('/api/admin/users/:id/tags', authMiddleware, adminOnly, (req, res) => {
+  const t = db.users[String(req.params.id)];
+  if (!t) return res.status(404).json({ error: 'not found' });
+  ensureProfile(t);
+  t.tags = validateTags(req.body?.tags);
+  saveDb();
+  res.json({ ok: true, id: t.id, tags: t.tags });
+});
+
+// ============================================================================
 // FAVORITES / HISTORY / PLAYS
 // ============================================================================
 api.get('/api/favorites', authMiddleware, (req, res) => res.json(db.favorites[req.user.id] || []));
