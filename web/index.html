@@ -428,21 +428,56 @@
               </div>
             </div>
 
-            <div id="lyricsPanel" class="lyrics-panel hidden" aria-hidden="true">
-              <div class="lyrics-head">
-                <div class="lyrics-head-title">Текст песни</div>
-                <div class="lyrics-head-actions">
-                  <button id="lyricsClose" class="queue-clear lyrics-close" title="Закрыть">Закрыть</button>
-                  <button id="lyricsRefresh" class="queue-clear" title="Обновить">Обновить</button>
-                </div>
-              </div>
-              <div id="lyricsInlineContent" class="lyrics-body">
-                <div class="lyrics-placeholder">Загрузка…</div>
-              </div>
-            </div>
           </div>
         </div>
       </section>
+
+      <div id="lyricsPanel" class="lyrics-panel hidden" aria-hidden="true">
+        <img class="lyrics-bg" id="lyricsBg" alt="">
+        <div class="lyrics-backdrop" id="lyricsBackdrop" data-lyrics-dismiss tabindex="-1"></div>
+        <div class="lyrics-gradient-overlay" id="lyricsGradientOverlay"></div>
+        <div class="lyrics-video-layer" id="lyricsVideoLayer">
+          <iframe id="lyricsVideoIframe" src="" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+        </div>
+        <div class="lyrics-overlay-inner" id="lyricsOverlayInner">
+
+  <button id="lyricsClose" class="lyrics-close" aria-label="Закрыть">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+  </button>
+
+          <div class="lyrics-side">
+            <div class="lyrics-cover">
+              <img id="lyricsCover" class="lyrics-big-cover" alt="">
+              <div class="lyrics-cover-ring"></div>
+            </div>
+            <div class="lyrics-side-info">
+              <h2 id="lyricsTitle" class="lyrics-side-title"></h2>
+              <p id="lyricsArtist" class="lyrics-side-artist"></p>
+              <div class="lyrics-side-controls">
+                <button id="lyricsPrevBtn" class="icon-control" title="Предыдущий">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m11 5-7 7 7 7"/><path d="M20 5v14"/></svg>
+                </button>
+                <button id="lyricsPlayBtn" class="icon-control primary" title="Play">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                </button>
+                <button id="lyricsNextBtn" class="icon-control" title="Следующий">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m13 5 7 7-7 7"/><path d="M4 5v14"/></svg>
+                </button>
+              </div>
+              <div class="lyrics-side-meta">
+                <button id="lyricsVideoToggle" class="lyrics-video-toggle" title="Видео">
+                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="lyrics-body-wrap">
+            <div class="lyrics-body" id="lyricsInlineContent">
+              <div class="lyrics-placeholder">Загрузка…</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
     </div>
   </main>
@@ -1015,6 +1050,29 @@
     </div>
   </div>
 </div>
+
+
+  <div id="videoPickerModal" class="video-picker-modal hidden" aria-hidden="true">
+    <div class="video-picker-backdrop" id="videoPickerBackdrop" data-lyrics-dismiss tabindex="-1"></div>
+    <div class="video-picker">
+      <div class="video-picker-head">
+        <h2 class="video-picker-title">Видео</h2>
+        <button id="videoPickerClose" class="video-picker-close" aria-label="Закрыть">×</button>
+      </div>
+      <div class="video-picker-search">
+        <input id="videoSearchInput" class="video-picker-input" placeholder="Поиск видео (YouTube)..." autocomplete="off">
+        <button id="videoSearchBtn" class="video-picker-btn">Найти</button>
+      </div>
+      <div id="videoSearchResults" class="video-picker-results">
+        <div class="video-picker-empty">Введите запрос в строке поиска или нажмите «Найти».</div>
+      </div>
+      <div class="video-picker-actions">
+        <button id="videoPickerCancel" class="video-picker-cancel">Отмена</button>
+        <button id="videoPickerEmbed" class="video-picker-embed primary">Встроить</button>
+      </div>
+    </div>
+  </div>
+
 
 <script src="app.js"></script>
 </body>

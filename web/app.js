@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   'use strict';
 
   [['dns-prefetch', 'https://i.ytimg.com'],
@@ -28,28 +28,28 @@
   if (!Array.isArray(savedLocalTracks)) savedLocalTracks = [];
 
   const CURSOR_VARIANTS = ['dot', 'ring', 'glow', 'system'];
-  const CURSOR_LABELS = { dot: 'Точка', ring: 'Кольцо', glow: 'Свечение', system: 'Системный' };
+  const CURSOR_LABELS = { dot: 'РўРѕС‡РєР°', ring: 'РљРѕР»СЊС†Рѕ', glow: 'РЎРІРµС‡РµРЅРёРµ', system: 'РЎРёСЃС‚РµРјРЅС‹Р№' };
   const THEME_PRESETS = ['dark','devblog','light','ocean','sunset','forest','midnight','dawn'];
   const THEMES = [
-    { id: 'dark',     name: 'Тёмная',   bg: '#0a0a0a', accent: '#ffffff' },
+    { id: 'dark',     name: 'РўС‘РјРЅР°СЏ',   bg: '#0a0a0a', accent: '#ffffff' },
     { id: 'devblog',  name: 'Devblog',  bg: '#0a0e14', accent: '#5ba3f5' },
-    { id: 'light',    name: 'Светлая',  bg: '#f5f5f5', accent: '#000000' },
-    { id: 'ocean',    name: 'Океан',    bg: '#0a0a1e', accent: '#7a5cff' },
-    { id: 'sunset',   name: 'Закат',    bg: '#1a0a08', accent: '#ff6b4a' },
+    { id: 'light',    name: 'РЎРІРµС‚Р»Р°СЏ',  bg: '#f5f5f5', accent: '#000000' },
+    { id: 'ocean',    name: 'РћРєРµР°РЅ',    bg: '#0a0a1e', accent: '#7a5cff' },
+    { id: 'sunset',   name: 'Р—Р°РєР°С‚',    bg: '#1a0a08', accent: '#ff6b4a' },
     { id: 'forest',   name: 'Forest',   bg: '#0a140a', accent: '#4ade80' },
     { id: 'midnight', name: 'Midnight', bg: '#050508', accent: '#a855f7' },
     { id: 'dawn',     name: 'Dawn',     bg: '#1a1510', accent: '#f0a868' }
   ];
   const CUSTOM_THEME_KEY = 'nova_custom_theme';
   const CUSTOM_TOKENS = [
-    { key: 'bg',      token: '--bg',      label: 'Фон' },
-    { key: 'text',    token: '--text',    label: 'Текст' },
-    { key: 'text2',   token: '--text-2',  label: 'Мутный текст' },
-    { key: 'text3',   token: '--text-3',  label: 'Второстепенный' },
-    { key: 'text4',   token: '--text-4',  label: 'Приглушённый' },
-    { key: 'accent',  token: '--accent',  label: 'Акцент' },
-    { key: 'border',  token: '--border',  label: 'Бордер' },
-    { key: 'border2', token: '--border-2',label: 'Бордер-2' }
+    { key: 'bg',      token: '--bg',      label: 'Р¤РѕРЅ' },
+    { key: 'text',    token: '--text',    label: 'РўРµРєСЃС‚' },
+    { key: 'text2',   token: '--text-2',  label: 'РњСѓС‚РЅС‹Р№ С‚РµРєСЃС‚' },
+    { key: 'text3',   token: '--text-3',  label: 'Р’С‚РѕСЂРѕСЃС‚РµРїРµРЅРЅС‹Р№' },
+    { key: 'text4',   token: '--text-4',  label: 'РџСЂРёРіР»СѓС€С‘РЅРЅС‹Р№' },
+    { key: 'accent',  token: '--accent',  label: 'РђРєС†РµРЅС‚' },
+    { key: 'border',  token: '--border',  label: 'Р‘РѕСЂРґРµСЂ' },
+    { key: 'border2', token: '--border-2',label: 'Р‘РѕСЂРґРµСЂ-2' }
   ];
   const savedCursor = store.get('nova_cursor', 'ring');
   const initialCursor = CURSOR_VARIANTS.includes(savedCursor) ? savedCursor : 'ring';
@@ -133,7 +133,7 @@
     'favoritesPlay','favoritesShuffle','clearFavorites','favoritesList',
     'createPlaylistBtn','playlistsGrid',
     'playlistHeroImage','playlistHeroName','playlistHeroMeta','playlistPlay','playlistShuffle','playlistDelete','playlistTracks',
-    'lyricsPanel','lyricsRefresh','lyricsClose','lyricsInlineContent','bigCoverWrap','bigCover',
+    'lyricsPanel','lyricsClose','lyricsInlineContent','lyricsBackdrop','lyricsOverlayInner','lyricsVideoToggle','lyricsVideoLayer','lyricsVideoIframe','videoPickerModal','videoPickerBackdrop','videoSearchInput','videoSearchBtn','videoSearchResults','videoPickerCancel','videoPickerEmbed','videoPickerClose','bigCoverWrap','bigCover',
     'nowTitle','nowArtist','nowChips','progress','currentTime','duration',
     'downloadBtn','repeatBtn','prevBtn','largePlayBtn','largePlayIcon','nextBtn','shuffleBtn','favoriteBtn','queueToggleBtn','moreBtn',
     'volumeLarge','equalizerBtn','similarBtn',
@@ -236,7 +236,7 @@
       document.documentElement.setAttribute('data-cursor', state.cursor);
       initCustomCursor();
     }
-    if (el.cursorToggle) el.cursorToggle.textContent = CURSOR_LABELS[state.cursor] || 'Кольцо';
+    if (el.cursorToggle) el.cursorToggle.textContent = CURSOR_LABELS[state.cursor] || 'РљРѕР»СЊС†Рѕ';
   }
 
   let audioCtx = null, sourceNode = null, fadeGain = null, volumeGain = null, eqFilters = null, audioGraphReady = false;
@@ -364,10 +364,10 @@
     if (url) {
       box.textContent = '';
       box.style.backgroundImage = `url("${url.replace(/"/g, '\\"')}")`;
-      box.title = 'Обложка переопределена';
+      box.title = 'РћР±Р»РѕР¶РєР° РїРµСЂРµРѕРїСЂРµРґРµР»РµРЅР°';
     } else {
       box.style.backgroundImage = 'none';
-      box.textContent = !t ? 'Ничего не играет' : 'Обложка не выбрана';
+      box.textContent = !t ? 'РќРёС‡РµРіРѕ РЅРµ РёРіСЂР°РµС‚' : 'РћР±Р»РѕР¶РєР° РЅРµ РІС‹Р±СЂР°РЅР°';
       box.title = '';
     }
   }
@@ -383,7 +383,7 @@
   function saveImageLibrary(list) { store.set('nova_image_library', JSON.stringify(list)); }
   function addImageToLibrary(entry) {
     const list = getImageLibrary();
-    if (list.length >= IMAGE_LIB_LIMIT) { notify('Лимит библиотеки: 50 изображений', 'error'); return null; }
+    if (list.length >= IMAGE_LIB_LIMIT) { notify('Р›РёРјРёС‚ Р±РёР±Р»РёРѕС‚РµРєРё: 50 РёР·РѕР±СЂР°Р¶РµРЅРёР№', 'error'); return null; }
     const item = { id: newImageId(), type: entry.type, value: entry.value, addedAt: Date.now() };
     list.unshift(item); saveImageLibrary(list);
     renderImageLibrary(); renderImagePickerGrid();
@@ -397,7 +397,7 @@
     if (!container) return;
     const list = getImageLibrary();
     if (!list.length) {
-      container.innerHTML = '<div class="image-library-empty">Библиотека пуста</div>';
+      container.innerHTML = '<div class="image-library-empty">Р‘РёР±Р»РёРѕС‚РµРєР° РїСѓСЃС‚Р°</div>';
       return;
     }
     container.innerHTML = '';
@@ -411,9 +411,9 @@
       if (withActions) {
         const bar = document.createElement('div');
         bar.className = 'image-library-item-actions';
-        bar.innerHTML = '<button data-act="cover" title="Сделать обложкой текущего трека">Обложка</button>'
-          + '<button data-act="bg" title="Сделать фоном приложения">Фон</button>'
-          + '<button data-act="del" title="Удалить из библиотеки">×</button>';
+        bar.innerHTML = '<button data-act="cover" title="РЎРґРµР»Р°С‚СЊ РѕР±Р»РѕР¶РєРѕР№ С‚РµРєСѓС‰РµРіРѕ С‚СЂРµРєР°">РћР±Р»РѕР¶РєР°</button>'
+          + '<button data-act="bg" title="РЎРґРµР»Р°С‚СЊ С„РѕРЅРѕРј РїСЂРёР»РѕР¶РµРЅРёСЏ">Р¤РѕРЅ</button>'
+          + '<button data-act="del" title="РЈРґР°Р»РёС‚СЊ РёР· Р±РёР±Р»РёРѕС‚РµРєРё">Г—</button>';
         cell.appendChild(bar);
       }
       container.appendChild(cell);
@@ -429,26 +429,26 @@
   function handleLibAction(act, item) {
     if (!item) return;
     if (act === 'cover') {
-      if (!state.currentTrack) return notify('Ничего не играет', 'error');
+      if (!state.currentTrack) return notify('РќРёС‡РµРіРѕ РЅРµ РёРіСЂР°РµС‚', 'error');
       applyCustomCover(state.currentTrack, item.value);
-      notify('Обложка обновлена');
+      notify('РћР±Р»РѕР¶РєР° РѕР±РЅРѕРІР»РµРЅР°');
     } else if (act === 'bg') {
       state.background.src = item.value;
       saveBgData(item.value).catch(() => {});
       applyBackground(item.value);
-      notify('Фон изменён');
+      notify('Р¤РѕРЅ РёР·РјРµРЅС‘РЅ');
     } else if (act === 'del') {
       removeImageFromLibrary(item.id);
       if (state.currentTrack && customCoverFor(state.currentTrack) === item.value) resetCustomCover(state.currentTrack);
       if (imagePickerViewId === item.id) hideImageView();
-      notify('Удалено из библиотеки');
+      notify('РЈРґР°Р»РµРЅРѕ РёР· Р±РёР±Р»РёРѕС‚РµРєРё');
     }
   }
   let imagePickerCb = null;
   let imagePickerViewId = null;
   function openImagePicker(cb) {
     imagePickerCb = cb || null;
-    el.imagePickerTitle.textContent = 'Выбрать из библиотеки';
+    el.imagePickerTitle.textContent = 'Р’С‹Р±СЂР°С‚СЊ РёР· Р±РёР±Р»РёРѕС‚РµРєРё';
     hideImageView();
     renderImagePickerGrid();
     el.imagePickerModal.classList.add('open');
@@ -456,7 +456,7 @@
   }
   function openImageView(id) {
     imagePickerCb = null;
-    el.imagePickerTitle.textContent = 'Просмотр изображения';
+    el.imagePickerTitle.textContent = 'РџСЂРѕСЃРјРѕС‚СЂ РёР·РѕР±СЂР°Р¶РµРЅРёСЏ';
     renderImagePickerGrid();
     showImageView(id);
     el.imagePickerModal.classList.add('open');
@@ -484,7 +484,7 @@
   function renderBgPreview() {
     const box = el.bgPreview; if (!box) return;
     const src = String(state.background.src || '');
-    if (!src) { box.style.backgroundImage = 'none'; box.style.backgroundColor = '#0a0a0a'; box.title = 'Фон не выбран'; return; }
+    if (!src) { box.style.backgroundImage = 'none'; box.style.backgroundColor = '#0a0a0a'; box.title = 'Р¤РѕРЅ РЅРµ РІС‹Р±СЂР°РЅ'; return; }
     if (src.startsWith('url(') || src.startsWith('data:') || src.startsWith('http') || src.startsWith('/')) {
       box.style.backgroundImage = src.startsWith('url(') ? src : `url("${src.replace(/"/g, '\\"')}")`;
       box.style.backgroundColor = '#0a0a0a';
@@ -492,10 +492,10 @@
       box.style.backgroundImage = 'none';
       box.style.backgroundColor = src;
     }
-    box.title = 'Текущий фон';
+    box.title = 'РўРµРєСѓС‰РёР№ С„РѕРЅ';
   }
   function normalizeSearch(v) {
-    return String(v || '').toLowerCase().replace(/[’'`´]/g, '').replace(/ё/g, 'е')
+    return String(v || '').toLowerCase().replace(/[вЂ™'`Вґ]/g, '').replace(/С‘/g, 'Рµ')
       .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
   }
   function cleanTitleLocal(t) {
@@ -511,7 +511,7 @@
   }
   function artistsHtml(s) {
     const parts = splitArtistsList(s);
-    if (!parts.length) return '—';
+    if (!parts.length) return 'вЂ”';
     return parts.map(a => `<a class="artist-link" data-artist="${escapeHtml(a)}" href="javascript:void(0)">${escapeHtml(a)}</a>`).join(', ');
   }
   function isFavorite(t) { const k = trackKey(t); return state.favorites.some(x => trackKey(x) === k); }
@@ -555,7 +555,7 @@
       id: t.id || t.providerId || cryptoLike(t),
       providerId: t.providerId || t.id || '',
       provider: t.provider || '',
-      title: t.title || t.trackName || t.name || 'Без названия',
+      title: t.title || t.trackName || t.name || 'Р‘РµР· РЅР°Р·РІР°РЅРёСЏ',
       artist: artistName, artistId, cover,
       source: String(t.source || 'CATALOG').toUpperCase(),
       album: albumTitle, albumId,
@@ -632,25 +632,25 @@
       el.avatarBtn.innerHTML = `<img src="${url}" alt="">`;
       el.userAvatar.src = url;
       el.userName.textContent = u.username || 'User';
-      el.userTag.textContent = u.provider === 'discord' ? 'Discord аккаунт' : 'Локальный аккаунт';
+      el.userTag.textContent = u.provider === 'discord' ? 'Discord Р°РєРєР°СѓРЅС‚' : 'Р›РѕРєР°Р»СЊРЅС‹Р№ Р°РєРєР°СѓРЅС‚';
       el.userLoginBtn.style.display = 'none';
       el.userLogoutBtn.style.display = 'flex';
-      el.homeGreeting.textContent = 'С возвращением, ' + (u.username || 'User') + '!';
+      el.homeGreeting.textContent = 'РЎ РІРѕР·РІСЂР°С‰РµРЅРёРµРј, ' + (u.username || 'User') + '!';
       if (el.settingsAccountName) el.settingsAccountName.textContent = u.username || 'User';
-      if (el.settingsAccountHint) el.settingsAccountHint.textContent = u.provider === 'discord' ? 'Discord аккаунт' : 'Локальный аккаунт';
-      if (el.settingsAccountBtn) el.settingsAccountBtn.textContent = 'Выйти';
+      if (el.settingsAccountHint) el.settingsAccountHint.textContent = u.provider === 'discord' ? 'Discord Р°РєРєР°СѓРЅС‚' : 'Р›РѕРєР°Р»СЊРЅС‹Р№ Р°РєРєР°СѓРЅС‚';
+      if (el.settingsAccountBtn) el.settingsAccountBtn.textContent = 'Р’С‹Р№С‚Рё';
     } else {
       el.avatarBtn.classList.remove('logged-in');
       el.avatarBtn.innerHTML = '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5 20c.9-3.7 3.1-5.5 7-5.5s6.1 1.8 7 5.5"/></svg>';
       el.userAvatar.removeAttribute('src');
-      el.userName.textContent = 'Гость';
-      el.userTag.textContent = 'не авторизован';
+      el.userName.textContent = 'Р“РѕСЃС‚СЊ';
+      el.userTag.textContent = 'РЅРµ Р°РІС‚РѕСЂРёР·РѕРІР°РЅ';
       el.userLoginBtn.style.display = 'flex';
       el.userLogoutBtn.style.display = 'none';
-      el.homeGreeting.textContent = 'Добро пожаловать в NOVA';
-      if (el.settingsAccountName) el.settingsAccountName.textContent = 'Гость';
-      if (el.settingsAccountHint) el.settingsAccountHint.textContent = 'Не авторизован';
-      if (el.settingsAccountBtn) el.settingsAccountBtn.textContent = 'Войти';
+      el.homeGreeting.textContent = 'Р”РѕР±СЂРѕ РїРѕР¶Р°Р»РѕРІР°С‚СЊ РІ NOVA';
+      if (el.settingsAccountName) el.settingsAccountName.textContent = 'Р“РѕСЃС‚СЊ';
+      if (el.settingsAccountHint) el.settingsAccountHint.textContent = 'РќРµ Р°РІС‚РѕСЂРёР·РѕРІР°РЅ';
+      if (el.settingsAccountBtn) el.settingsAccountBtn.textContent = 'Р’РѕР№С‚Рё';
     }
   }
   function openLoginModal() { el.loginModal.classList.add('open'); el.loginModal.setAttribute('aria-hidden', 'false'); }
@@ -684,7 +684,7 @@
     state.user = null; state.favorites = []; state.history = [];
     state.recommendations = []; state.queue = []; state.playlists = [];
     persist(); renderUser(); renderFavorites(); renderHistory(); renderPlaylists();
-    updateQueue(); renderHome(); notify('Вы вышли');
+    updateQueue(); renderHome(); notify('Р’С‹ РІС‹С€Р»Рё');
     toggleUserMenu(false); refreshDiagnostics();
   }
   function loginViaDiscord() { window.location.href = '/api/auth/discord'; }
@@ -701,7 +701,7 @@
     authMode = mode;
     el.tabLogin.classList.toggle('active', mode === 'login');
     el.tabRegister.classList.toggle('active', mode === 'register');
-    if (el.authSubmitText) el.authSubmitText.textContent = mode === 'login' ? 'Войти' : 'Создать аккаунт';
+    if (el.authSubmitText) el.authSubmitText.textContent = mode === 'login' ? 'Р’РѕР№С‚Рё' : 'РЎРѕР·РґР°С‚СЊ Р°РєРєР°СѓРЅС‚';
     el.authUsername.value = ''; el.authPassword.value = '';
     el.authError.classList.add('hidden'); el.authError.textContent = '';
   }
@@ -709,9 +709,9 @@
   async function submitLocalAuth(e) {
     e.preventDefault();
     const u = el.authUsername.value.trim(), p = el.authPassword.value;
-    if (!u || !p) { showAuthError('Заполни оба поля'); return; }
+    if (!u || !p) { showAuthError('Р—Р°РїРѕР»РЅРё РѕР±Р° РїРѕР»СЏ'); return; }
     el.authSubmit.disabled = true;
-    if (el.authSubmitText) el.authSubmitText.textContent = 'Загрузка…';
+    if (el.authSubmitText) el.authSubmitText.textContent = 'Р—Р°РіСЂСѓР·РєР°вЂ¦';
     try {
       const url = authMode === 'register' ? '/api/register' : '/api/login';
       const r = await fetch(apiBase() + url, {
@@ -719,15 +719,15 @@
         body: JSON.stringify({ username: u, password: p })
       });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'Ошибка');
+      if (!r.ok) throw new Error(d.error || 'РћС€РёР±РєР°');
       authToken = d.token; store.set(API_TOKEN_KEY, d.token);
       state.user = d.user; store.set('nova_user', JSON.stringify(d.user));
       await loadUserData();
       closeLoginModal(); renderUser();
-    } catch (err) { showAuthError(err.message || 'Ошибка входа'); }
+    } catch (err) { showAuthError(err.message || 'РћС€РёР±РєР° РІС…РѕРґР°'); }
     finally {
       el.authSubmit.disabled = false;
-      if (el.authSubmitText) el.authSubmitText.textContent = authMode === 'login' ? 'Войти' : 'Создать аккаунт';
+      if (el.authSubmitText) el.authSubmitText.textContent = authMode === 'login' ? 'Р’РѕР№С‚Рё' : 'РЎРѕР·РґР°С‚СЊ Р°РєРєР°СѓРЅС‚';
     }
   }
 
@@ -789,13 +789,13 @@
   }
   async function saveSelectedBackground(file) {
     if (!file) return;
-    if (!/^image\/(png|jpe?g|webp|gif)$/i.test(file.type)) return notify('Поддерживаются PNG, JPG, WEBP и GIF');
+    if (!/^image\/(png|jpe?g|webp|gif)$/i.test(file.type)) return notify('РџРѕРґРґРµСЂР¶РёРІР°СЋС‚СЃСЏ PNG, JPG, WEBP Рё GIF');
     const reader = new FileReader();
     reader.onload = async () => {
       state.background.src = String(reader.result || '');
       await saveBgData(state.background.src);
       applyBackground(state.background.src);
-      notify('Фон изменён');
+      notify('Р¤РѕРЅ РёР·РјРµРЅС‘РЅ');
     };
     reader.readAsDataURL(file);
   }
@@ -803,7 +803,7 @@
     state.background.src = '';
     saveBgData('').catch(() => {});
     applyBackground('');
-    notify('Фон сброшен');
+    notify('Р¤РѕРЅ СЃР±СЂРѕС€РµРЅ');
   }
 
   function resolveCacheParts(t) {
@@ -865,21 +865,21 @@
       }
     } catch (e) { if (e.name === 'AbortError') throw e; }
 
-    throw new Error('Не удалось найти источник воспроизведения');
+    throw new Error('РќРµ СѓРґР°Р»РѕСЃСЊ РЅР°Р№С‚Рё РёСЃС‚РѕС‡РЅРёРє РІРѕСЃРїСЂРѕРёР·РІРµРґРµРЅРёСЏ');
   }
 
   function isBadArtist(n) {
     const x = normalizeSearch(n);
-    return !x || /^(unknown( artist)?|various artists|no name|без названия|null|undefined)$/i.test(x);
+    return !x || /^(unknown( artist)?|various artists|no name|Р±РµР· РЅР°Р·РІР°РЅРёСЏ|null|undefined)$/i.test(x);
   }
   function placeholderCover() {
     return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300"><rect width="300" height="300" fill="#0a0a0a"/><text x="150" y="168" fill="#2e2e2e" font-size="72" text-anchor="middle">♪</text></svg>');
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300"><rect width="300" height="300" fill="#0a0a0a"/><text x="150" y="168" fill="#2e2e2e" font-size="72" text-anchor="middle">в™Є</text></svg>');
   }
   function renderHome() {
     const recent = state.history.slice(0, 8);
     el.homeContinue.innerHTML = '';
-    if (!recent.length) el.homeContinue.innerHTML = '<div class="empty" style="grid-column:1/-1"><div>Начни слушать музыку</div></div>';
+    if (!recent.length) el.homeContinue.innerHTML = '<div class="empty" style="grid-column:1/-1"><div>РќР°С‡РЅРё СЃР»СѓС€Р°С‚СЊ РјСѓР·С‹РєСѓ</div></div>';
     else recent.forEach(t => el.homeContinue.appendChild(makeMiniCard(t, 'track')));
     el.homeContinueSection.style.display = '';
 
@@ -892,7 +892,7 @@
     const popular = state.popularTracks.length ? state.popularTracks : state.tracks.slice(0, 12);
     el.homePopular.innerHTML = '';
     if (popular.length) popular.slice(0, 12).forEach(t => el.homePopular.appendChild(makeMiniCard(t, 'track')));
-    else el.homePopular.innerHTML = '<div class="empty" style="grid-column:1/-1"><div>Пока пусто</div></div>';
+    else el.homePopular.innerHTML = '<div class="empty" style="grid-column:1/-1"><div>РџРѕРєР° РїСѓСЃС‚Рѕ</div></div>';
     setTimeout(() => prefetchTracks(popular.slice(0, 6)), 500);
 
     const artists = [], seenA = new Set();
@@ -930,10 +930,10 @@
     img.onerror = () => { img.src = placeholderCover(); };
     const t = document.createElement('div');
     t.className = 'home-mini-title';
-    t.textContent = track.title || track.album || '—';
+    t.textContent = track.title || track.album || 'вЂ”';
     const s = document.createElement('div');
     s.className = 'home-mini-sub';
-    s.innerHTML = kind === 'artist' ? 'Исполнитель' : kind === 'album' ? (track.artist || 'Альбом') : artistsHtml(track.artist);
+    s.innerHTML = kind === 'artist' ? 'РСЃРїРѕР»РЅРёС‚РµР»СЊ' : kind === 'album' ? (track.artist || 'РђР»СЊР±РѕРј') : artistsHtml(track.artist);
     d.append(img, t, s);
     if (kind === 'artist') d.addEventListener('click', () => showArtist(track.artistId || '', track.artist || ''));
     else if (kind === 'album') d.addEventListener('click', () => { if (track.albumId) showAlbum(track.albumId); });
@@ -994,7 +994,7 @@
     const controller = new AbortController();
     searchAbort = controller;
 
-    if (el.resultsInfo) el.resultsInfo.textContent = 'Поиск…';
+    if (el.resultsInfo) el.resultsInfo.textContent = 'РџРѕРёСЃРєвЂ¦';
     renderSkeleton();
 
     try {
@@ -1007,15 +1007,15 @@
       if (reqId !== state.searchRequest) return;
       state.tracks = Array.isArray(d.results) ? d.results.map(normalizeTrack).filter(Boolean) : [];
       state.lastSearchArtists = Array.isArray(d.artists) ? d.artists : [];
-      if (el.resultsInfo) el.resultsInfo.textContent = `${state.tracks.length} результатов`;
+      if (el.resultsInfo) el.resultsInfo.textContent = `${state.tracks.length} СЂРµР·СѓР»СЊС‚Р°С‚РѕРІ`;
       renderTracks(); renderSearchArtists(); renderHome();
       if (state.tracks.length) prefetchTracks(state.tracks.slice(0, 8));
       applySearchFilter();
     } catch (e) {
       if (e.name === 'AbortError' || reqId !== state.searchRequest) return;
       state.tracks = []; state.lastSearchArtists = [];
-      if (el.trackGrid) el.trackGrid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div>Ошибка: ${escapeHtml(e.message)}</div></div>`;
-      if (el.resultsInfo) el.resultsInfo.textContent = 'Ошибка поиска';
+      if (el.trackGrid) el.trackGrid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div>РћС€РёР±РєР°: ${escapeHtml(e.message)}</div></div>`;
+      if (el.resultsInfo) el.resultsInfo.textContent = 'РћС€РёР±РєР° РїРѕРёСЃРєР°';
     }
   }
   function renderSkeleton() {
@@ -1032,7 +1032,7 @@
     const grid = el.trackGrid; if (!grid) return;
     grid.innerHTML = '';
     if (!state.tracks.length) {
-      grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div>Ничего не найдено</div><div style="margin-top:6px;font-size:11px;color:var(--text-4)">Попробуй другое название или исполнителя</div></div>`;
+      grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><div>РќРёС‡РµРіРѕ РЅРµ РЅР°Р№РґРµРЅРѕ</div><div style="margin-top:6px;font-size:11px;color:var(--text-4)">РџРѕРїСЂРѕР±СѓР№ РґСЂСѓРіРѕРµ РЅР°Р·РІР°РЅРёРµ РёР»Рё РёСЃРїРѕР»РЅРёС‚РµР»СЏ</div></div>`;
       return;
     }
     state.tracks.forEach((track, index) => {
@@ -1045,7 +1045,7 @@
       const img = document.createElement('img');
       img.className = 'cover'; img.alt = '';
       img.src = coverFor(track) || placeholderCover();
-      img.onerror = () => { img.style.display = 'none'; const fb = document.createElement('div'); fb.className = 'cover-fallback'; fb.textContent = '♪'; coverBox.appendChild(fb); };
+      img.onerror = () => { img.style.display = 'none'; const fb = document.createElement('div'); fb.className = 'cover-fallback'; fb.textContent = 'в™Є'; coverBox.appendChild(fb); };
       coverBox.appendChild(img);
       if (track.provider) {
         const badge = document.createElement('div');
@@ -1055,7 +1055,7 @@
           if (srcNow === track.provider) {
             badge.textContent = track.provider;
           } else {
-            badge.textContent = 'только метаданные';
+            badge.textContent = 'С‚РѕР»СЊРєРѕ РјРµС‚Р°РґР°РЅРЅС‹Рµ';
             badge.style.background = 'rgba(110,110,110,.6)';
             badge.style.borderColor = 'rgba(255,255,255,.14)';
             badge.style.textTransform = 'none';
@@ -1078,7 +1078,7 @@
       coverBox.appendChild(play);
       const info = document.createElement('button');
       info.className = 'info-card';
-      info.title = 'Информация';
+      info.title = 'РРЅС„РѕСЂРјР°С†РёСЏ';
       info.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><circle cx="12" cy="8" r="0.5" fill="currentColor"/></svg>';
       info.addEventListener('click', e => { e.stopPropagation(); openSongInfo(track); });
       coverBox.appendChild(info);
@@ -1086,7 +1086,7 @@
       copy.className = 'card-copy';
       const ti = document.createElement('div');
       ti.className = 'card-title';
-      ti.textContent = track.title || 'Без названия';
+      ti.textContent = track.title || 'Р‘РµР· РЅР°Р·РІР°РЅРёСЏ';
       ti.title = track.title || '';
       ti.addEventListener('click', e => { e.stopPropagation(); openSongInfo(track); });
       const ar = document.createElement('div');
@@ -1116,7 +1116,7 @@
       const t = document.createElement('div');
       t.className = 'home-mini-title'; t.textContent = a.name;
       const s = document.createElement('div');
-      s.className = 'home-mini-sub'; s.textContent = a.nbFan ? `${formatNumber(a.nbFan)} фанатов` : 'Исполнитель';
+      s.className = 'home-mini-sub'; s.textContent = a.nbFan ? `${formatNumber(a.nbFan)} С„Р°РЅР°С‚РѕРІ` : 'РСЃРїРѕР»РЅРёС‚РµР»СЊ';
       card.append(img, t, s);
       card.addEventListener('click', () => showArtist(a.providerId, a.name));
       grid.appendChild(card);
@@ -1188,7 +1188,7 @@
   async function playTrack(index, opts = {}) {
     if (!Number.isInteger(index) || index < 0 || index >= state.queue.length) return;
     const track = state.queue[index];
-    if (track._drmOnly) { notify('Трек защищён DRM — недоступен на этом хостинге', 'error'); return; }
+    if (track._drmOnly) { notify('РўСЂРµРє Р·Р°С‰РёС‰С‘РЅ DRM вЂ” РЅРµРґРѕСЃС‚СѓРїРµРЅ РЅР° СЌС‚РѕРј С…РѕСЃС‚РёРЅРіРµ', 'error'); return; }
     const isSame = state.currentTrack && trackKey(track) === trackKey(state.currentTrack);
     const isActive = userIntent === 'playing' || userIntent === 'paused' || userIntent === 'loading';
     if (isSame && isActive && !opts.force) { openSongInfo(state.currentTrack); return; }
@@ -1235,7 +1235,7 @@
       onPlaybackError(e); return;
     }
     if (myId !== playRequestId) return;
-    if (!stream || !stream.url) { markMetaOnly(track); onPlaybackError(new Error('Нет playable URL')); return; }
+    if (!stream || !stream.url) { markMetaOnly(track); onPlaybackError(new Error('РќРµС‚ playable URL')); return; }
 
     track._resolveData = { ...stream, time: Date.now() };
 
@@ -1278,9 +1278,9 @@
     updatePlayButtons();
     if (e.drmOnly && state.currentTrack) {
       state.currentTrack._drmOnly = true;
-      notify('Трек защищён DRM — недоступен на этом хостинге', 'error');
+      notify('РўСЂРµРє Р·Р°С‰РёС‰С‘РЅ DRM вЂ” РЅРµРґРѕСЃС‚СѓРїРµРЅ РЅР° СЌС‚РѕРј С…РѕСЃС‚РёРЅРіРµ', 'error');
     } else {
-      notify('Не удалось воспроизвести: ' + lastPlaybackError, 'error');
+      notify('РќРµ СѓРґР°Р»РѕСЃСЊ РІРѕСЃРїСЂРѕРёР·РІРµСЃС‚Рё: ' + lastPlaybackError, 'error');
     }
     refreshDiagnostics();
   }
@@ -1307,7 +1307,7 @@
             const r = await fetch(url, { headers: { Range: 'bytes=0-0', Accept: 'application/json' } });
             if (r.status === 404) {
               const j = await r.json().catch(() => null);
-              if (j && j.error === 'drm_only') { err = new Error(j.message || 'Трек защищён DRM'); err.drmOnly = true; }
+              if (j && j.error === 'drm_only') { err = new Error(j.message || 'РўСЂРµРє Р·Р°С‰РёС‰С‘РЅ DRM'); err.drmOnly = true; }
             }
           } catch {}
         }
@@ -1397,12 +1397,12 @@
     state.shuffle = !state.shuffle;
     if (state.shuffle) { state.smartShuffleHistory = []; if (state.currentTrack) addRecentToShuffleHistory(state.currentTrack); }
     updateModeButtons();
-    notify(state.shuffle ? 'Перемешивание включено' : 'Перемешивание выключено');
+    notify(state.shuffle ? 'РџРµСЂРµРјРµС€РёРІР°РЅРёРµ РІРєР»СЋС‡РµРЅРѕ' : 'РџРµСЂРµРјРµС€РёРІР°РЅРёРµ РІС‹РєР»СЋС‡РµРЅРѕ');
   }
   function toggleRepeat() {
     state.repeat = !state.repeat;
     updateModeButtons();
-    notify(state.repeat ? 'Повтор включён' : 'Повтор выключен');
+    notify(state.repeat ? 'РџРѕРІС‚РѕСЂ РІРєР»СЋС‡С‘РЅ' : 'РџРѕРІС‚РѕСЂ РІС‹РєР»СЋС‡РµРЅ');
   }
   function updateModeButtons() {
     el.repeatBtn?.classList.toggle('active', state.repeat);
@@ -1453,9 +1453,9 @@
     try { store.set('nova_volume', String(state.volume)); } catch {}
   }
   function updatePlayButtons() {
-    // Источник правды — реальное состояние аудио (el.audio.paused), а не userIntent:
-    // на вкладке в фоне браузер мог поставить/снять паузу без событий, и userIntent
-    // рассинхронизируется. Ветка loading (спиннер) обрабатывается ниже отдельно. (Баг 3)
+    // РСЃС‚РѕС‡РЅРёРє РїСЂР°РІРґС‹ вЂ” СЂРµР°Р»СЊРЅРѕРµ СЃРѕСЃС‚РѕСЏРЅРёРµ Р°СѓРґРёРѕ (el.audio.paused), Р° РЅРµ userIntent:
+    // РЅР° РІРєР»Р°РґРєРµ РІ С„РѕРЅРµ Р±СЂР°СѓР·РµСЂ РјРѕРі РїРѕСЃС‚Р°РІРёС‚СЊ/СЃРЅСЏС‚СЊ РїР°СѓР·Сѓ Р±РµР· СЃРѕР±С‹С‚РёР№, Рё userIntent
+    // СЂР°СЃСЃРёРЅС…СЂРѕРЅРёР·РёСЂСѓРµС‚СЃСЏ. Р’РµС‚РєР° loading (СЃРїРёРЅРЅРµСЂ) РѕР±СЂР°Р±Р°С‚С‹РІР°РµС‚СЃСЏ РЅРёР¶Рµ РѕС‚РґРµР»СЊРЅРѕ. (Р‘Р°Рі 3)
     const playing = !!state.currentTrack && !el.audio.paused;
     const loading = userIntent === 'loading';
     [el.miniPlay, el.largePlayBtn].forEach(b => b?.classList.toggle('loading', loading));
@@ -1476,13 +1476,13 @@
   function updateMiniPlayer() {
     const t = state.currentTrack;
     if (!t) {
-      el.miniTitle.textContent = 'Ничего не играет';
-      el.miniArtist.innerHTML = '—';
+      el.miniTitle.textContent = 'РќРёС‡РµРіРѕ РЅРµ РёРіСЂР°РµС‚';
+      el.miniArtist.innerHTML = 'вЂ”';
       el.miniCover.removeAttribute('src');
       el.miniPlayer.classList.remove('visible');
       return;
     }
-    el.miniTitle.textContent = t.title || 'Без названия';
+    el.miniTitle.textContent = t.title || 'Р‘РµР· РЅР°Р·РІР°РЅРёСЏ';
     el.miniArtist.innerHTML = artistsHtml(t.artist);
     const miniCov = customCoverFor(t) || coverFor(t);
     if (miniCov) el.miniCover.src = miniCov; else el.miniCover.removeAttribute('src');
@@ -1494,8 +1494,8 @@
     const t = state.currentTrack;
     const placeholder = placeholderCover();
     if (!t) {
-      el.nowTitle.textContent = 'Ничего не играет';
-      el.nowArtist.textContent = 'Выбери трек в поиске';
+      el.nowTitle.textContent = 'РќРёС‡РµРіРѕ РЅРµ РёРіСЂР°РµС‚';
+      el.nowArtist.textContent = 'Р’С‹Р±РµСЂРё С‚СЂРµРє РІ РїРѕРёСЃРєРµ';
       el.bigCover.src = placeholder;
       el.currentTime.textContent = '0:00';
       el.duration.textContent = '0:00';
@@ -1504,7 +1504,7 @@
       el.favoriteBtn.classList.remove('active');
       return;
     }
-    el.nowTitle.textContent = t.title || 'Без названия';
+    el.nowTitle.textContent = t.title || 'Р‘РµР· РЅР°Р·РІР°РЅРёСЏ';
     el.nowArtist.innerHTML = artistsHtml(t.artist);
     el.nowTitle.onclick = () => openSongInfo(t);
     const chips = [];
@@ -1531,23 +1531,23 @@
   function addToQueue(track) {
     if (!track) return;
     const k = trackKey(track);
-    if (state.queue.some(x => trackKey(x) === k)) return notify('Уже в очереди');
+    if (state.queue.some(x => trackKey(x) === k)) return notify('РЈР¶Рµ РІ РѕС‡РµСЂРµРґРё');
     if (state.currentTrack && queueIndexOf(state.currentTrack) < 0) {
       state.queue.unshift(state.currentTrack);
       state.currentIndex = 0;
     }
-    state.queue.push(track); updateQueue(); notify('Добавлено в очередь');
+    state.queue.push(track); updateQueue(); notify('Р”РѕР±Р°РІР»РµРЅРѕ РІ РѕС‡РµСЂРµРґСЊ');
   }
   function playNext(track) {
     if (!track) return;
     const k = trackKey(track);
-    if (state.currentTrack && k === trackKey(state.currentTrack)) return notify('Этот трек уже играет');
+    if (state.currentTrack && k === trackKey(state.currentTrack)) return notify('Р­С‚РѕС‚ С‚СЂРµРє СѓР¶Рµ РёРіСЂР°РµС‚');
     const filtered = state.queue.filter(x => trackKey(x) !== k);
     const curIdx = state.currentTrack ? filtered.findIndex(x => trackKey(x) === trackKey(state.currentTrack)) : -1;
     filtered.splice(curIdx + 1, 0, track);
     state.queue = filtered;
     state.currentIndex = curIdx;
-    updateQueue(); notify('Играет следующим');
+    updateQueue(); notify('РРіСЂР°РµС‚ СЃР»РµРґСѓСЋС‰РёРј');
   }
   function removeFromQueue(index) {
     if (index < 0 || index >= state.queue.length) return;
@@ -1555,11 +1555,11 @@
     state.currentIndex = queueIndexOf(state.currentTrack);
     updateQueue();
   }
-  function clearQueue() { state.queue = []; state.currentIndex = -1; updateQueue(); notify('Очередь очищена'); }
+  function clearQueue() { state.queue = []; state.currentIndex = -1; updateQueue(); notify('РћС‡РµСЂРµРґСЊ РѕС‡РёС‰РµРЅР°'); }
   function updateQueue() {
     const box = el.queueContent; if (!box) return;
     if (!state.queue.length) {
-      box.innerHTML = '<div class="queue-empty">Очередь пуста<br><span style="font-size:11px;color:var(--text-4)">Добавь треки, чтобы продолжить</span></div>';
+      box.innerHTML = '<div class="queue-empty">РћС‡РµСЂРµРґСЊ РїСѓСЃС‚Р°<br><span style="font-size:11px;color:var(--text-4)">Р”РѕР±Р°РІСЊ С‚СЂРµРєРё, С‡С‚РѕР±С‹ РїСЂРѕРґРѕР»Р¶РёС‚СЊ</span></div>';
       return;
     }
     box.innerHTML = '';
@@ -1568,16 +1568,16 @@
       row.className = 'queue-row' + (state.currentTrack && trackKey(state.currentTrack) === trackKey(t) ? ' active' : '');
       row.draggable = true; row.dataset.index = String(i);
       const drag = document.createElement('span');
-      drag.className = 'queue-drag'; drag.textContent = '⋮⋮';
+      drag.className = 'queue-drag'; drag.textContent = 'в‹®в‹®';
       const cover = document.createElement('img');
       cover.className = 'queue-cover'; cover.alt = '';
       cover.src = coverFor(t) || placeholderCover();
       cover.onerror = () => { cover.src = placeholderCover(); };
       const main = document.createElement('div');
       main.className = 'queue-main';
-      main.innerHTML = `<div class="queue-title-text">${escapeHtml(t.title || '—')}</div><div class="queue-artist-text">${artistsHtml(t.artist)}</div>`;
+      main.innerHTML = `<div class="queue-title-text">${escapeHtml(t.title || 'вЂ”')}</div><div class="queue-artist-text">${artistsHtml(t.artist)}</div>`;
       const rm = document.createElement('button');
-      rm.className = 'queue-remove'; rm.textContent = '×'; rm.title = 'Убрать';
+      rm.className = 'queue-remove'; rm.textContent = 'Г—'; rm.title = 'РЈР±СЂР°С‚СЊ';
       rm.addEventListener('click', e => { e.stopPropagation(); removeFromQueue(i); });
       row.append(drag, cover, main, rm);
       row.addEventListener('click', () => {
@@ -1610,11 +1610,11 @@
     const k = trackKey(t);
     if (isFavorite(t)) {
       state.favorites = state.favorites.filter(x => trackKey(x) !== k);
-      notify('Удалено из избранного');
+      notify('РЈРґР°Р»РµРЅРѕ РёР· РёР·Р±СЂР°РЅРЅРѕРіРѕ');
       if (state.user && authToken) apiAuth('/api/favorites/' + encodeURIComponent(k), { method: 'DELETE' }).catch(() => {});
     } else {
       state.favorites.unshift(t);
-      notify('Добавлено в избранное');
+      notify('Р”РѕР±Р°РІР»РµРЅРѕ РІ РёР·Р±СЂР°РЅРЅРѕРµ');
       if (state.user && authToken) apiAuth('/api/favorites', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(t)
       }).catch(() => {});
@@ -1626,7 +1626,7 @@
   function renderFavorites() {
     const box = el.favoritesList; if (!box) return;
     if (!state.favorites.length) {
-      box.innerHTML = `<div class="empty"><div>Нет избранных треков</div><div style="margin-top:6px;font-size:11px;color:var(--text-4)">Добавляй понравившиеся песни сердцем</div></div>`;
+      box.innerHTML = `<div class="empty"><div>РќРµС‚ РёР·Р±СЂР°РЅРЅС‹С… С‚СЂРµРєРѕРІ</div><div style="margin-top:6px;font-size:11px;color:var(--text-4)">Р”РѕР±Р°РІР»СЏР№ РїРѕРЅСЂР°РІРёРІС€РёРµСЃСЏ РїРµСЃРЅРё СЃРµСЂРґС†РµРј</div></div>`;
       return;
     }
     renderList(box, state.favorites, { context: 'favorites' });
@@ -1634,7 +1634,7 @@
   function renderHistory() {
     const box = el.historyList; if (!box) return;
     if (!state.history.length) {
-      box.innerHTML = `<div class="empty"><div>История пуста</div><div style="margin-top:6px;font-size:11px;color:var(--text-4)">Прослушанные треки появятся здесь</div></div>`;
+      box.innerHTML = `<div class="empty"><div>РСЃС‚РѕСЂРёСЏ РїСѓСЃС‚Р°</div><div style="margin-top:6px;font-size:11px;color:var(--text-4)">РџСЂРѕСЃР»СѓС€Р°РЅРЅС‹Рµ С‚СЂРµРєРё РїРѕСЏРІСЏС‚СЃСЏ Р·РґРµСЃСЊ</div></div>`;
       return;
     }
     const now = new Date();
@@ -1650,7 +1650,7 @@
       else groups.earlier.push(t);
     });
     box.innerHTML = '';
-    const labels = { today: 'Сегодня', yesterday: 'Вчера', week: 'Эта неделя', earlier: 'Ранее' };
+    const labels = { today: 'РЎРµРіРѕРґРЅСЏ', yesterday: 'Р’С‡РµСЂР°', week: 'Р­С‚Р° РЅРµРґРµР»СЏ', earlier: 'Р Р°РЅРµРµ' };
     for (const key of ['today', 'yesterday', 'week', 'earlier']) {
       const list = groups[key]; if (!list.length) continue;
       const head = document.createElement('div');
@@ -1678,13 +1678,13 @@
       const main = document.createElement('div');
       main.className = 'list-main';
       const title = document.createElement('strong');
-      title.textContent = track.title || 'Без названия';
+      title.textContent = track.title || 'Р‘РµР· РЅР°Р·РІР°РЅРёСЏ';
       const sub = document.createElement('span');
       if (opts.withTime && track.playedAt) {
         const d = new Date(track.playedAt);
         const hh = String(d.getHours()).padStart(2, '0');
         const mm = String(d.getMinutes()).padStart(2, '0');
-        sub.innerHTML = `${hh}:${mm} · ${artistsHtml(track.artist)}`;
+        sub.innerHTML = `${hh}:${mm} В· ${artistsHtml(track.artist)}`;
       } else {
         sub.innerHTML = artistsHtml(track.artist);
       }
@@ -1692,7 +1692,7 @@
       const actions = document.createElement('div');
       actions.className = 'row-actions';
       const play = document.createElement('button');
-      play.className = 'small-btn'; play.title = 'Играть'; play.textContent = '▶';
+      play.className = 'small-btn'; play.title = 'РРіСЂР°С‚СЊ'; play.textContent = 'в–¶';
       play.addEventListener('click', e => {
         e.stopPropagation();
         const i = list.findIndex(x => trackKey(x) === trackKey(track));
@@ -1700,8 +1700,8 @@
         else playFromList([track], 0, { force: true });
       });
       const fav = document.createElement('button');
-      fav.className = 'small-btn'; fav.title = 'Избранное';
-      fav.textContent = isFavorite(track) ? '♥' : '♡';
+      fav.className = 'small-btn'; fav.title = 'РР·Р±СЂР°РЅРЅРѕРµ';
+      fav.textContent = isFavorite(track) ? 'в™Ґ' : 'в™Ў';
       fav.addEventListener('click', e => { e.stopPropagation(); toggleFavorite(track); });
       actions.append(play, fav);
       row.append(cover, main, actions);
@@ -1715,12 +1715,12 @@
     });
   }  async function showArtist(id, name) {
     showView('artist');
-    el.artistHeroName.textContent = name || 'Исполнитель';
+    el.artistHeroName.textContent = name || 'РСЃРїРѕР»РЅРёС‚РµР»СЊ';
     el.artistHeroImage.removeAttribute('src');
     el.artistHeroMeta.innerHTML = '';
     el.artistBannerBg.style.backgroundImage = 'none';
     el.artistBannerBg.classList.remove('loaded');
-    el.artistTracks.innerHTML = '<div class="empty">Загрузка…</div>';
+    el.artistTracks.innerHTML = '<div class="empty">Р—Р°РіСЂСѓР·РєР°вЂ¦</div>';
     el.artistAlbums.innerHTML = ''; el.artistSingles.innerHTML = '';
     el.artistShowAllBtn.classList.add('hidden');
 
@@ -1730,14 +1730,14 @@
       el.artistBannerBg.classList.add('loaded');
     };
 
-    if (!name && !id) { el.artistTracks.innerHTML = '<div class="empty">Нет данных</div>'; return; }
+    if (!name && !id) { el.artistTracks.innerHTML = '<div class="empty">РќРµС‚ РґР°РЅРЅС‹С…</div>'; return; }
     try {
-      // Сервер сам ищет: id вида name:<имя> / sc_<uid> / dz_<id>; ?name= — подсказка.
+      // РЎРµСЂРІРµСЂ СЃР°Рј РёС‰РµС‚: id РІРёРґР° name:<РёРјСЏ> / sc_<uid> / dz_<id>; ?name= вЂ” РїРѕРґСЃРєР°Р·РєР°.
       let artistId = id, picture = '';
       if (!artistId && name) artistId = 'name:' + name;
       if (!artistId) {
-        el.artistHeroName.textContent = name || 'Исполнитель';
-        el.artistTracks.innerHTML = '<div class="empty">Нет данных</div>';
+        el.artistHeroName.textContent = name || 'РСЃРїРѕР»РЅРёС‚РµР»СЊ';
+        el.artistTracks.innerHTML = '<div class="empty">РќРµС‚ РґР°РЅРЅС‹С…</div>';
         return;
       }
       const qs = name ? '?name=' + encodeURIComponent(name) : '';
@@ -1746,41 +1746,41 @@
       if (!r.ok) throw Object.assign(new Error(d.error || 'unavailable'), { status: r.status });
       const artist = d.artist || {};
       const pic = artist.picture || picture || '';
-      el.artistHeroName.textContent = artist.name || name || 'Исполнитель';
+      el.artistHeroName.textContent = artist.name || name || 'РСЃРїРѕР»РЅРёС‚РµР»СЊ';
       if (pic) el.artistHeroImage.src = coverUrl(pic);
       const meta = [];
-      if (artist.nbFan) meta.push(`<span>${formatNumber(artist.nbFan)} фанатов</span>`);
-      if (d.top_tracks?.length) meta.push(`<span>${d.top_tracks.length} треков</span>`);
+      if (artist.nbFan) meta.push(`<span>${formatNumber(artist.nbFan)} С„Р°РЅР°С‚РѕРІ</span>`);
+      if (d.top_tracks?.length) meta.push(`<span>${d.top_tracks.length} С‚СЂРµРєРѕРІ</span>`);
       const totalRel = (d.albums?.length || 0) + (d.singles?.length || 0);
-      if (totalRel) meta.push(`<span>${totalRel} релизов</span>`);
+      if (totalRel) meta.push(`<span>${totalRel} СЂРµР»РёР·РѕРІ</span>`);
       el.artistHeroMeta.innerHTML = meta.join('');
       const allTracks = (d.top_tracks || []).map(normalizeTrack).filter(Boolean);
       let expanded = false; const INITIAL = 5;
       const drawTop = () => {
-        if (!allTracks.length) { el.artistTracks.innerHTML = '<div class="empty">Артист не найден в SoundCloud/Audius. Попробуй поиск</div>'; return; }
+        if (!allTracks.length) { el.artistTracks.innerHTML = '<div class="empty">РђСЂС‚РёСЃС‚ РЅРµ РЅР°Р№РґРµРЅ РІ SoundCloud/Audius. РџРѕРїСЂРѕР±СѓР№ РїРѕРёСЃРє</div>'; return; }
         renderList(el.artistTracks, expanded ? allTracks : allTracks.slice(0, INITIAL), { context: 'artist' });
       };
       drawTop();
       if (allTracks.length > INITIAL) {
         el.artistShowAllBtn.classList.remove('hidden');
-        el.artistShowAllBtn.textContent = `Показать все (${allTracks.length})`;
+        el.artistShowAllBtn.textContent = `РџРѕРєР°Р·Р°С‚СЊ РІСЃРµ (${allTracks.length})`;
         el.artistShowAllBtn.onclick = () => {
           expanded = !expanded;
-          el.artistShowAllBtn.textContent = expanded ? 'Свернуть' : `Показать все (${allTracks.length})`;
+          el.artistShowAllBtn.textContent = expanded ? 'РЎРІРµСЂРЅСѓС‚СЊ' : `РџРѕРєР°Р·Р°С‚СЊ РІСЃРµ (${allTracks.length})`;
           drawTop();
         };
       }
       setTimeout(() => prefetchTracks(allTracks.slice(0, 3)), 200);
       const albums = d.albums || [];
       el.artistAlbumsSection.style.display = '';
-      el.artistAlbums.innerHTML = albums.length ? '' : '<div class="empty">Альбомы недоступны для этого артиста</div>';
+      el.artistAlbums.innerHTML = albums.length ? '' : '<div class="empty">РђР»СЊР±РѕРјС‹ РЅРµРґРѕСЃС‚СѓРїРЅС‹ РґР»СЏ СЌС‚РѕРіРѕ Р°СЂС‚РёСЃС‚Р°</div>';
       albums.forEach(a => el.artistAlbums.appendChild(makeMiniCard({
         id: a.providerId, albumId: a.providerId, album: a.title,
         title: a.title, artist: artist.name || name, cover: a.cover
       }, 'album')));
       const singles = d.singles || [];
       el.artistSinglesSection.style.display = '';
-      el.artistSingles.innerHTML = singles.length ? '' : '<div class="empty">Синглы недоступны для этого артиста</div>';
+      el.artistSingles.innerHTML = singles.length ? '' : '<div class="empty">РЎРёРЅРіР»С‹ РЅРµРґРѕСЃС‚СѓРїРЅС‹ РґР»СЏ СЌС‚РѕРіРѕ Р°СЂС‚РёСЃС‚Р°</div>';
       singles.forEach(a => el.artistSingles.appendChild(makeMiniCard({
         id: a.providerId, albumId: a.providerId, album: a.title,
         title: a.title, artist: artist.name || name, cover: a.cover
@@ -1788,26 +1788,26 @@
     } catch (e) {
       el.artistTracks.innerHTML = '<div class="empty">' +
         (e && e.status === 404
-          ? 'Артист не найден в SoundCloud/Audius. Попробуй поиск'
-          : 'Не удалось загрузить данные артиста') + '</div>';
+          ? 'РђСЂС‚РёСЃС‚ РЅРµ РЅР°Р№РґРµРЅ РІ SoundCloud/Audius. РџРѕРїСЂРѕР±СѓР№ РїРѕРёСЃРє'
+          : 'РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ РґР°РЅРЅС‹Рµ Р°СЂС‚РёСЃС‚Р°') + '</div>';
     }
   }
   async function showAlbum(id) {
     showView('album');
-    el.albumTracks.innerHTML = '<div class="empty">Загрузка…</div>';
+    el.albumTracks.innerHTML = '<div class="empty">Р—Р°РіСЂСѓР·РєР°вЂ¦</div>';
     try {
       const r = await fetch(apiBase() + '/api/album/' + encodeURIComponent(id));
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'unavailable');
       const raw = d.tracks || [];
-      el.albumHeroName.textContent = d.title || 'Альбом';
-      el.albumHeroArtist.textContent = d.artist?.name || '—';
+      el.albumHeroName.textContent = d.title || 'РђР»СЊР±РѕРј';
+      el.albumHeroArtist.textContent = d.artist?.name || 'вЂ”';
       el.albumHeroType.textContent = (d.recordType || 'album').toUpperCase();
-      el.albumHeroMeta.textContent = [d.releaseDate?.slice?.(0, 4), raw.length ? `${raw.length} треков` : ''].filter(Boolean).join(' · ') || '—';
+      el.albumHeroMeta.textContent = [d.releaseDate?.slice?.(0, 4), raw.length ? `${raw.length} С‚СЂРµРєРѕРІ` : ''].filter(Boolean).join(' В· ') || 'вЂ”';
       if (d.cover) el.albumHeroImage.src = coverUrl(d.cover);
       const tracks = raw.map(normalizeTrack).filter(Boolean);
       el.albumTracks.innerHTML = '';
-      if (!tracks.length) { el.albumTracks.innerHTML = '<div class="empty">Пустой альбом</div>'; return; }
+      if (!tracks.length) { el.albumTracks.innerHTML = '<div class="empty">РџСѓСЃС‚РѕР№ Р°Р»СЊР±РѕРј</div>'; return; }
       tracks.forEach((t, i) => {
         const row = document.createElement('div');
         row.className = 'list-row';
@@ -1819,7 +1819,7 @@
         const actions = document.createElement('div');
         actions.className = 'row-actions';
         const play = document.createElement('button');
-        play.className = 'small-btn'; play.textContent = '▶';
+        play.className = 'small-btn'; play.textContent = 'в–¶';
         play.addEventListener('click', e => { e.stopPropagation(); playFromList(tracks, i, { force: true }); });
         actions.appendChild(play);
         row.append(idx, main, actions);
@@ -1833,7 +1833,7 @@
       el.albumAddToPlaylist.onclick = () => openPlaylistPicker(tracks);
       setTimeout(() => prefetchTracks(tracks.slice(0, 4)), 200);
     } catch {
-      el.albumTracks.innerHTML = '<div class="empty">Не удалось загрузить</div>';
+      el.albumTracks.innerHTML = '<div class="empty">РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ</div>';
     }
   }
 
@@ -1848,9 +1848,9 @@
   function renderPlaylists() {
     const grid = el.playlistsGrid; if (!grid) return;
     grid.innerHTML = '';
-    if (!state.user) { grid.innerHTML = '<div class="empty" style="grid-column:1/-1">Войди, чтобы создавать плейлисты</div>'; return; }
+    if (!state.user) { grid.innerHTML = '<div class="empty" style="grid-column:1/-1">Р’РѕР№РґРё, С‡С‚РѕР±С‹ СЃРѕР·РґР°РІР°С‚СЊ РїР»РµР№Р»РёСЃС‚С‹</div>'; return; }
     if (!state.playlists.length) {
-      grid.innerHTML = '<div class="empty" style="grid-column:1/-1">Плейлистов пока нет<br><span style="font-size:11px;color:var(--text-4)">Нажми «Новый плейлист», чтобы создать</span></div>';
+      grid.innerHTML = '<div class="empty" style="grid-column:1/-1">РџР»РµР№Р»РёСЃС‚РѕРІ РїРѕРєР° РЅРµС‚<br><span style="font-size:11px;color:var(--text-4)">РќР°Р¶РјРё В«РќРѕРІС‹Р№ РїР»РµР№Р»РёСЃС‚В», С‡С‚РѕР±С‹ СЃРѕР·РґР°С‚СЊ</span></div>';
       return;
     }
     state.playlists.forEach(pl => {
@@ -1863,7 +1863,7 @@
       else if (firstCover) cover.style.backgroundImage = `url("${firstCover}")`;
       const body = document.createElement('div');
       body.className = 'playlist-card-body';
-      body.innerHTML = `<div class="playlist-card-name">${escapeHtml(pl.name)}</div><div class="playlist-card-meta">${pl.tracks?.length || 0} треков</div>`;
+      body.innerHTML = `<div class="playlist-card-name">${escapeHtml(pl.name)}</div><div class="playlist-card-meta">${pl.tracks?.length || 0} С‚СЂРµРєРѕРІ</div>`;
       card.append(cover, body);
       card.addEventListener('click', () => openPlaylist(pl.id));
       grid.appendChild(card);
@@ -1874,22 +1874,22 @@
     state.currentPlaylistId = id;
     showView('playlist');
     el.playlistHeroName.textContent = pl.name;
-    el.playlistHeroMeta.textContent = `${pl.tracks?.length || 0} треков${pl.description ? ' · ' + pl.description : ''}`;
+    el.playlistHeroMeta.textContent = `${pl.tracks?.length || 0} С‚СЂРµРєРѕРІ${pl.description ? ' В· ' + pl.description : ''}`;
     const firstCover = coverUrl(pl.cover || pl.tracks?.find(t => t.cover)?.cover || '');
     el.playlistHeroImage.src = firstCover || placeholderCover();
     const box = el.playlistTracks;
     box.innerHTML = '';
-    if (!pl.tracks?.length) box.innerHTML = '<div class="empty">Плейлист пуст</div>';
+    if (!pl.tracks?.length) box.innerHTML = '<div class="empty">РџР»РµР№Р»РёСЃС‚ РїСѓСЃС‚</div>';
     else renderList(box, pl.tracks, { context: 'playlist' });
     el.playlistPlay.onclick = () => { if (!pl.tracks?.length) return; playFromList(pl.tracks, 0, { force: true }); };
     el.playlistShuffle.onclick = () => { if (!pl.tracks?.length) return; state.shuffle = true; updateModeButtons(); playFromList(pl.tracks.slice().sort(() => Math.random() - 0.5), 0, { force: true }); };
     el.playlistDelete.onclick = async () => {
-      if (!confirm('Удалить плейлист?')) return;
+      if (!confirm('РЈРґР°Р»РёС‚СЊ РїР»РµР№Р»РёСЃС‚?')) return;
       try {
         await apiAuth('/api/playlists/' + id, { method: 'DELETE' });
         state.playlists = state.playlists.filter(p => p.id !== id);
-        renderPlaylists(); showView('playlists'); notify('Плейлист удалён');
-      } catch { notify('Не удалось удалить', 'error'); }
+        renderPlaylists(); showView('playlists'); notify('РџР»РµР№Р»РёСЃС‚ СѓРґР°Р»С‘РЅ');
+      } catch { notify('РќРµ СѓРґР°Р»РѕСЃСЊ СѓРґР°Р»РёС‚СЊ', 'error'); }
     };
   }
   function openPlaylistCreate(prefillTrack) {
@@ -1902,7 +1902,7 @@
   async function submitPlaylistCreate() {
     const name = el.playlistNameInput.value.trim();
     const description = el.playlistDescInput.value.trim();
-    if (!name) return notify('Введи название');
+    if (!name) return notify('Р’РІРµРґРё РЅР°Р·РІР°РЅРёРµ');
     if (!state.user || !authToken) { closePlaylistCreate(); openLoginModal(); return; }
     try {
       const r = await apiAuth('/api/playlists', {
@@ -1920,9 +1920,9 @@
           r.tracks.push(t);
         } catch {}
       }
-      renderPlaylists(); closePlaylistCreate(); notify('Плейлист создан');
+      renderPlaylists(); closePlaylistCreate(); notify('РџР»РµР№Р»РёСЃС‚ СЃРѕР·РґР°РЅ');
       el.playlistCreateModal.dataset.prefillTrack = '';
-    } catch { notify('Не удалось создать', 'error'); }
+    } catch { notify('РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕР·РґР°С‚СЊ', 'error'); }
   }
   function closePlaylistCreate() {
     el.playlistCreateModal.classList.remove('open');
@@ -1933,11 +1933,11 @@
     const arr = Array.isArray(tracks) ? tracks : [tracks];
     el.playlistPickerModal.dataset.tracks = JSON.stringify(arr);
     const box = el.playlistPickerList; box.innerHTML = '';
-    if (!state.playlists.length) box.innerHTML = '<div class="playlist-picker-empty">Плейлистов пока нет</div>';
+    if (!state.playlists.length) box.innerHTML = '<div class="playlist-picker-empty">РџР»РµР№Р»РёСЃС‚РѕРІ РїРѕРєР° РЅРµС‚</div>';
     else state.playlists.forEach(pl => {
       const row = document.createElement('div');
       row.className = 'playlist-picker-item';
-      row.textContent = pl.name + (pl.tracks?.length ? ` · ${pl.tracks.length}` : '');
+      row.textContent = pl.name + (pl.tracks?.length ? ` В· ${pl.tracks.length}` : '');
       row.addEventListener('click', () => addTracksToPlaylist(pl.id, arr));
       box.appendChild(row);
     });
@@ -1953,10 +1953,10 @@
       }
       const pl = state.playlists.find(p => p.id === plId);
       if (pl) for (const t of tracks) if (!pl.tracks.some(x => trackKey(x) === trackKey(t))) pl.tracks.push(t);
-      notify(`Добавлено в «${pl?.name || 'плейлист'}»`);
+      notify(`Р”РѕР±Р°РІР»РµРЅРѕ РІ В«${pl?.name || 'РїР»РµР№Р»РёСЃС‚'}В»`);
       closePlaylistPicker();
       if (state.currentPlaylistId === plId) openPlaylist(plId);
-    } catch { notify('Не удалось добавить', 'error'); }
+    } catch { notify('РќРµ СѓРґР°Р»РѕСЃСЊ РґРѕР±Р°РІРёС‚СЊ', 'error'); }
   }
   function closePlaylistPicker() {
     el.playlistPickerModal.classList.remove('open');
@@ -1975,7 +1975,7 @@
       const track = {
         id: 'local_' + (crypto.randomUUID ? crypto.randomUUID() : (Date.now() + Math.random().toString(36).slice(2))),
         provider: 'local', source: 'LOCAL',
-        title: fallbackTitle, artist: 'Локальный файл', album: '',
+        title: fallbackTitle, artist: 'Р›РѕРєР°Р»СЊРЅС‹Р№ С„Р°Р№Р»', album: '',
         duration: 0, localUrl: url, cover: ''
       };
       try {
@@ -1993,7 +1993,7 @@
     }
     state.localTracks = state.localTracks.slice(0, 500);
     persist(); renderLocal();
-    if (added) notify(`Добавлено файлов: ${added}`);
+    if (added) notify(`Р”РѕР±Р°РІР»РµРЅРѕ С„Р°Р№Р»РѕРІ: ${added}`);
   }
   function renderLocal() {
     const box = el.localList; if (!box) return;
@@ -2004,23 +2004,23 @@
   function showContextMenu(e, track) {
     const menu = el.contextMenu; menu.innerHTML = '';
     const items = [
-      { label: 'Играть', icon: '▶', action: () => {
+      { label: 'РРіСЂР°С‚СЊ', icon: 'в–¶', action: () => {
         const i = state.tracks.findIndex(x => trackKey(x) === trackKey(track));
         if (i >= 0) playFromList(state.tracks, i, { force: true });
         else playFromList([track], 0, { force: true });
       }},
-      { label: 'Играть следующим', icon: '→', action: () => playNext(track) },
-      { label: 'Добавить в очередь', icon: '+', action: () => addToQueue(track) },
+      { label: 'РРіСЂР°С‚СЊ СЃР»РµРґСѓСЋС‰РёРј', icon: 'в†’', action: () => playNext(track) },
+      { label: 'Р”РѕР±Р°РІРёС‚СЊ РІ РѕС‡РµСЂРµРґСЊ', icon: '+', action: () => addToQueue(track) },
       { divider: true },
-      { label: 'Добавить в плейлист', icon: '☰', action: () => openPlaylistPicker(track) },
-      { label: isFavorite(track) ? 'Убрать из избранного' : 'В избранное', icon: '♥', action: () => toggleFavorite(track) },
+      { label: 'Р”РѕР±Р°РІРёС‚СЊ РІ РїР»РµР№Р»РёСЃС‚', icon: 'в°', action: () => openPlaylistPicker(track) },
+      { label: isFavorite(track) ? 'РЈР±СЂР°С‚СЊ РёР· РёР·Р±СЂР°РЅРЅРѕРіРѕ' : 'Р’ РёР·Р±СЂР°РЅРЅРѕРµ', icon: 'в™Ґ', action: () => toggleFavorite(track) },
       { divider: true },
-      { label: 'Открыть исполнителя', icon: '⌕', action: () => {
+      { label: 'РћС‚РєСЂС‹С‚СЊ РёСЃРїРѕР»РЅРёС‚РµР»СЏ', icon: 'вЊ•', action: () => {
         const a = splitArtistsList(track.artist)[0];
         if (a) showArtist(track.artistId || '', a);
       }},
-      { label: 'Открыть альбом', icon: '▤', action: () => {
-        if (track.albumId) showAlbum(track.albumId); else notify('Альбом недоступен');
+      { label: 'РћС‚РєСЂС‹С‚СЊ Р°Р»СЊР±РѕРј', icon: 'в–¤', action: () => {
+        if (track.albumId) showAlbum(track.albumId); else notify('РђР»СЊР±РѕРј РЅРµРґРѕСЃС‚СѓРїРµРЅ');
       }}
     ];
     items.forEach(it => {
@@ -2049,18 +2049,18 @@
     songInfoCurrent = track;
     el.songInfoCover.src = coverUrl(track.cover) || placeholderCover();
     el.songInfoCover.style.display = track.cover ? 'block' : 'none';
-    el.songInfoTitle.textContent = track.title || 'Без названия';
+    el.songInfoTitle.textContent = track.title || 'Р‘РµР· РЅР°Р·РІР°РЅРёСЏ';
     el.songInfoArtist.innerHTML = artistsHtml(track.artist);
-    el.songInfoAlbum.textContent = track.album || (track.provider === 'soundcloud' ? 'Single' : '—');
+    el.songInfoAlbum.textContent = track.album || (track.provider === 'soundcloud' ? 'Single' : 'вЂ”');
     el.songInfoAlbum.style.cursor = track.albumId ? 'pointer' : 'default';
     el.songInfoAlbum.onclick = () => { if (track.albumId) { closeSongInfo(); showAlbum(track.albumId); } };
-    el.songInfoMeta.textContent = [track.duration ? formatTime(track.duration) : '', track.releaseDate?.slice(0, 4)].filter(Boolean).join(' · ') || '—';
-    const providerLabel = { soundcloud: 'SoundCloud', audius: 'Audius', deezer: 'Deezer', youtube: 'YouTube', local: 'Локальный файл' }[track.provider]
+    el.songInfoMeta.textContent = [track.duration ? formatTime(track.duration) : '', track.releaseDate?.slice(0, 4)].filter(Boolean).join(' В· ') || 'вЂ”';
+    const providerLabel = { soundcloud: 'SoundCloud', audius: 'Audius', deezer: 'Deezer', youtube: 'YouTube', local: 'Р›РѕРєР°Р»СЊРЅС‹Р№ С„Р°Р№Р»' }[track.provider]
       || String(track.provider || track.source || 'CATALOG').toUpperCase();
     el.songInfoSource.innerHTML = track.sourceUrl
-      ? `Провайдер: <a href="${escapeHtml(track.sourceUrl)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline">${escapeHtml(providerLabel)} ↗</a>`
-      : `Провайдер: ${escapeHtml(providerLabel)}`;
-    el.songInfoFavorite.textContent = isFavorite(track) ? '♥ В избранном' : '♡ В избранное';
+      ? `РџСЂРѕРІР°Р№РґРµСЂ: <a href="${escapeHtml(track.sourceUrl)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline">${escapeHtml(providerLabel)} в†—</a>`
+      : `РџСЂРѕРІР°Р№РґРµСЂ: ${escapeHtml(providerLabel)}`;
+    el.songInfoFavorite.textContent = isFavorite(track) ? 'в™Ґ Р’ РёР·Р±СЂР°РЅРЅРѕРј' : 'в™Ў Р’ РёР·Р±СЂР°РЅРЅРѕРµ';
     el.songInfoModal.classList.add('open');
     el.songInfoModal.setAttribute('aria-hidden', 'false');
   }
@@ -2160,10 +2160,10 @@
     lyricsRetried = false;
     box.dataset.trackKey = trackKey(track);
     box.dataset.loaded = '0';
-    box.innerHTML = '<div class="lyrics-placeholder">Ищу текст…</div>';
+    box.innerHTML = '<div class="lyrics-placeholder">РС‰Сѓ С‚РµРєСЃС‚вЂ¦</div>';
 
-    // Баг A: слать СЫРОЕ название — скобки «(w/ asteria & kets4eki)» нужны серверу
-    // для извлечения соавторов и точного /api/get у LRCLIB; чистку делает сервер.
+    // Р‘Р°Рі A: СЃР»Р°С‚СЊ РЎР«Р РћР• РЅР°Р·РІР°РЅРёРµ вЂ” СЃРєРѕР±РєРё В«(w/ asteria & kets4eki)В» РЅСѓР¶РЅС‹ СЃРµСЂРІРµСЂСѓ
+    // РґР»СЏ РёР·РІР»РµС‡РµРЅРёСЏ СЃРѕР°РІС‚РѕСЂРѕРІ Рё С‚РѕС‡РЅРѕРіРѕ /api/get Сѓ LRCLIB; С‡РёСЃС‚РєСѓ РґРµР»Р°РµС‚ СЃРµСЂРІРµСЂ.
     const params = new URLSearchParams({
       track_name: String(track.title || ''),
       artist_name: track.artist || ''
@@ -2185,10 +2185,10 @@
               loadLyrics(track, true);
             }
           }, 2200);
-          box.innerHTML = '<div class="lyrics-placeholder">Пробую ещё раз…</div>';
+          box.innerHTML = '<div class="lyrics-placeholder">РџСЂРѕР±СѓСЋ РµС‰С‘ СЂР°Р·вЂ¦</div>';
           return;
         }
-        box.innerHTML = '<div class="lyrics-placeholder">Текст не найден</div>';
+        box.innerHTML = '<div class="lyrics-placeholder">РўРµРєСЃС‚ РЅРµ РЅР°Р№РґРµРЅ</div>';
         box.dataset.loaded = '1';
         return;
       }
@@ -2218,33 +2218,42 @@
         box.dataset.loaded = '1';
         return;
       }
-      box.innerHTML = '<div class="lyrics-placeholder">Текст не найден</div>';
+      box.innerHTML = '<div class="lyrics-placeholder">РўРµРєСЃС‚ РЅРµ РЅР°Р№РґРµРЅ</div>';
       box.dataset.loaded = '1';
     } catch (e) {
       if (box.dataset.trackKey !== trackKey(track)) return;
-      box.innerHTML = `<div class="lyrics-placeholder">${escapeHtml(e.message || 'Ошибка загрузки')}</div>`;
+      box.innerHTML = `<div class="lyrics-placeholder">${escapeHtml(e.message || 'РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё')}</div>`;
       box.dataset.loaded = '1';
     }
   }
   function setPlayerTab(tab) {
     document.querySelectorAll('.player-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-    // Bug B: видимость колонки текста и сжатие обложки управляются CSS-правилами
-    // по атрибуту data-tab на .player-view ([data-tab="lyrics"] .lyrics-panel и т.д.).
-    const playerView = el.lyricsPanel?.closest('.player-view');
-    if (playerView) playerView.dataset.tab = tab;
-    if (tab === 'lyrics') {
+  }
+  function openLyrics() {
+    if (state.view !== 'player') showView('player');
+    if (!state.currentTrack) { if (state.view !== 'player') showView('player'); notify('РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ С‚СЂРµРє'); return; }
+    if (el.lyricsPanel.classList.contains('hidden')) {
       el.lyricsPanel.classList.remove('hidden');
       el.lyricsPanel.setAttribute('aria-hidden', 'false');
-      if (state.currentTrack) loadLyrics(state.currentTrack);
-    } else {
-      el.lyricsPanel.classList.add('hidden');
-      el.lyricsPanel.setAttribute('aria-hidden', 'true');
-      clearLyricsSync();
+      const key = trackKey(state.currentTrack);
+      if (el.lyricsInlineContent.dataset.trackKey !== key || el.lyricsInlineContent.dataset.loaded !== '1') {
+        loadLyrics(state.currentTrack);
+      } else {
+        highlightLyrics();
+      }
     }
+    try { el.lyricsPanel.scrollTop = 0; } catch {}
+  }
+  function closeLyrics() {
+    if (el.lyricsPanel.classList.contains('hidden')) return;
+    el.lyricsPanel.classList.add('hidden');
+    el.lyricsPanel.setAttribute('aria-hidden', 'true');
+    clearLyricsSync();
+    if (el.lyricsVideoLayer) el.lyricsVideoLayer.classList.add('off');
   }
   function showLyrics() {
     if (state.view !== 'player') showView('player');
-    setTimeout(() => setPlayerTab('lyrics'), 60);
+    openLyrics();
   }
 
   function showView(view) {
@@ -2278,7 +2287,7 @@
 
   function applyTheme() {
     document.documentElement.setAttribute('data-theme', settings.theme);
-    if (el.themeToggle) el.themeToggle.textContent = settings.theme === 'dark' ? 'Тёмная' : 'Светлая';
+    if (el.themeToggle) el.themeToggle.textContent = settings.theme === 'dark' ? 'РўС‘РјРЅР°СЏ' : 'РЎРІРµС‚Р»Р°СЏ';
     store.set('nova_theme', settings.theme);
   }
   function applyThemePreset(name, userPick = false) {
@@ -2302,12 +2311,12 @@
       applyTheme();
       if (customEditorOpen && customThemeStore()) applyCustomTheme();
     }
-    if (userPick) notify('Пресет: ' + (n === 'custom' ? 'Своя тема' : n));
+    if (userPick) notify('РџСЂРµСЃРµС‚: ' + (n === 'custom' ? 'РЎРІРѕСЏ С‚РµРјР°' : n));
     document.querySelectorAll('.theme-preset').forEach(p => p.classList.toggle('active', p.dataset.preset === n));
     syncCustomEditor();
   }
 
-  // ⬇⬇⬇ ДОБАВЛЕНО: функция выбора шрифта приложения ⬇⬇⬇
+  // в¬‡в¬‡в¬‡ Р”РћР‘РђР’Р›Р•РќРћ: С„СѓРЅРєС†РёСЏ РІС‹Р±РѕСЂР° С€СЂРёС„С‚Р° РїСЂРёР»РѕР¶РµРЅРёСЏ в¬‡в¬‡в¬‡
   function applyFont(name) {
     const v = String(name || 'Inter');
     let stack;
@@ -2321,7 +2330,7 @@
     document.documentElement.style.setProperty('--font-app', stack);
     store.set('nova_font', v);
   }
-  // ⬆⬆⬆ КОНЕЦ добавленного ⬆⬆⬆
+  // в¬†в¬†в¬† РљРћРќР•Р¦ РґРѕР±Р°РІР»РµРЅРЅРѕРіРѕ в¬†в¬†в¬†
 
   function applyTileNameColor(nameEl, bgCss) {
     const p = parseCssColor(bgCss);
@@ -2349,11 +2358,11 @@
     });
     const custom = document.createElement('button');
     custom.className = 'theme-preset' + (settings.themePreset === 'custom' ? ' active' : '');
-    custom.dataset.preset = 'custom'; custom.title = 'Своя тема';
+    custom.dataset.preset = 'custom'; custom.title = 'РЎРІРѕСЏ С‚РµРјР°';
     const cDot = document.createElement('div');
     cDot.className = 'theme-preset-dot';
     const cNm = document.createElement('div');
-    cNm.className = 'theme-preset-name'; cNm.textContent = 'Своя тема';
+    cNm.className = 'theme-preset-name'; cNm.textContent = 'РЎРІРѕСЏ С‚РµРјР°';
     custom.append(cDot, cNm);
     custom.addEventListener('click', () => {
       ensureCustomDraft();
@@ -2485,7 +2494,7 @@
       hex.spellcheck = false; hex.dataset.token = t.key; hex.placeholder = '#000000';
       const reset = document.createElement('button');
       reset.type = 'button'; reset.className = 'custom-field-reset'; reset.dataset.token = t.key;
-      reset.title = 'Вернуть цвет базы'; reset.textContent = '×';
+      reset.title = 'Р’РµСЂРЅСѓС‚СЊ С†РІРµС‚ Р±Р°Р·С‹'; reset.textContent = 'Г—';
       row.append(label, color, hex, reset);
       el.customEditorGrid.append(row);
     });
@@ -2540,9 +2549,9 @@
         hex.classList.remove('invalid');
       }
     });
-    const baseName = draft.base === 'custom' ? 'Своя тема'
-      : ((THEMES.find(x => x.id === draft.base) || {}).name || 'Своя тема');
-    el.customBaseLabel.textContent = 'База: ' + baseName;
+    const baseName = draft.base === 'custom' ? 'РЎРІРѕСЏ С‚РµРјР°'
+      : ((THEMES.find(x => x.id === draft.base) || {}).name || 'РЎРІРѕСЏ С‚РµРјР°');
+    el.customBaseLabel.textContent = 'Р‘Р°Р·Р°: ' + baseName;
   }
   on(el.customApplyBtn, 'click', () => {
     ensureCustomDraft();
@@ -2558,13 +2567,13 @@
   });
   on(el.customExportBtn, 'click', () => {
     const draft = customThemeStore();
-    if (!draft) { notify('Нет данных для экспорта', 'error'); return; }
+    if (!draft) { notify('РќРµС‚ РґР°РЅРЅС‹С… РґР»СЏ СЌРєСЃРїРѕСЂС‚Р°', 'error'); return; }
     const url = URL.createObjectURL(new Blob([JSON.stringify(draft, null, 2)], { type: 'application/json' }));
     const a = document.createElement('a');
     a.href = url; a.download = 'nova-theme.noverset';
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
-    notify('Тема экспортирована');
+    notify('РўРµРјР° СЌРєСЃРїРѕСЂС‚РёСЂРѕРІР°РЅР°');
   });
   on(el.customImportBtn, 'click', () => el.customImportInput.click());
   on(el.customImportInput, 'change', async () => {
@@ -2588,12 +2597,12 @@
       saveCustomTheme(clean);
       if (settings.themePreset === 'custom') applyCustomTheme(); else clearCustomThemeInline();
       syncCustomEditor(); renderCustomPreview();
-      notify(bad ? 'Импортировано, невалидных полей: ' + bad : 'Тема импортирована');
-    } catch { notify('Не удалось импортировать файл', 'error'); }
+      notify(bad ? 'РРјРїРѕСЂС‚РёСЂРѕРІР°РЅРѕ, РЅРµРІР°Р»РёРґРЅС‹С… РїРѕР»РµР№: ' + bad : 'РўРµРјР° РёРјРїРѕСЂС‚РёСЂРѕРІР°РЅР°');
+    } catch { notify('РќРµ СѓРґР°Р»РѕСЃСЊ РёРјРїРѕСЂС‚РёСЂРѕРІР°С‚СЊ С„Р°Р№Р»', 'error'); }
   });
   function applyToggle(btn, on) {
     if (!btn) return;
-    btn.textContent = on ? 'Вкл' : 'Выкл';
+    btn.textContent = on ? 'Р’РєР»' : 'Р’С‹РєР»';
     btn.classList.toggle('primary', on);
     btn.classList.toggle('off', !on);
   }
@@ -2605,7 +2614,7 @@
     if (el.defaultSource && el.defaultSource.value !== settings.defaultSource)
       el.defaultSource.value = settings.defaultSource;
     if (el.settingsVolumeValue) el.settingsVolumeValue.textContent = state.volume + '%';
-    if (el.cursorToggle) el.cursorToggle.textContent = CURSOR_LABELS[state.cursor] || 'Кольцо';
+    if (el.cursorToggle) el.cursorToggle.textContent = CURSOR_LABELS[state.cursor] || 'РљРѕР»СЊС†Рѕ';
     renderAccentPicker(); renderThemePresets(); applyThemePreset(settings.themePreset);
     renderBgPresets(); renderUser();
     if (el.fontSelect) el.fontSelect.value = store.get('nova_font', 'Inter');
@@ -2630,7 +2639,7 @@
         c.querySelectorAll('.accent-preset').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
         if (state.currentTrack?.cover) updateAmbientFromCover(coverUrl(state.currentTrack.cover));
-        notify('Цвет: ' + a);
+        notify('Р¦РІРµС‚: ' + a);
       });
       c.appendChild(b);
     });
@@ -2638,11 +2647,11 @@
   function renderBgPresets() {
     const c = el.bgPresets; if (!c) return;
     const presets = [
-      { name: 'Нет', value: '' },
-      { name: 'Космос', value: 'radial-gradient(ellipse at top,#0b0b1e 0%,#000 60%)' },
-      { name: 'Закат', value: 'linear-gradient(135deg,#2a0a14 0%,#0a0408 60%,#000 100%)' },
-      { name: 'Океан', value: 'linear-gradient(180deg,#001018 0%,#000 100%)' },
-      { name: 'Графит', value: 'linear-gradient(180deg,#101010 0%,#000 100%)' }
+      { name: 'РќРµС‚', value: '' },
+      { name: 'РљРѕСЃРјРѕСЃ', value: 'radial-gradient(ellipse at top,#0b0b1e 0%,#000 60%)' },
+      { name: 'Р—Р°РєР°С‚', value: 'linear-gradient(135deg,#2a0a14 0%,#0a0408 60%,#000 100%)' },
+      { name: 'РћРєРµР°РЅ', value: 'linear-gradient(180deg,#001018 0%,#000 100%)' },
+      { name: 'Р“СЂР°С„РёС‚', value: 'linear-gradient(180deg,#101010 0%,#000 100%)' }
     ];
     c.innerHTML = '';
     presets.forEach(p => {
@@ -2653,7 +2662,7 @@
         state.background.src = p.value;
         saveBgData(p.value).catch(() => {});
         applyBackground(p.value);
-        notify('Фон: ' + p.name);
+        notify('Р¤РѕРЅ: ' + p.name);
       });
       c.appendChild(b);
     });
@@ -2689,7 +2698,7 @@
     initAudioGraph();
     if (audioCtx?.state === 'suspended') audioCtx.resume().then(applyEq).catch(() => {});
     renderEqBands(); renderEqPresets();
-    if (!state.currentTrack) { el.eqNotice.textContent = 'Сначала включи трек.'; el.eqNotice.style.display = 'block'; }
+    if (!state.currentTrack) { el.eqNotice.textContent = 'РЎРЅР°С‡Р°Р»Р° РІРєР»СЋС‡Рё С‚СЂРµРє.'; el.eqNotice.style.display = 'block'; }
     else el.eqNotice.style.display = 'none';
     el.equalizerModal.classList.add('open');
     el.equalizerModal.setAttribute('aria-hidden', 'false');
@@ -2700,15 +2709,15 @@
   }
 
   const PROFILE_TAG_META = {
-    owner:     { label: 'Владелец',    emoji: '👑' },
-    admin:     { label: 'Админ',       emoji: '🛡️' },
-    artist:    { label: 'Артист',      emoji: '🎤' },
-    verified:  { label: 'Верифицирован', emoji: '✓' },
-    vip:       { label: 'VIP',         emoji: '⭐' },
-    moderator: { label: 'Модератор',   emoji: '⚔️' }
+    owner:     { label: 'Р’Р»Р°РґРµР»РµС†',    emoji: 'рџ‘‘' },
+    admin:     { label: 'РђРґРјРёРЅ',       emoji: 'рџ›ЎпёЏ' },
+    artist:    { label: 'РђСЂС‚РёСЃС‚',      emoji: 'рџЋ¤' },
+    verified:  { label: 'Р’РµСЂРёС„РёС†РёСЂРѕРІР°РЅ', emoji: 'вњ“' },
+    vip:       { label: 'VIP',         emoji: 'в­ђ' },
+    moderator: { label: 'РњРѕРґРµСЂР°С‚РѕСЂ',   emoji: 'вљ”пёЏ' }
   };
   function profileTagPill(t) {
-    const m = PROFILE_TAG_META[t] || { label: t, emoji: '•' };
+    const m = PROFILE_TAG_META[t] || { label: t, emoji: 'вЂў' };
     return `<span class="profile-tag-pill t-${escapeHtml(t)}"><span class="tag-emoji">${m.emoji}</span>${escapeHtml(m.label)}</span>`;
   }
   const SOCIAL_META = {
@@ -2737,8 +2746,8 @@
     el.profileNowBody.hidden = false;
     el.profileNowProvider.textContent = String(t.source || t.provider || 'CATALOG').toUpperCase();
     el.profileNowCover.src = coverFor(t) || placeholderCover();
-    el.profileNowTitle.textContent = t.title || '—';
-    el.profileNowArtist.textContent = t.artist || '—';
+    el.profileNowTitle.textContent = t.title || 'вЂ”';
+    el.profileNowArtist.textContent = t.artist || 'вЂ”';
     const dur = Number.isFinite(el.audio.duration) && el.audio.duration > 0 ? el.audio.duration : (Number(t.duration) || 0);
     const cur = el.audio.currentTime || 0;
     el.profileNowCur.textContent = formatTime(cur);
@@ -2756,9 +2765,9 @@
   function renderProfilePlaylists() {
     if (!el.profilePlaylists) return;
     const pls = state.playlists || [];
-    if (!pls.length) { el.profilePlaylists.innerHTML = '<div class="profile-panel-empty">Нет плейлистов</div>'; return; }
+    if (!pls.length) { el.profilePlaylists.innerHTML = '<div class="profile-panel-empty">РќРµС‚ РїР»РµР№Р»РёСЃС‚РѕРІ</div>'; return; }
     el.profilePlaylists.innerHTML = pls.map((pl, i) =>
-      `<div class="profile-panel-item" data-pl="${escapeHtml(pl.id)}"><div class="profile-panel-num">${i + 1}</div><div class="profile-panel-info"><div class="profile-panel-title">${escapeHtml(pl.name)}</div><div class="profile-panel-sub">${pl.tracks?.length || 0} треков</div></div></div>`
+      `<div class="profile-panel-item" data-pl="${escapeHtml(pl.id)}"><div class="profile-panel-num">${i + 1}</div><div class="profile-panel-info"><div class="profile-panel-title">${escapeHtml(pl.name)}</div><div class="profile-panel-sub">${pl.tracks?.length || 0} С‚СЂРµРєРѕРІ</div></div></div>`
     ).join('');
     el.profilePlaylists.querySelectorAll('.profile-panel-item').forEach(it => it.addEventListener('click', () => {
       const id = it.dataset.pl; closeProfile(); openPlaylist(id);
@@ -2766,7 +2775,7 @@
   }
 
 
-  let profileEditBanner = null; // null = не меняли; '' = сбросить; data-url = новый баннер
+  let profileEditBanner = null; // null = РЅРµ РјРµРЅСЏР»Рё; '' = СЃР±СЂРѕСЃРёС‚СЊ; data-url = РЅРѕРІС‹Р№ Р±Р°РЅРЅРµСЂ
   function peCounter() {
     const v = el.peBio.value.replace(/[\r\n\t]+/g, ' ');
     if (v !== el.peBio.value) el.peBio.value = v;
@@ -2775,7 +2784,7 @@
     el.peBioCount.classList.toggle('over', n > 280);
   }
   function openProfileEdit() {
-    const u = state.user; if (!u) return notify('Войди', 'error');
+    const u = state.user; if (!u) return notify('Р’РѕР№РґРё', 'error');
     profileEditBanner = null;
     if (u.banner) { el.peBannerPreview.style.backgroundImage = `url("${u.banner}")`; }
     else { el.peBannerPreview.style.backgroundImage = ''; el.peBannerPreview.style.backgroundColor = u.bannerColor || '#1DB954'; }
@@ -2797,19 +2806,19 @@
   function peReadBannerFile(input) {
     const f = input.files && input.files[0];
     if (!f) return;
-    if (!/^image\/(png|jpeg|webp)$/.test(f.type)) { notify('Только PNG, JPG или WEBP', 'error'); input.value = ''; return; }
-    if (f.size > 500 * 1024) { notify('Файл больше 500 КБ', 'error'); input.value = ''; return; }
+    if (!/^image\/(png|jpeg|webp)$/.test(f.type)) { notify('РўРѕР»СЊРєРѕ PNG, JPG РёР»Рё WEBP', 'error'); input.value = ''; return; }
+    if (f.size > 500 * 1024) { notify('Р¤Р°Р№Р» Р±РѕР»СЊС€Рµ 500 РљР‘', 'error'); input.value = ''; return; }
     const reader = new FileReader();
     reader.onload = () => {
       profileEditBanner = String(reader.result || '');
       el.peBannerPreview.style.backgroundImage = `url("${profileEditBanner}")`;
-      notify('Баннер загружен');
+      notify('Р‘Р°РЅРЅРµСЂ Р·Р°РіСЂСѓР¶РµРЅ');
     };
-    reader.onerror = () => notify('Не удалось прочитать файл', 'error');
+    reader.onerror = () => notify('РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕС‡РёС‚Р°С‚СЊ С„Р°Р№Р»', 'error');
     reader.readAsDataURL(f);
   }
   async function saveProfileEdit() {
-    const u = state.user; if (!u) return notify('Войди', 'error');
+    const u = state.user; if (!u) return notify('Р’РѕР№РґРё', 'error');
     const bio = el.peBio.value.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 300);
     const socials = {
       telegram: el.peTelegram.value.trim(),
@@ -2820,7 +2829,7 @@
     if (socials.telegram && !/^(https?:\/\/\S+|@?[A-Za-z0-9._/-]{2,64})$/i.test(socials.telegram)) bad.push('Telegram');
     if (socials.youtube && !/^https?:\/\/(www\.)?(youtube\.com|youtu\.be)\/\S+$/i.test(socials.youtube)) bad.push('YouTube');
     if (socials.spotify && !/^https?:\/\/open\.spotify\.com\/\S+$/i.test(socials.spotify)) bad.push('Spotify');
-    if (bad.length) return notify('Проверь ссылку: ' + bad.join(', '), 'error');
+    if (bad.length) return notify('РџСЂРѕРІРµСЂСЊ СЃСЃС‹Р»РєСѓ: ' + bad.join(', '), 'error');
     const body = {
       banner: profileEditBanner === null ? u.banner || '' : profileEditBanner,
       bannerColor: el.peBannerColor.value,
@@ -2835,11 +2844,11 @@
       const updated = (r && r.user) || u;
       state.user = updated;
       store.set('nova_user', JSON.stringify(updated));
-      notify('Профиль обновлён');
+      notify('РџСЂРѕС„РёР»СЊ РѕР±РЅРѕРІР»С‘РЅ');
       closeProfileEdit();
       openProfile();
     } catch (e) {
-      notify('Не удалось сохранить профиль', 'error');
+      notify('РќРµ СѓРґР°Р»РѕСЃСЊ СЃРѕС…СЂР°РЅРёС‚СЊ РїСЂРѕС„РёР»СЊ', 'error');
       console.log('[profile] update error:', e && e.message);
     } finally {
       el.profileEditSave.disabled = false;
@@ -2851,7 +2860,7 @@
     console.log('[profile] openProfile() start; user=', state.user ? state.user.username : 'guest', '; modalEl=', !!el.profileModal, '; inDom=', document.contains(el.profileModal));
     el.profileModal.classList.add('open');
     el.profileModal.setAttribute('aria-hidden', 'false');
-    // Свежие данные пользователя (tags/banner/bio могли измениться после миграции или с другого устройства)
+    // РЎРІРµР¶РёРµ РґР°РЅРЅС‹Рµ РїРѕР»СЊР·РѕРІР°С‚РµР»СЏ (tags/banner/bio РјРѕРіР»Рё РёР·РјРµРЅРёС‚СЊСЃСЏ РїРѕСЃР»Рµ РјРёРіСЂР°С†РёРё РёР»Рё СЃ РґСЂСѓРіРѕРіРѕ СѓСЃС‚СЂРѕР№СЃС‚РІР°)
     if (state.user && authToken) {
       try { const me = await apiAuth('/api/me'); if (me) { state.user = me; store.set('nova_user', JSON.stringify(me)); } } catch {}
     }
@@ -2869,7 +2878,7 @@
     } else {
       el.profileBanner.style.backgroundImage = ''; el.profileBanner.style.backgroundColor = '#1DB954';
       el.profileAvatarBig.innerHTML = `<img src="${defaultAvatarSvg()}" alt="">`;
-      el.profileName.textContent = 'Гость';
+      el.profileName.textContent = 'Р“РѕСЃС‚СЊ';
       el.profileTags.innerHTML = '';
       el.profileTag.textContent = '@guest';
       el.profileBio.textContent = '';
@@ -2879,8 +2888,8 @@
     setProfileTab('tracks');
     if (!u || !authToken) {
       el.statTracks.textContent = '0'; el.statArtists.textContent = '0'; el.statPlaylists.textContent = '0'; el.statFavorites.textContent = '0';
-      el.profileTopArtists.innerHTML = '<div class="profile-panel-empty">Нет данных</div>';
-      el.profileTopTracks.innerHTML = '<div class="profile-panel-empty">Нет данных</div>';
+      el.profileTopArtists.innerHTML = '<div class="profile-panel-empty">РќРµС‚ РґР°РЅРЅС‹С…</div>';
+      el.profileTopTracks.innerHTML = '<div class="profile-panel-empty">РќРµС‚ РґР°РЅРЅС‹С…</div>';
       renderProfilePlaylists();
       return;
     }
@@ -2893,20 +2902,20 @@
       el.statFavorites.textContent = formatNumber(s.favorites || 0);
       if (s.topArtists?.length) {
         el.profileTopArtists.innerHTML = s.topArtists.map((a, i) =>
-          `<div class="profile-panel-item" data-artist="${escapeHtml(a.name)}"><div class="profile-panel-num">${i + 1}</div><div class="profile-panel-info"><div class="profile-panel-title">${escapeHtml(a.name)}</div><div class="profile-panel-sub">Артист</div></div><div class="profile-panel-count">${a.count}</div></div>`).join('');
+          `<div class="profile-panel-item" data-artist="${escapeHtml(a.name)}"><div class="profile-panel-num">${i + 1}</div><div class="profile-panel-info"><div class="profile-panel-title">${escapeHtml(a.name)}</div><div class="profile-panel-sub">РђСЂС‚РёСЃС‚</div></div><div class="profile-panel-count">${a.count}</div></div>`).join('');
         el.profileTopArtists.querySelectorAll('.profile-panel-item').forEach(it => it.addEventListener('click', () => {
           closeProfile(); showArtist('', it.dataset.artist);
         }));
-      } else el.profileTopArtists.innerHTML = '<div class="profile-panel-empty">Нет данных</div>';
+      } else el.profileTopArtists.innerHTML = '<div class="profile-panel-empty">РќРµС‚ РґР°РЅРЅС‹С…</div>';
       if (s.topTracks?.length) {
         el.profileTopTracks.innerHTML = s.topTracks.map((t, i) =>
-          `<div class="profile-panel-item" data-idx="${i}"><div class="profile-panel-num">${i + 1}</div><div class="profile-panel-info"><div class="profile-panel-title">${escapeHtml(t.track.title || '—')}</div><div class="profile-panel-sub">${escapeHtml(t.track.artist || '')}</div></div><div class="profile-panel-count">${t.count}</div></div>`).join('');
+          `<div class="profile-panel-item" data-idx="${i}"><div class="profile-panel-num">${i + 1}</div><div class="profile-panel-info"><div class="profile-panel-title">${escapeHtml(t.track.title || 'вЂ”')}</div><div class="profile-panel-sub">${escapeHtml(t.track.artist || '')}</div></div><div class="profile-panel-count">${t.count}</div></div>`).join('');
         el.profileTopTracks.querySelectorAll('.profile-panel-item').forEach(it => it.addEventListener('click', () => {
           const tr = s.topTracks[Number(it.dataset.idx)].track;
           closeProfile();
           playFromList([normalizeTrack(tr)], 0, { force: true });
         }));
-      } else el.profileTopTracks.innerHTML = '<div class="profile-panel-empty">Нет данных</div>';
+      } else el.profileTopTracks.innerHTML = '<div class="profile-panel-empty">РќРµС‚ РґР°РЅРЅС‹С…</div>';
       renderProfilePlaylists();
     } catch (e) { console.log('[profile] stats error:', e && e.message); }
   }
@@ -2939,7 +2948,7 @@
       const r = await apiAuth('/api/recommendations');
       state.recommendations = (r.results || []).map(normalizeTrack).filter(Boolean);
       if (el.recommendationsSub) {
-        el.recommendationsSub.textContent = r.based_on?.length ? 'По мотивам: ' + r.based_on.slice(0, 3).join(', ') : 'Популярное сейчас';
+        el.recommendationsSub.textContent = r.based_on?.length ? 'РџРѕ РјРѕС‚РёРІР°Рј: ' + r.based_on.slice(0, 3).join(', ') : 'РџРѕРїСѓР»СЏСЂРЅРѕРµ СЃРµР№С‡Р°СЃ';
       }
       renderHome();
     } catch { state.recommendations = []; }
@@ -2949,17 +2958,17 @@
     const box = el.diagnostics; if (!box) return;
     const t = state.currentTrack;
     const rows = [
-      ['Backend', (location.origin || '—')],
-      ['Track', t ? `${t.title || '—'} — ${t.artist || '—'}` : '—'],
-      ['Provider', t?.provider || '—'],
-      ['Stream URL', t?._resolveData?.url ? t._resolveData.url.slice(0, 80) + '…' : '—'],
-      ['Audio error', lastPlaybackError || (el.audio?.error ? `code ${el.audio.error.code}` : 'нет')],
-      ['readyState', el.audio?.readyState ?? '—'],
-      ['networkState', el.audio?.networkState ?? '—'],
-      ['currentTime', Number.isFinite(el.audio?.currentTime) ? el.audio.currentTime.toFixed(1) + 's' : '—'],
-      ['duration', Number.isFinite(el.audio?.duration) ? el.audio.duration.toFixed(1) + 's' : '—'],
+      ['Backend', (location.origin || 'вЂ”')],
+      ['Track', t ? `${t.title || 'вЂ”'} вЂ” ${t.artist || 'вЂ”'}` : 'вЂ”'],
+      ['Provider', t?.provider || 'вЂ”'],
+      ['Stream URL', t?._resolveData?.url ? t._resolveData.url.slice(0, 80) + 'вЂ¦' : 'вЂ”'],
+      ['Audio error', lastPlaybackError || (el.audio?.error ? `code ${el.audio.error.code}` : 'РЅРµС‚')],
+      ['readyState', el.audio?.readyState ?? 'вЂ”'],
+      ['networkState', el.audio?.networkState ?? 'вЂ”'],
+      ['currentTime', Number.isFinite(el.audio?.currentTime) ? el.audio.currentTime.toFixed(1) + 's' : 'вЂ”'],
+      ['duration', Number.isFinite(el.audio?.duration) ? el.audio.duration.toFixed(1) + 's' : 'вЂ”'],
       ['volume', state.volume + '%'],
-      ['queue', `${state.queue.length} треков`],
+      ['queue', `${state.queue.length} С‚СЂРµРєРѕРІ`],
       ['favorites', `${state.favorites.length}`],
       ['history', `${state.history.length}`],
       ['cursor', state.cursor]
@@ -2975,7 +2984,7 @@
   let workshopItems = [];
 
   async function loadWorkshop() {
-    el.workshopGrid.innerHTML = '<div class="workshop-empty">Загрузка…</div>';
+    el.workshopGrid.innerHTML = '<div class="workshop-empty">Р—Р°РіСЂСѓР·РєР°вЂ¦</div>';
     try {
       const params = new URLSearchParams({ sort: workshopSort });
       if (workshopQuery) params.set('q', workshopQuery);
@@ -2984,7 +2993,7 @@
       const d = await r.json();
       workshopItems = Array.isArray(d.items) ? d.items : [];
       renderWorkshop();
-    } catch { el.workshopGrid.innerHTML = '<div class="workshop-empty">Не удалось загрузить</div>'; }
+    } catch { el.workshopGrid.innerHTML = '<div class="workshop-empty">РќРµ СѓРґР°Р»РѕСЃСЊ Р·Р°РіСЂСѓР·РёС‚СЊ</div>'; }
   }
 
   function sanitizeSvgMarkup(html) {
@@ -3026,7 +3035,7 @@
 
   function renderWorkshop() {
     if (!workshopItems.length) {
-      el.workshopGrid.innerHTML = '<div class="workshop-empty">Ничего не найдено в этой категории.<br><br>Попробуй другую категорию или опубликуй свой фон.</div>';
+      el.workshopGrid.innerHTML = '<div class="workshop-empty">РќРёС‡РµРіРѕ РЅРµ РЅР°Р№РґРµРЅРѕ РІ СЌС‚РѕР№ РєР°С‚РµРіРѕСЂРёРё.<br><br>РџРѕРїСЂРѕР±СѓР№ РґСЂСѓРіСѓСЋ РєР°С‚РµРіРѕСЂРёСЋ РёР»Рё РѕРїСѓР±Р»РёРєСѓР№ СЃРІРѕР№ С„РѕРЅ.</div>';
       return;
     }
     el.workshopGrid.innerHTML = '';
@@ -3037,10 +3046,10 @@
         ${renderWorkshopPreview(item)}
         <div class="workshop-item-body">
           <div class="workshop-item-name">${escapeHtml(item.name || 'Untitled')}</div>
-          <div class="workshop-item-author">от ${escapeHtml(item.author || 'Unknown')}</div>
+          <div class="workshop-item-author">РѕС‚ ${escapeHtml(item.author || 'Unknown')}</div>
           <div class="workshop-item-actions">
-            <button class="workshop-item-btn primary" data-act="apply">Применить</button>
-            <button class="workshop-item-btn" data-act="preview">Просмотр</button>
+            <button class="workshop-item-btn primary" data-act="apply">РџСЂРёРјРµРЅРёС‚СЊ</button>
+            <button class="workshop-item-btn" data-act="preview">РџСЂРѕСЃРјРѕС‚СЂ</button>
           </div>
         </div>`;
       const preview = card.querySelector('.workshop-item-preview');
@@ -3060,7 +3069,7 @@
         if (act === 'preview') {
           state.background.src = item.value;
           applyBackground(item.value);
-          notify('Предпросмотр: ' + item.name);
+          notify('РџСЂРµРґРїСЂРѕСЃРјРѕС‚СЂ: ' + item.name);
           return;
         }
         if (act === 'apply') {
@@ -3068,7 +3077,7 @@
           saveBgData(item.value).catch(() => {});
           applyBackground(item.value);
           fetch(apiBase() + '/api/workshop/' + encodeURIComponent(item.id) + '/download', { method: 'POST' }).catch(() => {});
-          notify('Применено: ' + item.name);
+          notify('РџСЂРёРјРµРЅРµРЅРѕ: ' + item.name);
         }
       });
       el.workshopGrid.appendChild(card);
@@ -3085,8 +3094,8 @@
     el.workshopModal.setAttribute('aria-hidden', 'true');
   }
   function openWorkshopPublish() {
-    if (!state.user || !authToken) return notify('Войди, чтобы публиковать');
-    if (!state.background.src) return notify('Сначала выбери фон в настройках');
+    if (!state.user || !authToken) return notify('Р’РѕР№РґРё, С‡С‚РѕР±С‹ РїСѓР±Р»РёРєРѕРІР°С‚СЊ');
+    if (!state.background.src) return notify('РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРё С„РѕРЅ РІ РЅР°СЃС‚СЂРѕР№РєР°С…');
     el.workshopNameInput.value = '';
     el.workshopCategorySelect.value = 'background';
     el.workshopPublishModal.classList.add('open');
@@ -3100,23 +3109,23 @@
   async function submitWorkshopPublish() {
     const name = el.workshopNameInput.value.trim();
     const category = el.workshopCategorySelect.value || 'background';
-    if (!name) return notify('Введи название');
+    if (!name) return notify('Р’РІРµРґРё РЅР°Р·РІР°РЅРёРµ');
     const current = state.background.src || '';
-    if (!current) return notify('Нет фона для публикации');
+    if (!current) return notify('РќРµС‚ С„РѕРЅР° РґР»СЏ РїСѓР±Р»РёРєР°С†РёРё');
     let kind = 'css';
     if (current.startsWith('data:image')) kind = 'image';
     else if (current.startsWith('http')) kind = 'url';
     else if (current.startsWith('url(')) kind = 'url';
-    if (kind === 'image' && current.length > 800000) return notify('Файл слишком большой (max ~600KB)');
+    if (kind === 'image' && current.length > 800000) return notify('Р¤Р°Р№Р» СЃР»РёС€РєРѕРј Р±РѕР»СЊС€РѕР№ (max ~600KB)');
     try {
       await apiAuth('/api/workshop/publish', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, value: current, kind, category })
       });
-      notify('Опубликовано');
+      notify('РћРїСѓР±Р»РёРєРѕРІР°РЅРѕ');
       closeWorkshopPublish();
       loadWorkshop();
-    } catch { notify('Не удалось опубликовать', 'error'); }
+    } catch { notify('РќРµ СѓРґР°Р»РѕСЃСЊ РѕРїСѓР±Р»РёРєРѕРІР°С‚СЊ', 'error'); }
   }
 
   (function initWaves() {
@@ -3221,7 +3230,7 @@
     e.stopPropagation();
     if (!state.user) { openLoginModal(); return; }
     toggleUserMenu();
-    // [диагностика профиля] через 400мс (меню уже открыто) — кто перекрывает пункт «Профиль»
+    // [РґРёР°РіРЅРѕСЃС‚РёРєР° РїСЂРѕС„РёР»СЏ] С‡РµСЂРµР· 400РјСЃ (РјРµРЅСЋ СѓР¶Рµ РѕС‚РєСЂС‹С‚Рѕ) вЂ” РєС‚Рѕ РїРµСЂРµРєСЂС‹РІР°РµС‚ РїСѓРЅРєС‚ В«РџСЂРѕС„РёР»СЊВ»
     setTimeout(() => {
       const b = el.openProfileBtn;
       if (!b || !document.contains(b)) { console.log('[profile] diag: button missing/detached'); return; }
@@ -3235,7 +3244,7 @@
         '; menu=', menuCs.visibility + '/' + menuCs.opacity,
         '; top=', top ? ((top.id ? '#' + top.id : '') + '<' + top.tagName.toLowerCase() + '>') : 'null',
         '; stack=', stack.join(' >> '));
-      // подробности стекинга: цепочки предков меню и перекрывающего элемента
+      // РїРѕРґСЂРѕР±РЅРѕСЃС‚Рё СЃС‚РµРєРёРЅРіР°: С†РµРїРѕС‡РєРё РїСЂРµРґРєРѕРІ РјРµРЅСЋ Рё РїРµСЂРµРєСЂС‹РІР°СЋС‰РµРіРѕ СЌР»РµРјРµРЅС‚Р°
       const chain = (n) => {
         const out = [];
         while (n && n !== document.documentElement) {
@@ -3283,7 +3292,7 @@
     const idx = CURSOR_VARIANTS.indexOf(state.cursor);
     const next = CURSOR_VARIANTS[(idx + 1) % CURSOR_VARIANTS.length];
     applyCursor(next);
-    notify('Курсор: ' + CURSOR_LABELS[next]);
+    notify('РљСѓСЂСЃРѕСЂ: ' + CURSOR_LABELS[next]);
   });
   on(el.notificationsToggle, 'click', () => {
     settings.notifications = !settings.notifications;
@@ -3304,28 +3313,28 @@
   on(el.backgroundResetBtn, 'click', resetBackground);
   on(el.backgroundInput, 'change', e => saveSelectedBackground(e.target.files?.[0]));
   on(el.customCoverChoose, 'click', () => {
-    if (!state.currentTrack) return notify('Ничего не играет', 'error');
-    openImagePicker(url => { applyCustomCover(state.currentTrack, url); notify('Обложка обновлена'); });
+    if (!state.currentTrack) return notify('РќРёС‡РµРіРѕ РЅРµ РёРіСЂР°РµС‚', 'error');
+    openImagePicker(url => { applyCustomCover(state.currentTrack, url); notify('РћР±Р»РѕР¶РєР° РѕР±РЅРѕРІР»РµРЅР°'); });
   });
   on(el.customCoverReset, 'click', () => {
-    if (!state.currentTrack) return notify('Ничего не играет', 'error');
-    resetCustomCover(state.currentTrack); notify('Обложка сброшена');
+    if (!state.currentTrack) return notify('РќРёС‡РµРіРѕ РЅРµ РёРіСЂР°РµС‚', 'error');
+    resetCustomCover(state.currentTrack); notify('РћР±Р»РѕР¶РєР° СЃР±СЂРѕС€РµРЅР°');
   });
   on(el.imageLibAddUrl, 'click', () => {
     const v = (el.imageLibUrl.value || '').trim();
-    if (!/^https?:\/\/\S+/i.test(v)) return notify('Введи корректный URL (http/https)', 'error');
-    if (addImageToLibrary({ type: 'url', value: v })) { el.imageLibUrl.value = ''; notify('Добавлено в библиотеку'); }
+    if (!/^https?:\/\/\S+/i.test(v)) return notify('Р’РІРµРґРё РєРѕСЂСЂРµРєС‚РЅС‹Р№ URL (http/https)', 'error');
+    if (addImageToLibrary({ type: 'url', value: v })) { el.imageLibUrl.value = ''; notify('Р”РѕР±Р°РІР»РµРЅРѕ РІ Р±РёР±Р»РёРѕС‚РµРєСѓ'); }
   });
   on(el.imageLibAddFile, 'click', () => el.imageLibFileInput.click());
   on(el.imageLibFileInput, 'change', e => {
     const f = e.target.files?.[0];
     e.target.value = '';
     if (!f) return;
-    if (f.size > 2 * 1024 * 1024) return notify('Файл больше 2 МБ. Используй URL.', 'error');
-    if (!/^image\//i.test(f.type)) return notify('Нужен файл изображения', 'error');
+    if (f.size > 2 * 1024 * 1024) return notify('Р¤Р°Р№Р» Р±РѕР»СЊС€Рµ 2 РњР‘. РСЃРїРѕР»СЊР·СѓР№ URL.', 'error');
+    if (!/^image\//i.test(f.type)) return notify('РќСѓР¶РµРЅ С„Р°Р№Р» РёР·РѕР±СЂР°Р¶РµРЅРёСЏ', 'error');
     const reader = new FileReader();
-    reader.onload = () => { if (addImageToLibrary({ type: 'data', value: String(reader.result || '') })) notify('Добавлено в библиотеку'); };
-    reader.onerror = () => notify('Не удалось прочитать файл', 'error');
+    reader.onload = () => { if (addImageToLibrary({ type: 'data', value: String(reader.result || '') })) notify('Р”РѕР±Р°РІР»РµРЅРѕ РІ Р±РёР±Р»РёРѕС‚РµРєСѓ'); };
+    reader.onerror = () => notify('РќРµ СѓРґР°Р»РѕСЃСЊ РїСЂРѕС‡РёС‚Р°С‚СЊ С„Р°Р№Р»', 'error');
     reader.readAsDataURL(f);
   });
   on(el.imagePickerClose, 'click', closeImagePicker);
@@ -3351,14 +3360,14 @@
   on(el.clearHistory2, 'click', () => {
     state.history = []; persist(); renderHistory();
     if (state.user && authToken) apiAuth('/api/history', { method: 'DELETE' }).catch(() => {});
-    notify('История очищена');
+    notify('РСЃС‚РѕСЂРёСЏ РѕС‡РёС‰РµРЅР°');
   });
   on(el.clearFavorites2, 'click', () => {
     state.favorites = []; persist(); renderFavorites();
     if (state.user && authToken) apiAuth('/api/favorites', { method: 'DELETE' }).catch(() => {});
-    notify('Избранное очищено');
+    notify('РР·Р±СЂР°РЅРЅРѕРµ РѕС‡РёС‰РµРЅРѕ');
   });
-  on(el.clearCacheBtn, 'click', () => { localResolveCache.clear(); notify('Кэш резолва очищен'); });
+  on(el.clearCacheBtn, 'click', () => { localResolveCache.clear(); notify('РљСЌС€ СЂРµР·РѕР»РІР° РѕС‡РёС‰РµРЅ'); });
 
   document.querySelectorAll('#libraryTabs .page-tab').forEach(b => {
     b.addEventListener('click', () => {
@@ -3369,7 +3378,7 @@
   on(el.clearHistory, 'click', () => {
     state.history = []; persist(); renderHistory();
     if (state.user && authToken) apiAuth('/api/history', { method: 'DELETE' }).catch(() => {});
-    notify('История очищена');
+    notify('РСЃС‚РѕСЂРёСЏ РѕС‡РёС‰РµРЅР°');
   });
   on(el.openLocalFileBtn, 'click', localAudioPicker);
   on(el.localAudioInput, 'change', e => { handleLocalFiles(e.target.files); el.localAudioInput.value = ''; });
@@ -3398,7 +3407,7 @@
   on(el.clearFavorites, 'click', () => {
     state.favorites = []; persist(); renderFavorites();
     if (state.user && authToken) apiAuth('/api/favorites', { method: 'DELETE' }).catch(() => {});
-    notify('Избранное очищено');
+    notify('РР·Р±СЂР°РЅРЅРѕРµ РѕС‡РёС‰РµРЅРѕ');
   });
 
   on(el.createPlaylistBtn, 'click', () => openPlaylistCreate());
@@ -3437,7 +3446,7 @@
   on(el.queueClear, 'click', clearQueue);
   on(el.moreBtn, 'click', e => { if (state.currentTrack) showContextMenu(e, state.currentTrack); });
   on(el.similarBtn, 'click', () => {
-    if (!state.currentTrack) return notify('Сначала включи трек');
+    if (!state.currentTrack) return notify('РЎРЅР°С‡Р°Р»Р° РІРєР»СЋС‡Рё С‚СЂРµРє');
     const a = splitArtistsList(state.currentTrack.artist)[0]; if (!a) return;
     el.searchInput.value = a; doSearch(a);
   });
@@ -3453,8 +3462,19 @@
   document.querySelectorAll('.player-tab').forEach(tab => {
     tab.addEventListener('click', () => setPlayerTab(tab.dataset.tab));
   });
-  on(el.lyricsRefresh, 'click', () => { if (state.currentTrack) loadLyrics(state.currentTrack, true); });
-  on(el.lyricsClose, 'click', () => setPlayerTab('info'));
+  on(el.lyricsBackdrop, 'click', () => closeLyrics());
+  on(el.lyricsClose, 'click', () => closeLyrics());
+  on(el.lyricsPlayBtn, 'click', togglePlay);
+  on(el.lyricsPrevBtn, 'click', playPrev);
+  on(el.lyricsNextBtn, 'click', playNext);
+  on(el.lyricsVideoToggle, 'click', toggleVideoOverlay);
+  on(el.lyricsVideoLayer, 'click', e => { if (e.target === el.lyricsVideoLayer) closeVideo(); });
+  on(el.lyricsOverlayInner, 'click', e => { if (e.target === el.lyricsOverlayInner) closeLyrics(); });
+
+  on(el.videoPickerBackdrop, 'click', () => closeVideoPicker());
+  on(el.videoPickerClose, 'click', () => closeVideoPicker());
+  on(el.videoSearchBtn, 'click', () => renderVideoResults(el.videoSearchInput.value));
+  on(el.videoPickerCancel, 'click', () => closeVideoPicker());
 
   on(el.songInfoClose, 'click', closeSongInfo);
   on(el.songInfoModal, 'click', e => { if (e.target === el.songInfoModal) closeSongInfo(); });
@@ -3468,7 +3488,7 @@
   on(el.songInfoFavorite, 'click', () => {
     if (!songInfoCurrent) return;
     toggleFavorite(songInfoCurrent);
-    el.songInfoFavorite.textContent = isFavorite(songInfoCurrent) ? '♥ В избранном' : '♡ В избранное';
+    el.songInfoFavorite.textContent = isFavorite(songInfoCurrent) ? 'в™Ґ Р’ РёР·Р±СЂР°РЅРЅРѕРј' : 'в™Ў Р’ РёР·Р±СЂР°РЅРЅРѕРµ';
   });
   on(el.songInfoQueue, 'click', () => { if (songInfoCurrent) addToQueue(songInfoCurrent); });
   on(el.songInfoDownload, 'click', () => {
@@ -3500,7 +3520,7 @@
   on(el.peBannerFile, 'change', e => peReadBannerFile(e.target));
   on(el.peBio, 'input', peCounter);
   on(el.peBannerColor, 'input', e => { el.peBannerPreview.style.backgroundImage = ''; el.peBannerPreview.style.backgroundColor = e.target.value || '#1DB954'; });
-  on(el.peBannerReset, 'click', () => { profileEditBanner = ''; el.peBannerPreview.style.backgroundImage = ''; notify('Баннер сброшён — используется цвет'); });
+  on(el.peBannerReset, 'click', () => { profileEditBanner = ''; el.peBannerPreview.style.backgroundImage = ''; notify('Р‘Р°РЅРЅРµСЂ СЃР±СЂРѕС€С‘РЅ вЂ” РёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ С†РІРµС‚'); });
 
   on(el.workshopModalClose, 'click', closeWorkshop);
   on(el.workshopModal, 'click', e => { if (e.target === el.workshopModal) closeWorkshop(); });
@@ -3566,9 +3586,9 @@
     next();
   });
 
-  // Фикс Бага 3: при возврате из фоновой вкладки пересинхронизируем кнопки Play/Pause
-  // и прогресс по фактическому состоянию аудио (в фоне события play/pause могли не
-  // отработать, и UI показывал не то).
+  // Р¤РёРєСЃ Р‘Р°РіР° 3: РїСЂРё РІРѕР·РІСЂР°С‚Рµ РёР· С„РѕРЅРѕРІРѕР№ РІРєР»Р°РґРєРё РїРµСЂРµСЃРёРЅС…СЂРѕРЅРёР·РёСЂСѓРµРј РєРЅРѕРїРєРё Play/Pause
+  // Рё РїСЂРѕРіСЂРµСЃСЃ РїРѕ С„Р°РєС‚РёС‡РµСЃРєРѕРјСѓ СЃРѕСЃС‚РѕСЏРЅРёСЋ Р°СѓРґРёРѕ (РІ С„РѕРЅРµ СЃРѕР±С‹С‚РёСЏ play/pause РјРѕРіР»Рё РЅРµ
+  // РѕС‚СЂР°Р±РѕС‚Р°С‚СЊ, Рё UI РїРѕРєР°Р·С‹РІР°Р» РЅРµ С‚Рѕ).
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) return;
     if (state.currentTrack && userIntent !== 'loading' && userIntent !== 'error') {
@@ -3581,6 +3601,8 @@
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
+      if (!el.lyricsPanel.classList.contains('hidden')) { closeLyrics(); return; }
+      if (!el.videoPickerModal.classList.contains('hidden')) { closeVideoPicker(); return; }
       if (el.profileEditModal.classList.contains('open')) closeProfileEdit();
       else if (el.songInfoModal.classList.contains('open')) closeSongInfo();
       else if (el.equalizerModal.classList.contains('open')) closeEqualizer();
@@ -3629,8 +3651,8 @@
     if (!input || !box) return;
     let popularItems = [], popularLoaded = false, popularTime = 0, timer = null;
     function hide() { box.classList.add('hidden'); box.innerHTML = ''; }
-    function showLoading() { box.innerHTML = '<div class="suggestion-empty">Загрузка…</div>'; box.classList.remove('hidden'); }
-    function showEmpty() { box.innerHTML = '<div class="suggestion-empty">Ничего не найдено</div>'; box.classList.remove('hidden'); }
+    function showLoading() { box.innerHTML = '<div class="suggestion-empty">Р—Р°РіСЂСѓР·РєР°вЂ¦</div>'; box.classList.remove('hidden'); }
+    function showEmpty() { box.innerHTML = '<div class="suggestion-empty">РќРёС‡РµРіРѕ РЅРµ РЅР°Р№РґРµРЅРѕ</div>'; box.classList.remove('hidden'); }
     function show(items, label) {
       if (!items.length) { showEmpty(); return; }
       box.innerHTML = label ? `<div class="suggestion-label">${escapeHtml(label)}</div>` : '';
@@ -3639,7 +3661,7 @@
         s.className = 'suggestion';
         s.style.animationDelay = (i * 25) + 'ms';
         const fb = placeholderCover();
-        s.innerHTML = `<img src="${escapeHtml(coverUrl(item.cover) || fb)}" alt=""><div class="suggestion-main"><div class="suggestion-title">${escapeHtml(item.title || '')}</div><div class="suggestion-artist">${escapeHtml(item.artist || '—')}</div></div><span class="suggestion-badge">${escapeHtml(item.provider || 'CATALOG')}</span>`;
+        s.innerHTML = `<img src="${escapeHtml(coverUrl(item.cover) || fb)}" alt=""><div class="suggestion-main"><div class="suggestion-title">${escapeHtml(item.title || '')}</div><div class="suggestion-artist">${escapeHtml(item.artist || 'вЂ”')}</div></div><span class="suggestion-badge">${escapeHtml(item.provider || 'CATALOG')}</span>`;
         s.addEventListener('mousedown', e => {
           e.preventDefault();
           input.value = [item.title, item.artist].filter(Boolean).join(' ');
@@ -3664,13 +3686,13 @@
       const q = input.value.trim().toLowerCase();
       const items = await getPopular();
       if (!items.length) { hide(); return; }
-      if (!q) { show(items.slice(0, 8), 'Популярное сейчас'); return; }
+      if (!q) { show(items.slice(0, 8), 'РџРѕРїСѓР»СЏСЂРЅРѕРµ СЃРµР№С‡Р°СЃ'); return; }
       const filtered = items.filter(x => {
         const t = String(x.title || '').toLowerCase();
         const a = String(x.artist || '').toLowerCase();
         return t.includes(q) || a.includes(q);
       });
-      if (filtered.length) show(filtered, 'Популярное');
+      if (filtered.length) show(filtered, 'РџРѕРїСѓР»СЏСЂРЅРѕРµ');
       else hide();
     }
     input.addEventListener('focus', () => { clearTimeout(timer); timer = setTimeout(trigger, 80); });
@@ -3681,7 +3703,7 @@
 
   async function downloadCurrent() {
     const track = state.currentTrack;
-    if (!track) return notify('Нет трека');
+    if (!track) return notify('РќРµС‚ С‚СЂРµРєР°');
     try {
       const rd = track._resolveData;
       const vid = rd?.videoId || track.videoId;
@@ -3691,11 +3713,11 @@
         a.href = apiBase() + '/api/download/youtube/' + encodeURIComponent(vid) + '?name=' + encodeURIComponent(name);
         a.download = name + '.m4a';
         document.body.appendChild(a); a.click(); a.remove();
-        notify('Загрузка началась');
+        notify('Р—Р°РіСЂСѓР·РєР° РЅР°С‡Р°Р»Р°СЃСЊ');
         return;
       }
-      notify('Источник не поддерживает скачивание', 'error');
-    } catch { notify('Не удалось скачать', 'error'); }
+      notify('РСЃС‚РѕС‡РЅРёРє РЅРµ РїРѕРґРґРµСЂР¶РёРІР°РµС‚ СЃРєР°С‡РёРІР°РЅРёРµ', 'error');
+    } catch { notify('РќРµ СѓРґР°Р»РѕСЃСЊ СЃРєР°С‡Р°С‚СЊ', 'error'); }
   }
 
   applyTheme();
@@ -3733,11 +3755,11 @@
 
   async function startup() {
     try {
-      el.startupStatus.textContent = 'Восстанавливаем данные…';
+      el.startupStatus.textContent = 'Р’РѕСЃСЃС‚Р°РЅР°РІР»РёРІР°РµРј РґР°РЅРЅС‹РµвЂ¦';
       await loadSavedBackground();
-      el.startupStatus.textContent = 'Проверяем NOVA…';
+      el.startupStatus.textContent = 'РџСЂРѕРІРµСЂСЏРµРј NOVAвЂ¦';
       await fetch(apiBase() + '/api/health').catch(() => {});
-      el.startupStatus.textContent = 'Загружаем популярное…';
+      el.startupStatus.textContent = 'Р—Р°РіСЂСѓР¶Р°РµРј РїРѕРїСѓР»СЏСЂРЅРѕРµвЂ¦';
       try {
         const r = await fetch(apiBase() + '/api/popular');
         const d = await r.json();
@@ -3751,4 +3773,150 @@
 
   window.NOVA = { state, settings, playTrack, doSearch, showView, applyCursor, openWorkshop };
 
+  function togglePlay() {
+    if (!state.currentTrack) return;
+    if (el.audio.paused) { el.audio.play().catch(() => {}); } else { el.audio.pause(); }
+    updatePlayButtons();
+  }
+  function playPrev() { previous(); }
+  function playNext() { next(); }
+
+  const videoCache = new Map();
+  let activeVideoId = null;
+  let iframeReady = false;
+  let iframeVideoTime = 0;
+  let iframeCurrentTime = 0;
+  let videoSearchTimer = null;
+  let videoSyncTimer = null;
+
+  function openVideoPicker() {
+    if (!state.currentTrack) { notify('РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ С‚СЂРµРє'); return; }
+    if (!el.videoSearchInput) return;
+    el.videoSearchInput.value = normalizeSearch(String(state.currentTrack.title || '')) + ' ' + normalizeSearch(String(state.currentTrack.artist || ''));
+    el.videoPickerModal.classList.remove('hidden');
+    el.videoPickerModal.setAttribute('aria-hidden', 'false');
+    renderVideoResults(el.videoSearchInput.value);
+  }
+  function closeVideoPicker() {
+    if (el.videoPickerModal) { el.videoPickerModal.classList.add('hidden'); el.videoPickerModal.setAttribute('aria-hidden', 'true'); }
+    if (videoSearchTimer) { clearTimeout(videoSearchTimer); videoSearchTimer = null; }
+  }
+  function toggleVideoOverlay() {
+    if (!state.currentTrack) { notify('РЎРЅР°С‡Р°Р»Р° РІС‹Р±РµСЂРёС‚Рµ С‚СЂРµРє'); return; }
+    if (el.lyricsVideoLayer.classList.contains('off')) {
+      el.lyricsVideoLayer.classList.remove('off');
+      el.lyricsVideoLayer.classList.add('playing');
+      if (activeVideoId) startVideoSync();
+      else if (el.lyricsVideoIframe) { el.lyricsVideoIframe.src = 'https://www.youtube.com/embed?autoplay=1&mute=1&controls=0&loop=1&modestbranding=1&rel=0'; iframeReady = true; }
+      if (el.lyricsVideoToggle) el.lyricsVideoToggle.setAttribute('aria-pressed', 'true');
+      if (!videoSyncTimer) videoSyncTimer = setInterval(pollVideoDrift, 1000);
+    } else {
+      closeVideo();
+    }
+  }
+  function closeVideo() {
+    if (el.lyricsVideoLayer) el.lyricsVideoLayer.classList.add('off');
+    if (el.lyricsVideoIframe) el.lyricsVideoIframe.src = '';
+    activeVideoId = null;
+    iframeReady = false;
+    iframeVideoTime = 0;
+    iframeCurrentTime = 0;
+    if (videoSyncTimer) { clearInterval(videoSyncTimer); videoSyncTimer = null; }
+    if (el.videoPickerModal) { el.videoPickerModal.classList.add('hidden'); el.videoPickerModal.setAttribute('aria-hidden', 'true'); }
+    if (el.lyricsVideoToggle) el.lyricsVideoToggle.removeAttribute('aria-pressed');
+  }
+
+  function renderVideoResults(q) {
+    const results = el.videoSearchResults;
+    if (!results) return;
+    results.innerHTML = '<div class="video-picker-empty">РС‰РµРј РІРёРґРµРѕвЂ¦</div>';
+    if (videoCache.has(q)) {
+      const data = videoCache.get(q);
+      if (data && data.results && data.results.length) {
+        results.innerHTML = data.results.map(itemToVideoRow).join('');
+        return;
+      }
+    }
+    results.innerHTML = '<div class="video-picker-empty">РРґС‘С‚ РїРѕРёСЃРєвЂ¦</div>';
+    if (videoSearchTimer) clearTimeout(videoSearchTimer);
+    videoSearchTimer = setTimeout(async () => {
+      try {
+        const r = await fetch(apiBase() + '/api/search?q=' + encodeURIComponent(q) + '&source=youtube');
+        const d = await r.json().catch(() => ({}));
+        if (d && d.results && d.results.length) {
+          videoCache.set(q, d);
+          results.innerHTML = d.results.map(itemToVideoRow).join('');
+        } else {
+          results.innerHTML = '<div class="video-picker-empty">Р’РёРґРµРѕ РЅРµ РЅР°Р№РґРµРЅРѕ.</div>';
+        }
+      } catch (e) {
+        results.innerHTML = '<div class="video-picker-empty">РћС€РёР±РєР° Р·Р°РіСЂСѓР·РєРё.</div>';
+      }
+    }, 250);
+  }
+  function itemToVideoRow(item) {
+    const title = item.title || '';
+    const channel = item.channel || item.artist || '';
+    let dur = '';
+    if (item.duration) { dur = Math.floor(item.duration / 60) + ':' + String(Math.floor(item.duration % 60)).padStart(2, '0'); }
+    return '<div class="video-picker-row" data-id="' + escapeHtml(String(item.id || '')) + '">' +
+      '<img class="video-picker-thumb" src="' + escapeHtml(String(item.cover || '')) + '" alt="">' +
+      '<div class="video-picker-row-body">' +
+        '<div class="video-picker-row-title">' + escapeHtml(title) + '</div>' +
+        '<div class="video-picker-row-meta">' + escapeHtml(channel) + (dur ? ' <span class="video-picker-row-dur">' + dur + '</span>' : '') + '</div>' +
+      '</div>' +
+    '</div>';
+  }
+  function selectVideo(item) {
+    activeVideoId = item.videoId || null;
+    const vID = encodeURIComponent(String(item.videoId || ''));
+    const src = 'https://www.youtube.com/embed/' + vID + '?autoplay=1&mute=1&controls=0&loop=1&playlist=' + vID + '&modestbranding=1&rel=0&enablejsapi=1';
+    if (el.lyricsVideoIframe) el.lyricsVideoIframe.src = src;
+    if (el.lyricsVideoLayer) {
+      el.lyricsVideoLayer.classList.remove('off');
+      el.lyricsVideoLayer.classList.add('playing');
+    }
+    closeVideoPicker();
+    if (el.lyricsVideoToggle) el.lyricsVideoToggle.setAttribute('aria-pressed', 'true');
+    startVideoSync();
+  }
+  function startVideoSync() {
+    iframeReady = false;
+    iframeVideoTime = 0;
+    iframeCurrentTime = 0;
+    const onMsg = e => {
+      const d = e.data || {};
+      if (d && d.event === 'onReady') {
+        iframeReady = true;
+        sendVideoMessage('getPlaybackVideoOffsetMs');
+        window.removeEventListener('message', onMsg);
+      } else if (d && d.event === 'onStateChange' && (d.data === '1' || d.data === 1)) {
+        iframeReady = true;
+        sendVideoMessage('getPlaybackVideoOffsetMs');
+        window.removeEventListener('message', onMsg);
+      } else if (d && d.event === 'getPlaybackVideoOffsetMs' && d.success) {
+        iframeVideoTime = Number(d.result) || 0;
+      } else if (d && d.event === 'getCurrentTime' && d.success) {
+        iframeCurrentTime = Number(d.result) || 0;
+      } else if (d && d.event === 'error') { window.removeEventListener('message', onMsg); }
+    };
+    window.addEventListener('message', onMsg);
+  }
+  function sendVideoMessage(command, value) {
+    if (!el.lyricsVideoIframe) return;
+    try {
+      el.lyricsVideoIframe.contentWindow.postMessage({ event: command, value: value || {}, targetId: 'video' }, 'https://www.youtube.com');
+    } catch (e) { /* ignore */ }
+  }
+  function pollVideoDrift() {
+    if (!iframeReady || !el.audio || !activeVideoId) return;
+    sendVideoMessage('getCurrentTime');
+    setTimeout(() => {
+      if (!iframeReady || !el.audio || !activeVideoId) return;
+      const drift = el.audio.currentTime - iframeCurrentTime;
+      if (Math.abs(drift) > 1.0) {
+        sendVideoMessage('seekTo', String(Math.max(0, el.audio.currentTime - iframeCurrentTime)));
+      }
+    }, 300);
+  }
 })();
