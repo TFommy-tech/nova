@@ -2162,10 +2162,10 @@
     box.dataset.loaded = '0';
     box.innerHTML = '<div class="lyrics-placeholder">Ищу текст…</div>';
 
-    // Клиентская чистка (#AN4RCHKORE, скобки, official video и т.п.) — сервер
-    // чистит тоже, но чтобы ключ кэша и поисковая строка были консистентны.
+    // Баг A: слать СЫРОЕ название — скобки «(w/ asteria & kets4eki)» нужны серверу
+    // для извлечения соавторов и точного /api/get у LRCLIB; чистку делает сервер.
     const params = new URLSearchParams({
-      track_name: cleanTitleLocal(track.title) || track.title || '',
+      track_name: String(track.title || ''),
       artist_name: track.artist || ''
     });
     if (track.album) params.set('album_name', track.album);

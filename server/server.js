@@ -2005,6 +2005,38 @@ api.get('/api/lyrics', async (req, res) => {
     .replace(/\b(official|audio|video|lyric|lyrics|visualizer|hd|hq|explicit|mv|m\/v)\b/gi, ' ')
     .replace(/#\S+/g, ' ')
     .replace(/\s+/g, ' ').trim();
+  const fbArtist = String(req.query.fb_artist || '').trim(); // канал resolve — запасной вариант артиста
+  const log = (...a) => console.log('[lyrics]', ...a);
+
+  // Баг A: варианты artist_name по убыванию приоритета — сплит-артисты трека
+  // (основной первый), полный список, соавторы из скобок названия
+  // «Faster n Harder (w/ asteria & kets4eki)», канал resolve. LRCLIB часто
+  // хранит трек под одним из соавторов (artistName="asteria"), а основной
+  // артист там записан иначе («6arelyhuman» у нас vs наш «Garelyhuman»).
+  const parenNames = [...String(track).matchAll(/\(([^)]*)\)/g)].map(m => m[1]).join(' ');
+  const parenArtists = splitArtists(String(parenNames).replace(/^(?:w\/|feat\.?|ft\.?|with)\s+/i, ''));
+  const seen = new Set();
+  const artistVariants = [];
+  const pushVar = v => {
+    const s = String(v || '').trim(), k = normalize(s);
+    if (!s || !k || seen.has(k)) return;
+    seen.add(k); artistVariants.push(s);
+  };
+  splitArtists(artist).forEach(pushVar);
+  pushVar(artist);
+  parenArtists.forEach(pushVar);
+  pushVar(fbArtist);
+
+  const titleVariants = [];
+  const tSeen = new Set();
+  for (const t of [track, clean]) {
+    const k = normalize(t);
+    if (t && k && !tSeen.has(k)) { tSeen.add(k); titleVariants.push(t); }
+  }
+  const pairs = [];
+  for (const tv of titleVariants) for (const av of artistVariants) pairs.push([tv, av]);
+  const getPairs = pairs.slice(0, 5);
+
   // Баг 2: «не найдено» кэшируем только после УСПЕШНОГО search (200) — только поиск
   // даёт право сказать «текста нет». 404 у get = «точного совпадения нет» (search ещё
   // может найти), а 5xx/таймаут = временная недоступность: в обоих случаях НЕ кэшируем,
@@ -2014,47 +2046,93 @@ api.get('/api/lyrics', async (req, res) => {
     if (p.found || sawHealthy) lyricsCache.set(ck, { time: Date.now(), data: p, neg: !p.found });
     res.json(p);
   };
-  try {
-    const params = new URLSearchParams({ track_name: clean });
-    if (artist) params.set('artist_name', artist);
-    if (dur > 0) params.set('duration', String(Math.round(dur)));
-    const r = await jsonFetch('https://lrclib.net/api/get?' + params, { headers: { 'User-Agent': 'NOVA/5.2' } }, 4500);
-    if (r.ok) {
+
+  // 1) Точный каскад /api/get: track_name + artist_name (+duration, ±2 c у LRCLIB).
+  const tryGet = async (tv, av, useDur) => {
+    try {
+      const params = new URLSearchParams({ track_name: tv, artist_name: av });
+      if (useDur && dur > 0) params.set('duration', String(Math.round(dur)));
+      const r = await jsonFetch('https://lrclib.net/api/get?' + params, { headers: { 'User-Agent': 'NOVA/5.2' } }, 4500);
+      log(`GET ${r.status} track="${tv}" artist="${av}" duration=${useDur && dur > 0 ? Math.round(dur) : '-'}`);
+      if (!r.ok) return null;
       const d = await readJson(r);
-      if (d.plainLyrics || d.syncedLyrics)
-        return send({ found: true, plainLyrics: d.plainLyrics || '', syncedLyrics: d.syncedLyrics || '', source: 'LRCLIB' });
+      return (d.plainLyrics || d.syncedLyrics) ? d : null;
+    } catch (e) {
+      log(`GET error track="${tv}" artist="${av}": ${e.message}`);
+      return null;
     }
-  } catch {}
-  try {
-    const q = [clean, artist].filter(Boolean).join(' ');
-    const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q }), { headers: { 'User-Agent': 'NOVA/5.2' } }, 4500);
-    if (r.ok) {
+  };
+  for (const [tv, av] of getPairs) {
+    const d = await tryGet(tv, av, true);
+    if (d) {
+      log(`GET hit id=${d.id} artist="${d.artistName}" dur=${d.duration}`);
+      return send({ found: true, plainLyrics: d.plainLyrics || '', syncedLyrics: d.syncedLyrics || '', source: 'LRCLIB' });
+    }
+  }
+  // duration в /get — жёсткий фильтр ±2 c: если хронометраж трека чуть отличается,
+  // повторяем топ-3 комбинации без duration (имя+артист и так точный матч).
+  if (dur > 0) {
+    for (const [tv, av] of getPairs.slice(0, 3)) {
+      const d = await tryGet(tv, av, false);
+      if (d) {
+        log(`GET hit(no-duration) id=${d.id} artist="${d.artistName}" dur=${d.duration}`);
+        return send({ found: true, plainLyrics: d.plainLyrics || '', syncedLyrics: d.syncedLyrics || '', source: 'LRCLIB' });
+      }
+    }
+  }
+  // 2) Fallback /api/search: жёсткий фильтр |Δduration| <= 5, артист-матч —
+  // либо точное совпадение артиста, либо (точное название + длительность), т.к.
+  // основной артист у LRCLIB может быть записан иначе («6arelyhuman» vs
+  // «Garelyhuman»), а соавторы в скобках у очищенного названия недоступны.
+  // Без обеих страховок LRCLIB отдаёт первый попавшийся трек (баг A).
+  const nDur = dur > 0 ? Math.round(dur) : 0;
+  const nTitle = normalize(clean);
+  const nArtists = artistVariants.map(normalize).filter(Boolean);
+  const artistMatch = nA => nArtists.some(a => nA.includes(a) || a.includes(nA));
+  const titleMatch = x => !!nTitle && (normalize(x.trackName || '') === nTitle
+    || normalize(x.trackName || '').startsWith(nTitle)
+    || nTitle.startsWith(normalize(x.trackName || '')));
+  const durMatch = x => !nDur || (Number(x.duration) && Math.abs(Math.round(x.duration) - nDur) <= 5);
+  const pickBest = arr => arr
+    .filter(x => (x.plainLyrics || x.syncedLyrics) && durMatch(x))
+    .filter(x => !nArtists.length || !normalize(x.artistName || '')
+      || artistMatch(normalize(x.artistName || '')) || (titleMatch(x) && durMatch(x)))
+    .map(x => {
+      const nA = normalize(x.artistName || '');
+      let score = 0;
+      if (nArtists.includes(nA)) score += 4;                    // точное имя артиста
+      else if (artistMatch(nA)) score += 2;
+      if (titleMatch(x)) score += 3;                            // то же название
+      if (x.syncedLyrics) score += 1;
+      if (nDur && Number(x.duration)) score += Math.max(0, 3 - Math.abs(Math.round(x.duration) - nDur) / 2);
+      return { x, score };
+    })
+    .sort((a, b) => b.score - a.score)[0]?.x || null;
+  const queries = [...new Set([
+    ...artistVariants.map(a => [clean, a].filter(Boolean).join(' ')),
+    [clean, artist].filter(Boolean).join(' '),
+    clean // последний шанс: без артиста, но с фильтрами duration/title ниже
+  ].filter(Boolean))].slice(0, 4);
+  // bare-запрос (без артиста в q) имеет смысл только при известной длительности —
+  // она и отсекает чужие треки вместе с точным названием; без duration остаётся
+  // только title-матч, что и было причиной бага A (первый попавшийся трек).
+  for (const q of queries) {
+    if (q === clean && !nDur) continue;
+    try {
+      const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q }), { headers: { 'User-Agent': 'NOVA/5.2' } }, 4500);
+      log(`SEARCH ${r.status} q="${q}"`);
+      if (!r.ok) continue;
       sawHealthy = true; // 200 от search = LRCLIB жив, можно доверять итогу поиска
       const arr = await r.json();
-      if (Array.isArray(arr) && arr.length) {
-        const synced = arr.filter(x => x.syncedLyrics);
-        const pool = synced.length ? synced : arr;
-        const nA = normalize(artist);
-        let best = pool[0];
-        if (nA) for (const it of pool) if (normalize(it.artistName || '') === nA) { best = it; break; }
-        if (best.plainLyrics || best.syncedLyrics)
-          return send({ found: true, plainLyrics: best.plainLyrics || '', syncedLyrics: best.syncedLyrics || '', source: 'LRCLIB' });
+      if (!Array.isArray(arr) || !arr.length) { log(`SEARCH q="${q}": 0 результатов`); continue; }
+      const best = pickBest(arr);
+      if (best) {
+        log(`SEARCH hit q="${q}" id=${best.id} artist="${best.artistName}" dur=${best.duration}`);
+        return send({ found: true, plainLyrics: best.plainLyrics || '', syncedLyrics: best.syncedLyrics || '', source: 'LRCLIB' });
       }
-    }
-  } catch {}
-  try {
-    const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q: clean }), { headers: { 'User-Agent': 'NOVA/5.2' } }, 4500);
-    if (r.ok) {
-      sawHealthy = true;
-      const arr = await r.json();
-      if (Array.isArray(arr) && arr.length) {
-        const synced = arr.filter(x => x.syncedLyrics);
-        const best = synced[0] || arr[0];
-        if (best.plainLyrics || best.syncedLyrics)
-          return send({ found: true, plainLyrics: best.plainLyrics || '', syncedLyrics: best.syncedLyrics || '', source: 'LRCLIB' });
-      }
-    }
-  } catch {}
+      log(`SEARCH q="${q}": ${arr.length} результатов, ни один не прошёл фильтры duration±5/artist`);
+    } catch (e) { log(`SEARCH error q="${q}": ${e.message}`); }
+  }
   send({ found: false });
 });
 
