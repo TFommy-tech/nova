@@ -2162,7 +2162,12 @@
     box.dataset.loaded = '0';
     box.innerHTML = '<div class="lyrics-placeholder">Ищу текст…</div>';
 
-    const params = new URLSearchParams({ track_name: track.title || '', artist_name: track.artist || '' });
+    // Клиентская чистка (#AN4RCHKORE, скобки, official video и т.п.) — сервер
+    // чистит тоже, но чтобы ключ кэша и поисковая строка были консистентны.
+    const params = new URLSearchParams({
+      track_name: cleanTitleLocal(track.title) || track.title || '',
+      artist_name: track.artist || ''
+    });
     if (track.album) params.set('album_name', track.album);
     if (track.duration > 0) params.set('duration', String(Math.round(track.duration)));
     if (track._resolveData?.videoTitle) params.set('fb_title', track._resolveData.videoTitle);
@@ -2226,12 +2231,15 @@
     if (tab === 'lyrics') {
       el.lyricsPanel.classList.remove('hidden');
       el.lyricsPanel.setAttribute('aria-hidden', 'false');
-      el.bigCoverWrap.style.display = 'none';
+      // visibility вместо display:none: высоту .player-cover-col даёт aspect-ratio
+      // обложки, а .lyrics-panel — absolute/inset:0. При display:none колонка
+      // схлопывалась в 0px и панель текста была невидима (пустая вкладка).
+      el.bigCoverWrap.style.visibility = 'hidden';
       if (state.currentTrack) loadLyrics(state.currentTrack);
     } else {
       el.lyricsPanel.classList.add('hidden');
       el.lyricsPanel.setAttribute('aria-hidden', 'true');
-      el.bigCoverWrap.style.display = '';
+      el.bigCoverWrap.style.visibility = '';
       clearLyricsSync();
     }
   }
