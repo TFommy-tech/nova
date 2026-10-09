@@ -133,7 +133,7 @@
     'favoritesPlay','favoritesShuffle','clearFavorites','favoritesList',
     'createPlaylistBtn','playlistsGrid',
     'playlistHeroImage','playlistHeroName','playlistHeroMeta','playlistPlay','playlistShuffle','playlistDelete','playlistTracks',
-    'lyricsPanel','lyricsRefresh','lyricsInlineContent','bigCoverWrap','bigCover',
+    'lyricsPanel','lyricsRefresh','lyricsClose','lyricsInlineContent','bigCoverWrap','bigCover',
     'nowTitle','nowArtist','nowChips','progress','currentTime','duration',
     'downloadBtn','repeatBtn','prevBtn','largePlayBtn','largePlayIcon','nextBtn','shuffleBtn','favoriteBtn','queueToggleBtn','moreBtn',
     'volumeLarge','equalizerBtn','similarBtn',
@@ -2228,18 +2228,17 @@
   }
   function setPlayerTab(tab) {
     document.querySelectorAll('.player-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    // Bug B: видимость колонки текста и сжатие обложки управляются CSS-правилами
+    // по атрибуту data-tab на .player-view ([data-tab="lyrics"] .lyrics-panel и т.д.).
+    const playerView = el.lyricsPanel?.closest('.player-view');
+    if (playerView) playerView.dataset.tab = tab;
     if (tab === 'lyrics') {
       el.lyricsPanel.classList.remove('hidden');
       el.lyricsPanel.setAttribute('aria-hidden', 'false');
-      // visibility вместо display:none: высоту .player-cover-col даёт aspect-ratio
-      // обложки, а .lyrics-panel — absolute/inset:0. При display:none колонка
-      // схлопывалась в 0px и панель текста была невидима (пустая вкладка).
-      el.bigCoverWrap.style.visibility = 'hidden';
       if (state.currentTrack) loadLyrics(state.currentTrack);
     } else {
       el.lyricsPanel.classList.add('hidden');
       el.lyricsPanel.setAttribute('aria-hidden', 'true');
-      el.bigCoverWrap.style.visibility = '';
       clearLyricsSync();
     }
   }
@@ -3455,6 +3454,7 @@
     tab.addEventListener('click', () => setPlayerTab(tab.dataset.tab));
   });
   on(el.lyricsRefresh, 'click', () => { if (state.currentTrack) loadLyrics(state.currentTrack, true); });
+  on(el.lyricsClose, 'click', () => setPlayerTab('info'));
 
   on(el.songInfoClose, 'click', closeSongInfo);
   on(el.songInfoModal, 'click', e => { if (e.target === el.songInfoModal) closeSongInfo(); });

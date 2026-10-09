@@ -366,18 +366,9 @@
       </section>
 
       <section id="playerView" class="view hidden" data-view="player">
-        <div class="player-view">
+        <div class="player-view" data-tab="info">
           <div class="player-layout">
             <div class="player-cover-col">
-              <div id="lyricsPanel" class="lyrics-panel hidden" aria-hidden="true">
-                <div class="lyrics-head">
-                  <div class="lyrics-head-title">Текст песни</div>
-                  <button id="lyricsRefresh" class="queue-clear" title="Обновить">Обновить</button>
-                </div>
-                <div id="lyricsInlineContent" class="lyrics-body">
-                  <div class="lyrics-placeholder">Загрузка…</div>
-                </div>
-              </div>
               <div class="big-cover-wrap" id="bigCoverWrap">
                 <img id="bigCover" class="big-cover" alt="">
               </div>
@@ -434,6 +425,19 @@
                 </div>
                 <button id="equalizerBtn" class="inline-control">Эквалайзер</button>
                 <button id="similarBtn" class="inline-control">Похожие</button>
+              </div>
+            </div>
+
+            <div id="lyricsPanel" class="lyrics-panel hidden" aria-hidden="true">
+              <div class="lyrics-head">
+                <div class="lyrics-head-title">Текст песни</div>
+                <div class="lyrics-head-actions">
+                  <button id="lyricsClose" class="queue-clear lyrics-close" title="Закрыть">Закрыть</button>
+                  <button id="lyricsRefresh" class="queue-clear" title="Обновить">Обновить</button>
+                </div>
+              </div>
+              <div id="lyricsInlineContent" class="lyrics-body">
+                <div class="lyrics-placeholder">Загрузка…</div>
               </div>
             </div>
           </div>

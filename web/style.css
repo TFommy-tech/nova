@@ -414,25 +414,50 @@ body.has-background #backgroundLayer { opacity: 1; }
 
 /* PLAYER */
 .player-view { padding: 24px 30px 24px; }
-.player-layout { display: grid; grid-template-columns: minmax(300px, 420px) 1fr; gap: 40px; align-items: start; max-width: 1200px; margin: 0 auto; }
+/* Три колонки: обложка | инфо+контролы | текст песни.
+   В info-вкладке текст скрыт и сетка возвращается к двум колонкам (см. ниже). */
+.player-layout { display: grid; grid-template-columns: minmax(300px, 1fr) minmax(320px, 400px) minmax(360px, 1fr); gap: 32px; align-items: start; max-width: 1440px; margin: 0 auto; }
+.player-view[data-tab="info"] .player-layout { grid-template-columns: minmax(300px, 420px) 1fr; max-width: 1200px; }
+.player-view[data-tab="info"] .lyrics-panel { display: none; }
+/* Вкладка «Текст»: обложка сжимается, тексту отдаётся максимум ширины */
+.player-view[data-tab="lyrics"] .player-layout { grid-template-columns: 280px minmax(320px, 400px) minmax(360px, 1fr); }
+.player-view[data-tab="lyrics"] .player-cover-col { max-width: 280px; }
 .player-cover-col { position: relative; }
 .big-cover-wrap { position: relative; width: 100%; aspect-ratio: 1; border-radius: var(--radius-xl);
   overflow: hidden; background: #070707; border: 1px solid var(--border); box-shadow: 0 30px 80px rgba(0,0,0,.7); }
 .big-cover { width: 100%; height: 100%; object-fit: cover; cursor: pointer; }
-.lyrics-panel { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column;
+.lyrics-panel { position: relative; inset: auto; z-index: 3; display: flex; flex-direction: column;
+  height: 520px; max-height: 70vh;
   border-radius: var(--radius-xl); border: 1px solid var(--border); background: #080808; overflow: hidden;
-  animation: fadeIn .3s var(--ease-out); }
+  animation: lyricsIn .4s cubic-bezier(.16, 1, .3, 1); }
 .lyrics-panel.hidden { display: none; }
+/* Градиент-затемнение краёв: фон панели непрозрачный (#080808 / #fff в light) */
+.lyrics-panel::before, .lyrics-panel::after {
+  content: '';
+  position: absolute;
+  left: 0; right: 0;
+  height: 60px;
+  pointer-events: none;
+  z-index: 2;
+}
+.lyrics-panel::before { top: 0; background: linear-gradient(180deg, #080808 0%, transparent 100%); }
+.lyrics-panel::after { bottom: 0; background: linear-gradient(0deg, #080808 0%, transparent 100%); }
+@keyframes lyricsIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
 .lyrics-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px;
-  border-bottom: 1px solid var(--border); flex: 0 0 auto; }
+  border-bottom: 1px solid var(--border); flex: 0 0 auto;
+  position: relative; z-index: 3; background: #080808; }
+.lyrics-head-actions { display: flex; gap: 6px; }
+.lyrics-close { display: none; }
 .lyrics-head-title { font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: var(--text-4); }
 .lyrics-body { flex: 1; overflow-y: auto; padding: 20px 22px; scroll-behavior: smooth; }
-.lyrics-line { padding: 8px 10px; margin: 2px 0; font-size: 14.5px; line-height: 1.45;
-  color: rgba(180,180,180,.35); border-radius: var(--radius-sm);
-  transition: color .25s var(--ease), transform .3s var(--ease-out), background .25s var(--ease); cursor: pointer; }
-.lyrics-line:hover { color: rgba(230,230,230,.7); background: rgba(255,255,255,.03); }
-.lyrics-line.active { color: #fff; font-weight: 600; font-size: 16px;
-  background: linear-gradient(90deg, rgba(var(--glow),.10), transparent 80%); }
+.lyrics-line { padding: 10px 16px; margin: 3px 0; font-size: 17px; line-height: 1.6;
+  color: rgba(255,255,255,.3); border-radius: 8px; cursor: pointer; transform-origin: left center;
+  transition: color .3s ease, transform .35s cubic-bezier(.4,0,.2,1), background .3s ease, font-size .3s ease; }
+.lyrics-line:hover { color: rgba(255,255,255,.6); }
+.lyrics-line.active { color: #fff; font-size: 21px; font-weight: 700; letter-spacing: -.3px;
+  background: linear-gradient(90deg, rgba(var(--glow), .18) 0%, rgba(var(--glow), .04) 60%, transparent 100%);
+  transform: translateX(6px); padding-left: 20px;
+  box-shadow: inset 3px 0 0 var(--accent); }
 .lyrics-placeholder { color: var(--text-4); font-size: 12px; text-align: center; padding: 40px 12px; }
 .player-side { padding: 6px 0; animation: fadeIn .35s var(--ease-out); }
 .player-tabs-inline { display: inline-flex; gap: 3px; padding: 3px; border: 1px solid var(--border);
@@ -1192,8 +1217,12 @@ html[data-theme="light"] .player-tab.active, html[data-theme="light"] .search-fi
 html[data-theme="light"] .page-tab.active, html[data-theme="light"] .workshop-sort-btn.active,
 html[data-theme="light"] .workshop-cat-btn.active { background: #fff; color: #0a0a0a; }
 html[data-theme="light"] .lyrics-panel { background: #fff; border-color: var(--border); }
+html[data-theme="light"] .lyrics-head { background: #fff; }
+html[data-theme="light"] .lyrics-panel::before { background: linear-gradient(180deg, #fff 0%, transparent 100%); }
+html[data-theme="light"] .lyrics-panel::after { background: linear-gradient(0deg, #fff 0%, transparent 100%); }
 html[data-theme="light"] .lyrics-line { color: rgba(60,60,60,.4); }
-html[data-theme="light"] .lyrics-line.active { color: #0a0a0a; }
+html[data-theme="light"] .lyrics-line:hover { color: rgba(60,60,60,.7); }
+html[data-theme="light"] .lyrics-line.active { color: #0a0a0a; box-shadow: inset 3px 0 0 #0a0a0a; }
 html[data-theme="light"] .progress { background: rgba(0,0,0,.08); }
 html[data-theme="light"] .progress::-webkit-slider-runnable-track { background: linear-gradient(to right, var(--accent) var(--progress,0%), rgba(0,0,0,.08) var(--progress,0%)); }
 html[data-theme="light"] .volume-range, html[data-theme="light"] .mini-volume-range { background: rgba(0,0,0,.1); }
@@ -1209,8 +1238,13 @@ html[data-theme="light"] .nova-cursor-ring.hover { border-color: rgba(0,0,0,.7);
 
 /* RESPONSIVE */
 @media (max-width: 1020px) {
-  .player-layout { grid-template-columns: 1fr; gap: 26px; }
+  .player-view[data-tab] .player-layout { grid-template-columns: 1fr; gap: 26px; }
   .player-cover-col { max-width: 340px; margin: 0 auto; width: 100%; }
+  .player-view[data-tab="lyrics"] .player-cover-col { max-width: 340px; }
+  /* Текст песни — полноэкранный оверлей поверх плеера; закрытие — «Закрыть» в шапке */
+  .player-view[data-tab="lyrics"] .lyrics-panel { position: fixed; inset: 0; z-index: 100;
+    height: auto; max-height: 100vh; border-radius: 0; }
+  .lyrics-close { display: inline-flex; }
   .settings-grid { grid-template-columns: 1fr; }
   .profile-card { max-height: 92vh; }
   .profile-stats { grid-template-columns: repeat(2, 1fr); }
