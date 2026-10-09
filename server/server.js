@@ -203,9 +203,12 @@ api.use(express.json({ limit: '4mb' }));
 api.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
   const t = Date.now();
+  // Диагностика Бага 1: /api/me, /api/user/:id, /api/lyrics логируем ВСЕГДА,
+  // остальные — только при ошибке или медленном ответе (>1.5s).
+  const always = req.path === '/api/me' || req.path === '/api/lyrics' || req.path.startsWith('/api/user/');
   res.on('finish', () => {
     const ms = Date.now() - t;
-    if (res.statusCode >= 400 || ms > 1500) console.log(`[${res.statusCode}] ${req.method} ${req.path} ${ms}ms`);
+    if (always || res.statusCode >= 400 || ms > 1500) console.log(`[${res.statusCode}] ${req.method} ${req.path} ${ms}ms`);
   });
   next();
 });
@@ -1780,11 +1783,24 @@ async function tryPiped(base, vid, range, res) {
 
 // yt-dlp — primary для /api/audio/youtube/:videoId: youtubei.js ломается на
 // SABR/decipher ("No valid URL to decipher"), а yt-dlp качает m4a напрямую.
-// Файл кешируется 30 минут — повторные прослушивания не перекачиваются.
+// Файл живёт в /tmp до GC (см. ниже): yt-dlp не перезаписывает существующий
+// файл, поэтому «свежесть» по mtime бессмысленна — кэш по факту наличия.
 const YT_DLP_BIN = process.env.YT_DLP_BIN || '/usr/local/bin/yt-dlp';
 const YT_DLP_NODE = process.env.YT_DLP_NODE || '/usr/bin/node';
-const YT_DLP_CACHE_MS = 30 * 60 * 1000;
+const YT_DLP_GC_MS = 6 * 60 * 60 * 1000; // чистим /tmp/yt-*.m4a старше 6 часов
 const YT_DLP_BUDGET_MS = 30000; // внутри общего withTimeout(40000)
+
+// GC кэша yt-dlp в /tmp (файлы иначе копятся бесконечно).
+setInterval(() => {
+  try {
+    const cutoff = Date.now() - YT_DLP_GC_MS;
+    for (const f of fs.readdirSync(os.tmpdir())) {
+      if (!/^yt-[\w-]+\.m4a$/.test(f)) continue;
+      const p = path.join(os.tmpdir(), f);
+      try { if (fs.statSync(p).mtimeMs < cutoff) fs.unlinkSync(p); } catch {}
+    }
+  } catch {}
+}, 30 * 60 * 1000);
 
 function ytDlpFile(vid) {
   return path.join(os.tmpdir(), `yt-${vid}.m4a`); // на Linux это /tmp/yt-<vid>.m4a
@@ -1821,13 +1837,13 @@ function runYtDlp(vid, file) {
 async function streamViaYtDlp(vid, range, res) {
   const file = ytDlpFile(vid);
   try {
-    // Кеш 30 минут: свежий файл → без перекачки
-    let fresh = false;
-    try {
-      const st = fs.statSync(file);
-      fresh = st.size > 0 && (Date.now() - st.mtimeMs) < YT_DLP_CACHE_MS;
-    } catch {}
-    if (!fresh) {
+    // Кеш по факту наличия файла. Раньше была mtime-TTL 30 минут, но yt-dlp НЕ
+    // перезаписывает существующий файл (печатает "already downloaded") — mtime не
+    // менялся, и КАЖДЫЙ запрос платил ~3 c probe без реальной перекачки (Баг 1).
+    // Отдаём сразу, если файл есть и непустой; yt-dlp — только при отсутствии.
+    let have = false;
+    try { have = fs.statSync(file).size > 0; } catch {}
+    if (!have) {
       if (!(await runYtDlp(vid, file))) return false;
       try { if (fs.statSync(file).size <= 0) return false; } catch { return false; }
     }
@@ -1989,12 +2005,20 @@ api.get('/api/lyrics', async (req, res) => {
     .replace(/\b(official|audio|video|lyric|lyrics|visualizer|hd|hq|explicit|mv|m\/v)\b/gi, ' ')
     .replace(/#\S+/g, ' ')
     .replace(/\s+/g, ' ').trim();
-  const send = p => { lyricsCache.set(ck, { time: Date.now(), data: p, neg: !p.found }); res.json(p); };
+  // Баг 2: «не найдено» кэшируем только после УСПЕШНОГО search (200) — только поиск
+  // даёт право сказать «текста нет». 404 у get = «точного совпадения нет» (search ещё
+  // может найти), а 5xx/таймаут = временная недоступность: в обоих случаях НЕ кэшируем,
+  // чтобы retry клиента (через ~2.2 c) реально переспросил LRCLIB.
+  let sawHealthy = false;
+  const send = p => {
+    if (p.found || sawHealthy) lyricsCache.set(ck, { time: Date.now(), data: p, neg: !p.found });
+    res.json(p);
+  };
   try {
     const params = new URLSearchParams({ track_name: clean });
     if (artist) params.set('artist_name', artist);
     if (dur > 0) params.set('duration', String(Math.round(dur)));
-    const r = await jsonFetch('https://lrclib.net/api/get?' + params, { headers: { 'User-Agent': 'NOVA/5.2' } }, 8000);
+    const r = await jsonFetch('https://lrclib.net/api/get?' + params, { headers: { 'User-Agent': 'NOVA/5.2' } }, 4500);
     if (r.ok) {
       const d = await readJson(r);
       if (d.plainLyrics || d.syncedLyrics)
@@ -2003,8 +2027,9 @@ api.get('/api/lyrics', async (req, res) => {
   } catch {}
   try {
     const q = [clean, artist].filter(Boolean).join(' ');
-    const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q }), { headers: { 'User-Agent': 'NOVA/5.2' } }, 8000);
+    const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q }), { headers: { 'User-Agent': 'NOVA/5.2' } }, 4500);
     if (r.ok) {
+      sawHealthy = true; // 200 от search = LRCLIB жив, можно доверять итогу поиска
       const arr = await r.json();
       if (Array.isArray(arr) && arr.length) {
         const synced = arr.filter(x => x.syncedLyrics);
@@ -2018,8 +2043,9 @@ api.get('/api/lyrics', async (req, res) => {
     }
   } catch {}
   try {
-    const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q: clean }), { headers: { 'User-Agent': 'NOVA/5.2' } }, 8000);
+    const r = await jsonFetch('https://lrclib.net/api/search?' + new URLSearchParams({ q: clean }), { headers: { 'User-Agent': 'NOVA/5.2' } }, 4500);
     if (r.ok) {
+      sawHealthy = true;
       const arr = await r.json();
       if (Array.isArray(arr) && arr.length) {
         const synced = arr.filter(x => x.syncedLyrics);

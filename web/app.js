@@ -1453,7 +1453,10 @@
     try { store.set('nova_volume', String(state.volume)); } catch {}
   }
   function updatePlayButtons() {
-    const playing = userIntent === 'playing' && !!state.currentTrack;
+    // Источник правды — реальное состояние аудио (el.audio.paused), а не userIntent:
+    // на вкладке в фоне браузер мог поставить/снять паузу без событий, и userIntent
+    // рассинхронизируется. Ветка loading (спиннер) обрабатывается ниже отдельно. (Баг 3)
+    const playing = !!state.currentTrack && !el.audio.paused;
     const loading = userIntent === 'loading';
     [el.miniPlay, el.largePlayBtn].forEach(b => b?.classList.toggle('loading', loading));
     if (!el.miniPlayIcon || !el.largePlayIcon) return;
@@ -2734,7 +2737,7 @@
     el.profileNowCur.textContent = formatTime(cur);
     el.profileNowDur.textContent = formatTime(dur);
     el.profileNowFill.style.width = (dur > 0 ? Math.min(100, Math.max(0, (cur / dur) * 100)) : 0) + '%';
-    const playing = userIntent === 'playing';
+    const playing = !el.audio.paused;
     el.profileNowPlayIcon.innerHTML = playing
       ? '<rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/>'
       : '<path d="M8 5v14l11-7z"/>';
@@ -3553,6 +3556,19 @@
     if (state.repeat) { el.audio.currentTime = 0; rampFadeTo(1, 200); el.audio.play().catch(() => {}); return; }
     if (!settings.autoplay) return;
     next();
+  });
+
+  // Фикс Бага 3: при возврате из фоновой вкладки пересинхронизируем кнопки Play/Pause
+  // и прогресс по фактическому состоянию аудио (в фоне события play/pause могли не
+  // отработать, и UI показывал не то).
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    if (state.currentTrack && userIntent !== 'loading' && userIntent !== 'error') {
+      userIntent = el.audio.paused ? 'paused' : 'playing';
+    }
+    updatePlayButtons();
+    updateProfileNow();
+    updateProgress();
   });
 
   document.addEventListener('keydown', e => {
