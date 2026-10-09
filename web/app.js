@@ -2690,17 +2690,16 @@
   }
 
   const PROFILE_TAG_META = {
-    owner: { label: 'Owner', icon: '<path d="M5 16 4 6l5 4 3-6 3 6 5-4-1 10z"/>' },
-    admin: { label: 'Admin', icon: '<path d="M12 2l8 3v6c0 5-3.5 8.4-8 10-4.5-1.6-8-5-8-10V5z"/>' },
-    artist: { label: 'Artist', icon: '<path d="M12 14a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-3.1A7 7 0 0 0 19 11z"/>' },
-    verified: { label: 'Verified', icon: '<path d="M9 16.2 5.5 12.7 4 14.2l5 5L20 8l-1.4-1.4z"/>' },
-    vip: { label: 'VIP', icon: '<path d="M12 2l2.9 6.3 6.9.8-5 4.8 1.3 6.9L12 18l-6.1 3.8 1.3-6.9L2.2 9.1l6.9-.8z"/>' },
-    moderator: { label: 'Moderator', icon: '<path d="M12 2l8 3v6c0 5-3.5 8.4-8 10-4.5-1.6-8-5-8-10V5z"/>' }
+    owner:     { label: 'Владелец',    emoji: '👑' },
+    admin:     { label: 'Админ',       emoji: '🛡️' },
+    artist:    { label: 'Артист',      emoji: '🎤' },
+    verified:  { label: 'Верифицирован', emoji: '✓' },
+    vip:       { label: 'VIP',         emoji: '⭐' },
+    moderator: { label: 'Модератор',   emoji: '⚔️' }
   };
   function profileTagPill(t) {
-    const m = PROFILE_TAG_META[t] || { label: t, icon: '<circle cx="12" cy="12" r="6"/>' };
-    const icon = `<svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor" aria-hidden="true">${m.icon}</svg>`;
-    return `<span class="profile-tag-pill t-${escapeHtml(t)}">${icon}${escapeHtml(m.label)}</span>`;
+    const m = PROFILE_TAG_META[t] || { label: t, emoji: '•' };
+    return `<span class="profile-tag-pill t-${escapeHtml(t)}"><span class="tag-emoji">${m.emoji}</span>${escapeHtml(m.label)}</span>`;
   }
   const SOCIAL_META = {
     telegram: { title: 'Telegram', icon: '<path d="M9.78 18.65l.28-4.23 7.68-6.92c.34-.31-.07-.46-.52-.19L7.74 13 3.64 12c-.88-.25-.89-.86.2-1.3l15.97-6.16c.73-.33 1.43.18 1.15 1.3l-2.72 12.81c-.19.91-.74 1.13-1.5.71L12.6 16.3l-1.99 1.93c-.23.23-.42.42-.83.42z"/>' },

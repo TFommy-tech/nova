@@ -948,14 +948,17 @@ html[data-theme="light"] .profile-edit-card { background: #fff; border-color: va
 .profile-name-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .profile-name { font-size: 22px; font-weight: 800; letter-spacing: -.5px; color: #fff; }
 .profile-tags { display: inline-flex; gap: 5px; flex-wrap: wrap; }
-.profile-tag-pill { font-size: 9.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
-  padding: 3px 8px; border-radius: 20px; border: 1px solid transparent; line-height: 1.3; }
-.profile-tag-pill.t-owner { background: linear-gradient(135deg,#ffb400,#ff7a00); color:#1a0f00; }
-.profile-tag-pill.t-admin { background: rgba(96,165,250,.16); color:#93c5fd; border-color: rgba(96,165,250,.35); }
-.profile-tag-pill.t-verified { background: rgba(74,222,128,.15); color:#86efac; border-color: rgba(74,222,128,.35); }
-.profile-tag-pill.t-artist { background: rgba(var(--glow),.16); color: rgb(var(--glow)); border-color: rgba(var(--glow),.35); }
-.profile-tag-pill.t-vip { background: rgba(244,114,182,.16); color:#f9a8d4; border-color: rgba(244,114,182,.35); }
-.profile-tag-pill.t-moderator { background: rgba(148,163,184,.16); color:#cbd5e1; border-color: rgba(148,163,184,.35); }
+.profile-tag-pill { display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 8px; font-size: 11px; font-weight: 600; letter-spacing: 0;
+  line-height: 1.2; white-space: nowrap; border: 1px solid transparent;
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.profile-tag-pill .tag-emoji { font-size: 11px; line-height: 1; }
+.profile-tag-pill.t-owner { color: #fbbf24; background: rgba(251, 191, 36, .12); border-color: rgba(251, 191, 36, .35); }
+.profile-tag-pill.t-admin { color: #ef4444; background: rgba(239, 68, 68, .12); border-color: rgba(239, 68, 68, .35); }
+.profile-tag-pill.t-verified { color: #22c55e; background: rgba(34, 197, 94, .12); border-color: rgba(34, 197, 94, .35); }
+.profile-tag-pill.t-artist { color: #ec4899; background: rgba(236, 72, 153, .12); border-color: rgba(236, 72, 153, .35); }
+.profile-tag-pill.t-vip { color: #eab308; background: rgba(234, 179, 8, .12); border-color: rgba(234, 179, 8, .35); }
+.profile-tag-pill.t-moderator { color: #3b82f6; background: rgba(59, 130, 246, .12); border-color: rgba(59, 130, 246, .35); }
 .profile-tag { display: inline-block; font-size: 12px; color: var(--text-3); width: fit-content; margin-top: 3px; }
 .profile-bio { font-size: 12.5px; color: var(--text-2); line-height: 1.5; margin-top: 8px;
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
