@@ -2228,6 +2228,9 @@
   }
   function setPlayerTab(tab) {
     document.querySelectorAll('.player-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    const pv = document.querySelector('.player-view');
+    if (pv) pv.setAttribute('data-tab', tab);
+    if (tab === 'lyrics') openLyrics(); else closeLyrics();
   }
   function openLyrics() {
     if (state.view !== 'player') showView('player');
