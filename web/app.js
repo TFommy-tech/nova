@@ -3150,9 +3150,9 @@
     const ctx = canvas.getContext('2d');
     let W = 0, H = 0, raf = null;
     let stars = [];
-    // Плотность из площади экрана, зажатая в диапазон 150-200 звёзд (Этап 1-фикс).
+    // Плотность из площади экрана, зажатая в диапазон 200-300 звёзд (ярче фон).
     function starCount() {
-      return Math.max(150, Math.min(200, Math.floor((window.innerWidth * window.innerHeight) / 8000)));
+      return Math.max(200, Math.min(300, Math.floor((window.innerWidth * window.innerHeight) / 5000)));
     }
     // Берём размеры из окна (НЕ из getBoundingClientRect — на момент init layout
     // ещё не применён и canvas отдаёт дефолт 300×150, из-за чего звёзды кучковались
@@ -3169,14 +3169,32 @@
     }
     function seed() {
       const n = starCount();
-      stars = Array.from({ length: n }, () => ({
-        x: Math.random() * W, y: Math.random() * H,
-        r: Math.random() * 1.2 + 0.3,
-        vx: (Math.random() * 0.03 + 0.02) * (Math.random() < 0.5 ? -1 : 1),
-        vy: (Math.random() * 0.03 + 0.02) * (Math.random() < 0.5 ? -1 : 1),
-        base: Math.random() * 0.5 + 0.25,
-        tw: Math.random() * Math.PI * 2, twSpd: Math.random() * 0.02 + 0.005
-      }));
+      stars = Array.from({ length: n }, (_, i) => {
+        // ~30% звёзд получают лёгкий оттенок --glow (цвета обложки)
+        const tinted = Math.random() < 0.3;
+        return {
+          x: Math.random() * W, y: Math.random() * H,
+          r: Math.random() * 1.4 + 0.6,               // базовые 0.6-2.0px
+          vx: (Math.random() * 0.03 + 0.02) * (Math.random() < 0.5 ? -1 : 1),
+          vy: (Math.random() * 0.03 + 0.02) * (Math.random() < 0.5 ? -1 : 1),
+          base: Math.random() * 0.5 + 0.5,            // яркость 0.5-1.0
+          tw: Math.random() * Math.PI * 2, twSpd: Math.random() * 0.02 + 0.005,
+          big: false, tinted
+        };
+      });
+      // 10-15 «крупных» звёзд: r 2-3px, ярче, с мягким halo.
+      const bigN = 10 + Math.floor(Math.random() * 6); // 10..15
+      for (let i = 0; i < bigN; i++) {
+        stars.push({
+          x: Math.random() * W, y: Math.random() * H,
+          r: Math.random() * 1 + 2,                   // 2.0-3.0px
+          vx: (Math.random() * 0.02 + 0.01) * (Math.random() < 0.5 ? -1 : 1),
+          vy: (Math.random() * 0.02 + 0.01) * (Math.random() < 0.5 ? -1 : 1),
+          base: Math.random() * 0.2 + 0.8,            // 0.8-1.0
+          tw: Math.random() * Math.PI * 2, twSpd: Math.random() * 0.015 + 0.004,
+          big: true, tinted: Math.random() < 0.3
+        });
+      }
     }
     function glowColor() {
       // --glow = "r,g,b" (set by updateAmbientFromCover / theme). Fallback — лиловый.
@@ -3190,18 +3208,26 @@
       if (++gcT % 60 === 0) gc = glowColor(); // обновляем окраc раз в ~1 c
       for (const s of stars) {
         s.x += s.vx; s.y += s.vy; s.tw += s.twSpd;
-        if (s.x < -2) s.x = W + 2; else if (s.x > W + 2) s.x = -2;
-        if (s.y < -2) s.y = H + 2; else if (s.y > H + 2) s.y = -2;
-        const a = Math.max(0.05, Math.min(0.8, s.base + Math.sin(s.tw) * 0.3));
-        // лёгкий подмес цвета обложки к белому
-        const r = Math.round(255 + (gc.r - 255) * 0.35);
-        const gg = Math.round(255 + (gc.g - 255) * 0.35);
-        const b = Math.round(255 + (gc.b - 255) * 0.35);
+        if (s.x < -3) s.x = W + 3; else if (s.x > W + 3) s.x = -3;
+        if (s.y < -3) s.y = H + 3; else if (s.y > H + 3) s.y = -3;
+        // заметное мерцание: alpha *= 0.7 + 0.3*sin
+        let a = s.base * (0.7 + 0.3 * Math.sin(s.tw));
+        a = Math.max(0.05, Math.min(1, a));
+        // цвет: белый; для tinted-звёзд (~30%) — лёгкий оттенок --glow
+        let r = 255, gg = 255, b = 255;
+        if (s.tinted) {
+          r = Math.round(255 + (gc.r - 255) * 0.5);
+          gg = Math.round(255 + (gc.g - 255) * 0.5);
+          b = Math.round(255 + (gc.b - 255) * 0.5);
+        }
         ctx.beginPath();
         ctx.fillStyle = `rgba(${r},${gg},${b},${a})`;
+        if (s.big) { ctx.shadowBlur = 8; ctx.shadowColor = 'rgba(255,255,255,.6)'; }
+        else { ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; }
         ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
         ctx.fill();
       }
+      ctx.shadowBlur = 0;
       raf = requestAnimationFrame(draw);
     }
     function start() { resizeCanvas(); if (raf) cancelAnimationFrame(raf); draw(); }

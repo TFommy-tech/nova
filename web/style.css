@@ -123,7 +123,7 @@ body.has-background #backgroundLayer { opacity: 1; }
    #backgroundShade(z1): звёзды поверх фото-фона, но под затемнением и UI.
    Окрас звёзд читает --glow (см. initStars в app.js). pointer-events:none —
    не перехватывает клики. */
-.stars-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .7; }
+.stars-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .85; }
 
 .startup { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: #000;
   transition: opacity .6s var(--ease), visibility .6s var(--ease); }
