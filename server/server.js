@@ -1850,8 +1850,34 @@ function gcYtCache() {
   } catch {}
 }
 
+// Уборка СТАРОГО мусора в системном /tmp (os.tmpdir()): до переноса кэша yt-dlp
+// распаковывал PyInstaller-папки _MEI* (82 МБ × N) и клал yt-*.m4a прямо в /tmp,
+// забивая tmpfs (~479 МБ) в 100% → "Failed to extract Cryptodome/_ARC4.abi3.so".
+// Теперь новые записи идут в data/yt-tmp, но УЖЕ занятое место в /tmp надо освободить.
+// Чистим при старте и раз в час. Свежие _MEI (< TTL) не трогаем — возможно, живой процесс.
+function gcLegacyTmp() {
+  try {
+    const base = os.tmpdir();
+    const cutoff = Date.now() - YT_MEI_TTL_MS;
+    const recentCutoff = Date.now() - 60 * 1000; // страховка от гонки на 1 мин
+    for (const f of fs.readdirSync(base)) {
+      const p = path.join(base, f);
+      try {
+        if (f.startsWith('_MEI')) {
+          const st = fs.statSync(p);
+          if (st.isDirectory() && st.mtimeMs < cutoff) fs.rmSync(p, { recursive: true, force: true });
+        } else if (/^yt-[\w-]+\.m4a(\.part)?$/.test(f)) {
+          // старый кэш лежАл здесь; теперь кэш в data/yt-cache — этот мусор удаляем
+          const st = fs.statSync(p);
+          if (st.isFile() && st.mtimeMs < recentCutoff) fs.unlinkSync(p);
+        }
+      } catch {}
+    }
+  } catch {}
+}
+
 // GC раз в час (+ первый прогон при старте — см. startServer()).
-setInterval(gcYtCache, 60 * 60 * 1000);
+setInterval(() => { gcYtCache(); gcLegacyTmp(); }, 60 * 60 * 1000);
 
 function ytDlpFile(vid) {
   return path.join(YT_CACHE_DIR, `yt-${vid}.m4a`); // в DATA_DIR/yt-cache, не в /tmp
@@ -2245,6 +2271,7 @@ function startServer(options = {}) {
       runProfileMigration();
       gcYtCache(); // первый прогон GC кэша yt-dlp при старте (>2 ч + лимит 2 ГБ)
       gcMeiDirs(); // убрать _MEI*, осевшие от прошлого (убитого) процесса
+      gcLegacyTmp(); // освободить старый мусор в /tmp (_MEI* + yt-*.m4a) до переноса в data/
       if (IS_PROD && !process.env.DATA_DIR) console.warn('[NOVA] WARNING: DATA_DIR not set');
       console.log('============================================================');
       // Прогреваем youtubei.js в фоне

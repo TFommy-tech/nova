@@ -2242,8 +2242,13 @@
       el.lyricsPanel.classList.remove('hidden');
       el.lyricsPanel.setAttribute('aria-hidden', 'false');
       const key = trackKey(t);
-      if (el.lyricsInlineContent.dataset.trackKey !== key || el.lyricsInlineContent.dataset.loaded !== '1') {
-        loadLyrics(t);
+      // cached-строки остаются в DOM, но clearLyricsSync() (closeLyrics/playTrack/ended)
+      // обнуляет lyricsLines и гасит lyricsTimer, не трогая dataset.loaded. При
+      // повторном открытии того же трека highlightLyrics() выходил бы сразу
+      // (lyricsLines пуст) — строки видны, но ни одна не активна (весь текст
+      // приглушён). Если синхронизация сброшена — перезагружаем и пересинхронизируем.
+      if (el.lyricsInlineContent.dataset.trackKey !== key || el.lyricsInlineContent.dataset.loaded !== '1' || !lyricsLines.length) {
+        loadLyrics(t, true); // force: восстановить lyricsLines + lyricsTimer
       } else {
         highlightLyrics();
       }
