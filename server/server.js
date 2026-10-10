@@ -596,12 +596,21 @@ async function audiusTrending(limit = 50) {
 const scStreamCache = new Map(); // <trackId> → { url, time }; TTL 10 мин (см. /api/audio/soundcloud/:id)
 function soundcloudNorm(t) {
   if (!t?.id) return null;
+  // Фит из заголовка: «problems (feat. asteria)» → artist = «d3r, asteria» (Баг 3).
+  const feat = extractFeat(t.title);
+  const baseArtist = t.user?.username || '';
+  const artist = feat && !normalize(baseArtist).includes(normalize(feat))
+    ? `${baseArtist}, ${feat}` : baseArtist;
+  const title = String(t.title || '')
+    .replace(/\s*[([（]\s*(?:feat\.?|ft\.?|with)\s+[^\]）)]+[)\]）]\s*/gi, ' ')
+    .replace(/\s+/g, ' ').trim() || t.title || '';
   return {
     provider: 'soundcloud', providerId: String(t.id), id: String(t.id),
-    title: t.title || '', artist: t.user?.username || '',
+    title, artist,
     artistId: t.user?.id ? 'sc_' + String(t.user.id) : '',
     album: '', albumId: '',
-    cover: String(t.artwork_url || '').replace(/-large\./, '-t500x500.'),
+    // fallback обложки на аватар автора (Баг 2: у части треков artwork_url пуст).
+    cover: scCover(t.artwork_url || t.user?.avatar_url || ''),
     duration: Math.round(Number(t.duration || 0) / 1000), // SoundCloud отдаёт мс
     popularity: Number(t.playback_count || 0),
     sourceUrl: t.permalink_url || ''
@@ -653,10 +662,27 @@ async function soundcloudUserById(userId) {
 }
 async function soundcloudUserTracks(userId, limit = 50) {
   try {
-    const params = new URLSearchParams({ client_id: SOUNDCLOUD_CLIENT_ID, limit: String(limit), linked_partitioning: '1' });
-    const r = await jsonFetch(`https://api-v2.soundcloud.com/users/${encodeURIComponent(userId)}/tracks?${params}`, {}, 8000);
-    const d = await readJson(r);
-    return (Array.isArray(d?.collection) ? d.collection : []).map(soundcloudNorm).filter(Boolean);
+    // Пагинация по next_href (Баг 2): SoundCloud отдаёт 1 трек на 1-й странице
+    // (linked_partitioning), остальное — по next_href. Раньше бралась только
+    // первая страница → у артистов показывался 1 трек.
+    const out = [];
+    let url = `https://api-v2.soundcloud.com/users/${encodeURIComponent(userId)}/tracks?client_id=${encodeURIComponent(SOUNDCLOUD_CLIENT_ID)}&limit=${Math.min(limit, 200)}&linked_partitioning=1`;
+    for (let page = 0; url && out.length < limit && page < 6; page++) {
+      const r = await jsonFetch(url, {}, 8000);
+      const d = await readJson(r);
+      for (const t of (Array.isArray(d?.collection) ? d.collection : [])) {
+        const n = soundcloudNorm(t);
+        if (n) out.push(n);
+        if (out.length >= limit) break;
+      }
+      if (out.length >= limit) break;
+      if (d?.next_href) {
+        const u = new URL(d.next_href);
+        u.searchParams.set('client_id', SOUNDCLOUD_CLIENT_ID);
+        url = u.toString();
+      } else url = null;
+    }
+    return out;
   } catch { return []; }
 }
 async function soundcloudUserPlaylists(userId, limit = 20) {
@@ -2246,10 +2272,34 @@ api.get('/api/health', async (req, res) => {
 // ============================================================================
 // STATIC + START
 // ============================================================================
-api.use(express.static(WEB_DIR, { extensions: ['html'], maxAge: IS_PROD ? '1h' : 0 }));
+// Cache-busting (Баг 1): index.html тянет style.css/app.js БЕЗ ?v=, а prod
+// express.static кэширует их на 1h — после деплоя браузер/CDN час отдаёт старые
+// style.css/app.js (без блока .lyrics-side), хотя HEAD уже правильный. Решение:
+// (1) версионируем ассеты по mtime (новый деплой => новый URL => cache miss);
+// (2) index.html всегда отдаём с no-store, чтобы браузер видел свежий HTML.
+const ASSET_VER = {};
+for (const f of ['style.css', 'app.js']) {
+  try { ASSET_VER[f] = fs.statSync(path.join(WEB_DIR, f)).mtimeMs.toString(36); }
+  catch { ASSET_VER[f] = ''; }
+}
+function serveIndexHtml(req, res) {
+  const file = path.join(WEB_DIR, 'index.html');
+  try {
+    let html = fs.readFileSync(file, 'utf8');
+    if (ASSET_VER['style.css']) html = html.replace('href="style.css"', `href="style.css?v=${ASSET_VER['style.css']}"`);
+    if (ASSET_VER['app.js']) html = html.replace('src="app.js"', `src="app.js?v=${ASSET_VER['app.js']}"`);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    return res.end(html);
+  } catch { return res.sendFile(file); }
+}
+api.use(express.static(WEB_DIR, {
+  extensions: ['html'], index: false, maxAge: IS_PROD ? '1h' : 0,
+  setHeaders: (res, fp) => { if (/\.(?:css|js)$/.test(fp)) res.setHeader('Cache-Control', IS_PROD ? 'public, max-age=31536000, immutable' : 'no-store'); }
+}));
 api.get(/^\/(?!api(?:\/|$)).*/, (req, res, next) => {
   if (req.path.startsWith('/api/')) return next();
-  res.sendFile(path.join(WEB_DIR, 'index.html'));
+  serveIndexHtml(req, res);
 });
 api.use((err, req, res, next) => {
   console.error('[error]', req.method, req.path, err.message);
