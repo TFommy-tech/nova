@@ -1783,40 +1783,92 @@ async function tryPiped(base, vid, range, res) {
 
 // yt-dlp — primary для /api/audio/youtube/:videoId: youtubei.js ломается на
 // SABR/decipher ("No valid URL to decipher"), а yt-dlp качает m4a напрямую.
-// Файл живёт в /tmp до GC (см. ниже): yt-dlp не перезаписывает существующий
-// файл, поэтому «свежесть» по mtime бессмысленна — кэш по факту наличия.
+// Файл живёт в DATA_DIR/yt-cache (НЕ в /tmp): на проде /tmp — tmpfs ~479 МБ, и
+// PyInstaller-папки _MEI* (по 82 МБ × N) + yt-*.m4a забивали его в 100%, из-за
+// чего yt-dlp падал с "Failed to extract Cryptodome/Cipher/_ARC4.abi3.so".
+// yt-dlp не перезаписывает существующий файл ("already downloaded"), поэтому
+// «свежесть» по mtime бессмысленна — кэш по факту наличия, чистим по GC.
 const YT_DLP_BIN = process.env.YT_DLP_BIN || '/usr/local/bin/yt-dlp';
 const YT_DLP_NODE = process.env.YT_DLP_NODE || '/usr/bin/node';
-const YT_DLP_GC_MS = 6 * 60 * 60 * 1000; // чистим /tmp/yt-*.m4a старше 6 часов
+const YT_CACHE_DIR = path.join(DATA_DIR, 'yt-cache'); // кэш yt-*.m4a (на диске)
+const YT_TMP_DIR = path.join(DATA_DIR, 'yt-tmp');     // TMPDIR для PyInstaller _MEI*
+const YT_DLP_GC_MS = 2 * 60 * 60 * 1000;              // TTL кэша: 2 часа
+const YT_CACHE_MAX_BYTES = 2 * 1024 * 1024 * 1024;    // порог кэша: 2 ГБ
+const YT_CACHE_TRIM_TO = 1.5 * 1024 * 1024 * 1024;    // обрезаем до 1.5 ГБ
+const YT_MEI_TTL_MS = 5 * 60 * 1000;                  // _MEI* старше 5 мин — мусор
 const YT_DLP_BUDGET_MS = 30000; // внутри общего withTimeout(40000)
 
-// GC кэша yt-dlp в /tmp (файлы иначе копятся бесконечно).
-setInterval(() => {
+// Папки кэша/tmp создаём при старте (recursive — на случай отсутствия data/).
+for (const _d of [YT_CACHE_DIR, YT_TMP_DIR]) {
+  try { fs.mkdirSync(_d, { recursive: true }); }
+  catch (e) { console.warn('[yt-dlp] mkdir failed', _d, e.message); }
+}
+
+// Чистим осиротевшие PyInstaller-папки _MEI*: если процесс убит по SIGKILL
+// (таймбюджет 30 c), bootloader не успевает их удалить, и они копятся в tmp.
+// Свежие (< 5 мин) не трогаем — это может быть идущее скачивание.
+function gcMeiDirs() {
   try {
-    const cutoff = Date.now() - YT_DLP_GC_MS;
-    for (const f of fs.readdirSync(os.tmpdir())) {
-      if (!/^yt-[\w-]+\.m4a$/.test(f)) continue;
-      const p = path.join(os.tmpdir(), f);
-      try { if (fs.statSync(p).mtimeMs < cutoff) fs.unlinkSync(p); } catch {}
+    const cutoff = Date.now() - YT_MEI_TTL_MS;
+    for (const f of fs.readdirSync(YT_TMP_DIR)) {
+      if (!f.startsWith('_MEI')) continue;
+      const p = path.join(YT_TMP_DIR, f);
+      try {
+        const st = fs.statSync(p);
+        if (!st.isDirectory() || st.mtimeMs >= cutoff) continue;
+        fs.rmSync(p, { recursive: true, force: true });
+      } catch {}
     }
   } catch {}
-}, 30 * 60 * 1000);
+}
+
+// GC кэша yt-dlp: (1) удаляем yt-*.m4a[.part] старше 2 ч; (2) если суммарный
+// размер > 2 ГБ — удаляем самые старые, пока не уложимся в 1.5 ГБ.
+function gcYtCache() {
+  try {
+    const now = Date.now();
+    const entries = [];
+    for (const f of fs.readdirSync(YT_CACHE_DIR)) {
+      if (!/^yt-[\w-]+\.m4a(\.part)?$/.test(f)) continue;
+      const p = path.join(YT_CACHE_DIR, f);
+      try {
+        const st = fs.statSync(p);
+        if (!st.isFile()) continue;
+        if (now - st.mtimeMs > YT_DLP_GC_MS) { try { fs.unlinkSync(p); } catch {} continue; }
+        entries.push({ p, size: st.size, mtimeMs: st.mtimeMs });
+      } catch {}
+    }
+    let total = entries.reduce((s, e) => s + e.size, 0);
+    if (total > YT_CACHE_MAX_BYTES) {
+      entries.sort((a, b) => a.mtimeMs - b.mtimeMs); // самые старые — в начало
+      for (const e of entries) {
+        if (total <= YT_CACHE_TRIM_TO) break;
+        try { fs.unlinkSync(e.p); total -= e.size; } catch {}
+      }
+      console.log('[yt-dlp] cache over limit, trimmed to', (total / 1048576).toFixed(0), 'MB');
+    }
+  } catch {}
+}
+
+// GC раз в час (+ первый прогон при старте — см. startServer()).
+setInterval(gcYtCache, 60 * 60 * 1000);
 
 function ytDlpFile(vid) {
-  return path.join(os.tmpdir(), `yt-${vid}.m4a`); // на Linux это /tmp/yt-<vid>.m4a
+  return path.join(YT_CACHE_DIR, `yt-${vid}.m4a`); // в DATA_DIR/yt-cache, не в /tmp
 }
 
 function runYtDlp(vid, file) {
   return new Promise((resolve) => {
     let stderr = '';
     let child;
+    gcMeiDirs(); // убрать осиротевшие _MEI* от прошлых (убитых) запусков
     try {
       child = spawn(YT_DLP_BIN, [
         '-f', 'bestaudio[ext=m4a]/bestaudio',
         '--js-runtimes', `node:${YT_DLP_NODE}`,
         '-o', file,
         `https://www.youtube.com/watch?v=${vid}`
-      ], { stdio: ['ignore', 'ignore', 'pipe'] });
+      ], { stdio: ['ignore', 'ignore', 'pipe'], env: { ...process.env, TMPDIR: YT_TMP_DIR } });
     } catch (e) { console.log('[yt-dlp] spawn err:', e.message); resolve(false); return; }
     const timer = setTimeout(() => {
       console.log('[yt-dlp] budget', YT_DLP_BUDGET_MS, 'ms exceeded, kill, vid=', vid);
@@ -2191,6 +2243,8 @@ function startServer(options = {}) {
       console.log(`[NOVA] resolve debug: ${DEBUG_RESOLVE ? 'ON' : 'off'}`);
       console.log(`[NOVA] users: ${Object.keys(db.users).length}`);
       runProfileMigration();
+      gcYtCache(); // первый прогон GC кэша yt-dlp при старте (>2 ч + лимит 2 ГБ)
+      gcMeiDirs(); // убрать _MEI*, осевшие от прошлого (убитого) процесса
       if (IS_PROD && !process.env.DATA_DIR) console.warn('[NOVA] WARNING: DATA_DIR not set');
       console.log('============================================================');
       // Прогреваем youtubei.js в фоне
