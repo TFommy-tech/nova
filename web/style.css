@@ -280,8 +280,8 @@ body.has-background #backgroundLayer { opacity: 1; }
   animation: starPulse 4s ease-in-out infinite;
   transform-origin: center;
 }
-.star-sparkle { transform-origin: 100px 100px; animation: starTwinkle 3.5s ease-in-out infinite; }
-.star-core { transform-origin: 100px 100px; animation: starCore 4s ease-in-out infinite; }
+.star-sparkle { transform-origin: 100px 100px; animation: starTwinkle 4s ease-in-out infinite; }
+.star-core { transform-origin: 100px 100px; animation: starCore 5s ease-in-out infinite; }
 .star-arc-left { transform-origin: 100px 100px; animation: arcFloatLeft 6s ease-in-out infinite; }
 .star-arc-right { transform-origin: 100px 100px; animation: arcFloatRight 6s ease-in-out infinite; }
 
