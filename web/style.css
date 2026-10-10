@@ -260,7 +260,6 @@ body.has-background #backgroundLayer { opacity: 1; }
 /* HOME */
 .home-view { padding: 24px 30px 24px; }
 .home-hero { position: relative; margin-bottom: 26px; min-height: 160px; overflow: hidden; border-radius: var(--radius-lg); }
-.home-waves { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: .5; }
 .home-hero-content { position: relative; z-index: 1; padding: 30px 26px; }
 .home-kicker { color: var(--text-4); font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
 .home-title { margin: 8px 0 0; font-size: 30px; line-height: 1.1; letter-spacing: -.8px; font-weight: 800; color: #fff; }

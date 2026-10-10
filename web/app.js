@@ -123,7 +123,7 @@
     'backgroundInput','localAudioInput',
     'loginModal','loginClose','loginDiscordBtn','loginTabs','tabLogin','tabRegister','localAuthForm',
     'authUsername','authPassword','authError','authSubmit','authSubmitText','continueAsGuest',
-    'waveCanvas','homeGreeting','homeContinue','homeContinueSection','homeRecommendations','recommendationsSection','recommendationsSub',
+    'homeGreeting','homeContinue','homeContinueSection','homeRecommendations','recommendationsSection','recommendationsSub',
     'homePopular','homePopularSection','homeArtists','artistsSection','homeAlbums','homeAlbumsSection',
     'searchFilters','resultsInfo','searchArtistsBlock','searchArtists','searchTracksBlock','searchTracksTitle','trackGrid',
     'artistBanner','artistBannerBg','artistHeroImage','artistHeroName','artistHeroMeta','artistTracks','artistAlbums','artistSingles',
@@ -3232,40 +3232,6 @@
     }
     function start() { resizeCanvas(); if (raf) cancelAnimationFrame(raf); draw(); }
     window.addEventListener('resize', resizeCanvas, { passive: true });
-    start();
-  })();
-
-  (function initWaves() {
-    const canvas = el.waveCanvas; if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    let W = 0, H = 0, raf = null, t = 0;
-    function resize() {
-      const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      W = rect.width; H = rect.height;
-      canvas.width = W * dpr; canvas.height = H * dpr;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-    function draw() {
-      ctx.clearRect(0, 0, W, H);
-      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#fff';
-      for (let i = 0; i < 4; i++) {
-        ctx.beginPath();
-        const amp = 16 + i * 8, speed = 0.008 + i * 0.003, yBase = H * 0.6 + i * 18;
-        for (let x = 0; x <= W; x += 6) {
-          const y = yBase + Math.sin(x * 0.006 + t * speed * 10 + i) * amp + Math.sin(x * 0.014 + t * speed * 6 + i * 2) * (amp * 0.4);
-          x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-        }
-        ctx.strokeStyle = accent;
-        ctx.globalAlpha = 0.05 + i * 0.03;
-        ctx.lineWidth = 2 - i * 0.3;
-        ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
-      t++; raf = requestAnimationFrame(draw);
-    }
-    function start() { resize(); if (raf) cancelAnimationFrame(raf); draw(); }
-    window.addEventListener('resize', resize);
     start();
   })();
 
