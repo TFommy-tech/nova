@@ -119,7 +119,7 @@
   [
     'sidebar','logoBtn','userSlot','avatarBtn','userMenu','userAvatar','userName','userTag','userLoginBtn','userLogoutBtn','openProfileBtn',
     'topbarBack','searchWrap','searchInput','searchSuggestions','sourceFilter',
-    'backgroundLayer','backgroundShade','ambientGlow','startupScreen','startupStatus',
+    'backgroundLayer','backgroundShade','ambientGlow','starsCanvas','startupScreen','startupStatus',
     'backgroundInput','localAudioInput',
     'loginModal','loginClose','loginDiscordBtn','loginTabs','tabLogin','tabRegister','localAuthForm',
     'authUsername','authPassword','authError','authSubmit','authSubmitText','continueAsGuest',
@@ -3139,6 +3139,68 @@
       loadWorkshop();
     } catch { notify('Не удалось опубликовать', 'error'); }
   }
+
+  // ── COSMIC OBSERVATORY (Этап 1): звёздное небо ──
+  // 150-200 звёзд, медленный дрейф (0.02-0.05 px/кадр), случайное мерцание,
+  // подкраска в --glow (меняется от обложки трека). Self-contained IIFE,
+  // не трогает логику плеера. Уважает prefers-reduced-motion.
+  (function initStars() {
+    const canvas = el.starsCanvas; if (!canvas) return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const ctx = canvas.getContext('2d');
+    let W = 0, H = 0, raf = null;
+    const stars = [];
+    const COUNT = 170;
+    function resize() {
+      const dpr = window.devicePixelRatio || 1;
+      const rect = canvas.getBoundingClientRect();
+      W = rect.width; H = rect.height;
+      canvas.width = Math.max(1, Math.floor(W * dpr)); canvas.height = Math.max(1, Math.floor(H * dpr));
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    function seed() {
+      stars.length = 0;
+      for (let i = 0; i < COUNT; i++) {
+        stars.push({
+          x: Math.random() * W, y: Math.random() * H,
+          r: Math.random() * 1.3 + 0.3,
+          vx: (Math.random() * 0.03 + 0.02) * (Math.random() < 0.5 ? -1 : 1),
+          vy: (Math.random() * 0.03 + 0.02) * (Math.random() < 0.5 ? -1 : 1),
+          base: Math.random() * 0.5 + 0.25,
+          tw: Math.random() * Math.PI * 2, twSpd: Math.random() * 0.02 + 0.005
+        });
+      }
+    }
+    function glowColor() {
+      // --glow = "r,g,b" (set by updateAmbientFromCover / theme). Fallback — лиловый.
+      const g = getComputedStyle(document.documentElement).getPropertyValue('--glow').trim();
+      const m = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)$/.exec(g);
+      return m ? { r: +m[1], g: +m[2], b: +m[3] } : { r: 168, g: 85, b: 247 };
+    }
+    let gc = glowColor(), gcT = 0;
+    function draw() {
+      ctx.clearRect(0, 0, W, H);
+      if (++gcT % 60 === 0) gc = glowColor(); // обновляем окраc раз в ~1 c
+      for (const s of stars) {
+        s.x += s.vx; s.y += s.vy; s.tw += s.twSpd;
+        if (s.x < -2) s.x = W + 2; else if (s.x > W + 2) s.x = -2;
+        if (s.y < -2) s.y = H + 2; else if (s.y > H + 2) s.y = -2;
+        const a = Math.max(0.05, Math.min(0.8, s.base + Math.sin(s.tw) * 0.3));
+        // лёгкий подмес цвета обложки к белому
+        const r = Math.round(255 + (gc.r - 255) * 0.35);
+        const gg = Math.round(255 + (gc.g - 255) * 0.35);
+        const b = Math.round(255 + (gc.b - 255) * 0.35);
+        ctx.beginPath();
+        ctx.fillStyle = `rgba(${r},${gg},${b},${a})`;
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      raf = requestAnimationFrame(draw);
+    }
+    function start() { resize(); seed(); if (raf) cancelAnimationFrame(raf); draw(); }
+    window.addEventListener('resize', () => { resize(); seed(); }, { passive: true });
+    start();
+  })();
 
   (function initWaves() {
     const canvas = el.waveCanvas; if (!canvas) return;

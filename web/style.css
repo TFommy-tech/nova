@@ -11,6 +11,21 @@ a { color: inherit; text-decoration: none; }
 kbd { font-family: inherit; }
 
 :root {
+  /* ── COSMIC OBSERVATORY (Этап 1): палитра + шрифты ── */
+  --cosmos-bg: #05060d;
+  --cosmos-bg-2: #0a0e1a;
+  --cosmos-deep: #02030a;
+  --star-white: #ffffff;
+  --star-dim: rgba(255,255,255,.35);
+  --star-glow: rgba(168, 85, 247, .6);
+  --planet-1: #7a5cff;
+  --planet-2: #22d3ee;
+  --planet-3: #f472b6;
+  --glass: rgba(255,255,255,.03);
+  --glass-2: rgba(255,255,255,.06);
+  --glass-border: rgba(255,255,255,.08);
+  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
   --bg: #0a0a0a; --bg-2: #111;
   --surface: #0d0d0d; --surface-2: #141414; --surface-3: #1a1a1a;
   --border: #1c1c1c; --border-2: #262626;
@@ -41,7 +56,7 @@ kbd { font-family: inherit; }
 html { font-family: var(--font-app);
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
   font-size: 14px; color: var(--text); background: var(--bg); }
-body { color: var(--text);
+body { color: var(--text); font-family: var(--font-display);
   /* дефолтный «затемнённый» фон-подложка; перекрывается фото из настроек через #backgroundLayer */
   background:
     radial-gradient(1100px 700px at 15% -10%, rgba(255,255,255,.06), transparent 60%),
@@ -104,6 +119,11 @@ html[data-accent="white"]   { --accent: #ffffff; --glow: 255,255,255; }
   opacity: 0; transition: opacity .8s var(--ease); }
 body.has-ambient .ambient-glow { opacity: 1; }
 body.has-background #backgroundLayer { opacity: 1; }
+/* COSMIC OBSERVATORY (Этап 1): звёздное небо. Между #backgroundLayer(z0) и
+   #backgroundShade(z1): звёзды поверх фото-фона, но под затемнением и UI.
+   Окрас звёзд читает --glow (см. initStars в app.js). pointer-events:none —
+   не перехватывает клики. */
+.stars-canvas { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .7; }
 
 .startup { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; background: #000;
   transition: opacity .6s var(--ease), visibility .6s var(--ease); }
