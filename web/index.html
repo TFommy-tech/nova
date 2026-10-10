@@ -163,30 +163,31 @@
             <div class="hero-star" aria-hidden="true">
               <svg viewBox="0 0 200 200" class="hero-star-svg">
                 <defs>
-                  <linearGradient id="starGrad" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="starGrad" x1="0.5" y1="0" x2="0.5" y2="1">
                     <stop offset="0%" stop-color="#ffffff"/>
-                    <stop offset="50%" stop-color="#ffffff"/>
+                    <stop offset="45%" stop-color="#ffffff"/>
                     <stop offset="100%" stop-color="#a855f7"/>
                   </linearGradient>
-                  <filter id="starGlow" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur stdDeviation="3" result="blur"/>
+                  <radialGradient id="starHalo" cx="0.5" cy="0.5" r="0.5">
+                    <stop offset="0%" stop-color="#a855f7" stop-opacity="0.55"/>
+                    <stop offset="60%" stop-color="#7a5cff" stop-opacity="0.15"/>
+                    <stop offset="100%" stop-color="#7a5cff" stop-opacity="0"/>
+                  </radialGradient>
+                  <filter id="starGlow" x="-100%" y="-100%" width="300%" height="300%">
+                    <feGaussianBlur stdDeviation="4" result="b1"/>
+                    <feGaussianBlur stdDeviation="10" result="b2"/>
                     <feMerge>
-                      <feMergeNode in="blur"/>
+                      <feMergeNode in="b2"/>
+                      <feMergeNode in="b1"/>
                       <feMergeNode in="SourceGraphic"/>
                     </feMerge>
                   </filter>
                 </defs>
-                <path class="star-sparkle"
-                      d="M100 15 Q102 85 130 100 Q102 115 100 185 Q98 115 70 100 Q98 85 100 15 Z"
-                      fill="url(#starGrad)" filter="url(#starGlow)"/>
-                <path class="star-arc star-arc-left"
-                      d="M 30 120 Q 20 60 80 40"
-                      fill="none" stroke="#ffffff" stroke-width="1.5"
-                      stroke-linecap="round" filter="url(#starGlow)"/>
-                <path class="star-arc star-arc-right"
-                      d="M 170 80 Q 180 140 120 160"
-                      fill="none" stroke="#ffffff" stroke-width="1.5"
-                      stroke-linecap="round" filter="url(#starGlow)"/>
+                <circle cx="100" cy="100" r="95" fill="url(#starHalo)"/>
+                <path class="star-sparkle" d="M100 5 C 104 60, 108 92, 195 100 C 108 108, 104 140, 100 195 C 96 140, 92 108, 5 100 C 92 92, 96 60, 100 5 Z" fill="url(#starGrad)" filter="url(#starGlow)"/>
+                <path class="star-core" d="M100 30 C 102 75, 104 96, 170 100 C 104 104, 102 125, 100 170 C 98 125, 96 104, 30 100 C 96 96, 98 75, 100 30 Z" fill="#ffffff" opacity="0.35" filter="url(#starGlow)"/>
+                <path class="star-arc star-arc-left" d="M 55 40 A 90 90 0 0 0 55 160" fill="none" stroke="url(#starGrad)" stroke-width="2.2" stroke-linecap="round" opacity="0.75" filter="url(#starGlow)"/>
+                <path class="star-arc star-arc-right" d="M 145 40 A 90 90 0 0 1 145 160" fill="none" stroke="url(#starGrad)" stroke-width="2.2" stroke-linecap="round" opacity="0.75" filter="url(#starGlow)"/>
               </svg>
             </div>
           </div>

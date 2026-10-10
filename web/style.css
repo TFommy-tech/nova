@@ -270,7 +270,7 @@ body.has-background #backgroundLayer { opacity: 1; }
   position: absolute;
   right: 8%; top: 50%;
   transform: translateY(-50%);
-  width: 340px; height: 340px;
+  width: 260px; height: 260px;
   pointer-events: none;
   z-index: 0;
 }
@@ -280,18 +280,19 @@ body.has-background #backgroundLayer { opacity: 1; }
   animation: starPulse 4s ease-in-out infinite;
   transform-origin: center;
 }
-.star-sparkle { transform-origin: 100px 100px; animation: starTwinkle 3s ease-in-out infinite; }
-.star-arc { opacity: .55; }
+.star-sparkle { transform-origin: 100px 100px; animation: starTwinkle 3.5s ease-in-out infinite; }
+.star-core { transform-origin: 100px 100px; animation: starCore 4s ease-in-out infinite; }
 .star-arc-left { transform-origin: 100px 100px; animation: arcFloatLeft 6s ease-in-out infinite; }
 .star-arc-right { transform-origin: 100px 100px; animation: arcFloatRight 6s ease-in-out infinite; }
 
 @keyframes starPulse { 0%, 100% { transform: scale(1); opacity: .9; } 50% { transform: scale(1.04); opacity: 1; } }
 @keyframes starTwinkle { 0%, 100% { opacity: .85; } 50% { opacity: 1; } }
+@keyframes starCore { 0%, 100% { opacity: .35; transform: scale(1); } 50% { opacity: .7; transform: scale(1.04); } }
 @keyframes arcFloatLeft { 0%, 100% { transform: translate(0,0) rotate(0); } 50% { transform: translate(-3px,-3px) rotate(-2deg); } }
 @keyframes arcFloatRight { 0%, 100% { transform: translate(0,0) rotate(0); } 50% { transform: translate(3px,3px) rotate(2deg); } }
 
 @media (max-width: 760px) {
-  .hero-star { width: 200px; height: 200px; right: 4%; opacity: .65; }
+  .hero-star { width: 170px; height: 170px; right: 4%; opacity: .75; }
 }
 .home-section { margin-top: 26px; animation: fadeUp .4s var(--ease-out) both; }
 .home-section:first-child { margin-top: 0; }
