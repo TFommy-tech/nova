@@ -3149,27 +3149,34 @@
     if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const ctx = canvas.getContext('2d');
     let W = 0, H = 0, raf = null;
-    const stars = [];
-    const COUNT = 170;
-    function resize() {
+    let stars = [];
+    // Плотность из площади экрана, зажатая в диапазон 150-200 звёзд (Этап 1-фикс).
+    function starCount() {
+      return Math.max(150, Math.min(200, Math.floor((window.innerWidth * window.innerHeight) / 8000)));
+    }
+    // Берём размеры из окна (НЕ из getBoundingClientRect — на момент init layout
+    // ещё не применён и canvas отдаёт дефолт 300×150, из-за чего звёзды кучковались
+    // в углу). Явно задаём CSS-размер и буфер под DPR, затем ПЕРЕсоздаём звёзды.
+    function resizeCanvas() {
       const dpr = window.devicePixelRatio || 1;
-      const rect = canvas.getBoundingClientRect();
-      W = rect.width; H = rect.height;
-      canvas.width = Math.max(1, Math.floor(W * dpr)); canvas.height = Math.max(1, Math.floor(H * dpr));
+      W = window.innerWidth; H = window.innerHeight;
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      canvas.width = Math.floor(W * dpr);
+      canvas.height = Math.floor(H * dpr);
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      seed();
     }
     function seed() {
-      stars.length = 0;
-      for (let i = 0; i < COUNT; i++) {
-        stars.push({
-          x: Math.random() * W, y: Math.random() * H,
-          r: Math.random() * 1.3 + 0.3,
-          vx: (Math.random() * 0.03 + 0.02) * (Math.random() < 0.5 ? -1 : 1),
-          vy: (Math.random() * 0.03 + 0.02) * (Math.random() < 0.5 ? -1 : 1),
-          base: Math.random() * 0.5 + 0.25,
-          tw: Math.random() * Math.PI * 2, twSpd: Math.random() * 0.02 + 0.005
-        });
-      }
+      const n = starCount();
+      stars = Array.from({ length: n }, () => ({
+        x: Math.random() * W, y: Math.random() * H,
+        r: Math.random() * 1.2 + 0.3,
+        vx: (Math.random() * 0.03 + 0.02) * (Math.random() < 0.5 ? -1 : 1),
+        vy: (Math.random() * 0.03 + 0.02) * (Math.random() < 0.5 ? -1 : 1),
+        base: Math.random() * 0.5 + 0.25,
+        tw: Math.random() * Math.PI * 2, twSpd: Math.random() * 0.02 + 0.005
+      }));
     }
     function glowColor() {
       // --glow = "r,g,b" (set by updateAmbientFromCover / theme). Fallback — лиловый.
@@ -3197,8 +3204,8 @@
       }
       raf = requestAnimationFrame(draw);
     }
-    function start() { resize(); seed(); if (raf) cancelAnimationFrame(raf); draw(); }
-    window.addEventListener('resize', () => { resize(); seed(); }, { passive: true });
+    function start() { resizeCanvas(); if (raf) cancelAnimationFrame(raf); draw(); }
+    window.addEventListener('resize', resizeCanvas, { passive: true });
     start();
   })();
 
