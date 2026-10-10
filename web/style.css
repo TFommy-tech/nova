@@ -264,6 +264,35 @@ body.has-background #backgroundLayer { opacity: 1; }
 .home-kicker { color: var(--text-4); font-size: 10px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
 .home-title { margin: 8px 0 0; font-size: 30px; line-height: 1.1; letter-spacing: -.8px; font-weight: 800; color: #fff; }
 .home-sub { margin-top: 6px; color: var(--text-3); font-size: 12px; }
+
+/* HERO-STAR (NOVA sparkle) */
+.hero-star {
+  position: absolute;
+  right: 8%; top: 50%;
+  transform: translateY(-50%);
+  width: 340px; height: 340px;
+  pointer-events: none;
+  z-index: 0;
+}
+.hero-star-svg {
+  width: 100%; height: 100%;
+  overflow: visible;
+  animation: starPulse 4s ease-in-out infinite;
+  transform-origin: center;
+}
+.star-sparkle { transform-origin: 100px 100px; animation: starTwinkle 3s ease-in-out infinite; }
+.star-arc { opacity: .55; }
+.star-arc-left { transform-origin: 100px 100px; animation: arcFloatLeft 6s ease-in-out infinite; }
+.star-arc-right { transform-origin: 100px 100px; animation: arcFloatRight 6s ease-in-out infinite; }
+
+@keyframes starPulse { 0%, 100% { transform: scale(1); opacity: .9; } 50% { transform: scale(1.04); opacity: 1; } }
+@keyframes starTwinkle { 0%, 100% { opacity: .85; } 50% { opacity: 1; } }
+@keyframes arcFloatLeft { 0%, 100% { transform: translate(0,0) rotate(0); } 50% { transform: translate(-3px,-3px) rotate(-2deg); } }
+@keyframes arcFloatRight { 0%, 100% { transform: translate(0,0) rotate(0); } 50% { transform: translate(3px,3px) rotate(2deg); } }
+
+@media (max-width: 760px) {
+  .hero-star { width: 200px; height: 200px; right: 4%; opacity: .65; }
+}
 .home-section { margin-top: 26px; animation: fadeUp .4s var(--ease-out) both; }
 .home-section:first-child { margin-top: 0; }
 .home-section-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; gap: 12px; }

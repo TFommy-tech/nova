@@ -160,6 +160,35 @@
               <h1 id="homeGreeting" class="home-title">Добро пожаловать в NOVA</h1>
               <div class="home-sub">Музыка, которую хочется включать</div>
             </div>
+            <div class="hero-star" aria-hidden="true">
+              <svg viewBox="0 0 200 200" class="hero-star-svg">
+                <defs>
+                  <linearGradient id="starGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#ffffff"/>
+                    <stop offset="50%" stop-color="#ffffff"/>
+                    <stop offset="100%" stop-color="#a855f7"/>
+                  </linearGradient>
+                  <filter id="starGlow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feGaussianBlur stdDeviation="3" result="blur"/>
+                    <feMerge>
+                      <feMergeNode in="blur"/>
+                      <feMergeNode in="SourceGraphic"/>
+                    </feMerge>
+                  </filter>
+                </defs>
+                <path class="star-sparkle"
+                      d="M100 15 Q102 85 130 100 Q102 115 100 185 Q98 115 70 100 Q98 85 100 15 Z"
+                      fill="url(#starGrad)" filter="url(#starGlow)"/>
+                <path class="star-arc star-arc-left"
+                      d="M 30 120 Q 20 60 80 40"
+                      fill="none" stroke="#ffffff" stroke-width="1.5"
+                      stroke-linecap="round" filter="url(#starGlow)"/>
+                <path class="star-arc star-arc-right"
+                      d="M 170 80 Q 180 140 120 160"
+                      fill="none" stroke="#ffffff" stroke-width="1.5"
+                      stroke-linecap="round" filter="url(#starGlow)"/>
+              </svg>
+            </div>
           </div>
           <div class="home-section" id="homeContinueSection">
             <div class="home-section-head"><h2>Продолжить слушать</h2><span>Недавнее</span></div>
