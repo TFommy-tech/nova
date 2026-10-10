@@ -133,7 +133,7 @@
     'favoritesPlay','favoritesShuffle','clearFavorites','favoritesList',
     'createPlaylistBtn','playlistsGrid',
     'playlistHeroImage','playlistHeroName','playlistHeroMeta','playlistPlay','playlistShuffle','playlistDelete','playlistTracks',
-    'lyricsPanel','lyricsClose','lyricsInlineContent','lyricsBackdrop','lyricsOverlayInner','lyricsVideoToggle','lyricsVideoLayer','lyricsVideoIframe','videoPickerModal','videoPickerBackdrop','videoSearchInput','videoSearchBtn','videoSearchResults','videoPickerCancel','videoPickerEmbed','videoPickerClose','bigCoverWrap','bigCover',
+    'lyricsPanel','lyricsClose','lyricsInlineContent','lyricsBackdrop','lyricsOverlayInner','lyricsVideoToggle','lyricsVideoLayer','lyricsVideoIframe','lyricsBg','lyricsCover','lyricsTitle','lyricsArtist','lyricsPrevBtn','lyricsPlayBtn','lyricsNextBtn','videoPickerModal','videoPickerBackdrop','videoSearchInput','videoSearchBtn','videoSearchResults','videoPickerCancel','videoPickerEmbed','videoPickerClose','bigCoverWrap','bigCover',
     'nowTitle','nowArtist','nowChips','progress','currentTime','duration',
     'downloadBtn','repeatBtn','prevBtn','largePlayBtn','largePlayIcon','nextBtn','shuffleBtn','favoriteBtn','queueToggleBtn','moreBtn',
     'volumeLarge','equalizerBtn','similarBtn',
@@ -1459,19 +1459,15 @@
     const playing = !!state.currentTrack && !el.audio.paused;
     const loading = userIntent === 'loading';
     [el.miniPlay, el.largePlayBtn].forEach(b => b?.classList.toggle('loading', loading));
-    if (!el.miniPlayIcon || !el.largePlayIcon) return;
-    if (loading) {
-      const svg = '<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="22 22"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur=".9s" repeatCount="indefinite"/></circle>';
-      el.miniPlayIcon.innerHTML = svg; el.largePlayIcon.innerHTML = svg;
-      return;
-    }
-    if (playing) {
-      const svg = '<rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/>';
-      el.miniPlayIcon.innerHTML = svg; el.largePlayIcon.innerHTML = svg;
-    } else {
-      const svg = '<path d="M8 5v14l11-7z"/>';
-      el.miniPlayIcon.innerHTML = svg; el.largePlayIcon.innerHTML = svg;
-    }
+    const inner = loading
+      ? '<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2" stroke-dasharray="22 22"><animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur=".9s" repeatCount="indefinite"/></circle>'
+      : playing
+        ? '<rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/>'
+        : '<path d="M8 5v14l11-7z"/>';
+    if (el.miniPlayIcon) el.miniPlayIcon.innerHTML = inner;
+    if (el.largePlayIcon) el.largePlayIcon.innerHTML = inner;
+    // Кнопка play в полноэкранном оверлее текста — синхронизируем с реальным состоянием.
+    if (el.lyricsPlayBtn) el.lyricsPlayBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" stroke="none">${inner}</svg>`;
   }
   function updateMiniPlayer() {
     const t = state.currentTrack;
@@ -2235,16 +2231,24 @@
   function openLyrics() {
     if (state.view !== 'player') showView('player');
     if (!state.currentTrack) { if (state.view !== 'player') showView('player'); notify('Сначала выберите трек'); return; }
+    const t = state.currentTrack;
+    // Заполняем боковую колонку и фон размытой обложкой (иначе пустой чёрный оверлей).
+    const cover = customCoverFor(t) || coverFor(t) || placeholderCover();
+    if (el.lyricsCover && el.lyricsCover.src !== cover) el.lyricsCover.src = cover;
+    if (el.lyricsBg && el.lyricsBg.getAttribute('src') !== cover) el.lyricsBg.src = cover;
+    if (el.lyricsTitle) el.lyricsTitle.textContent = t.title || 'Без названия';
+    if (el.lyricsArtist) el.lyricsArtist.innerHTML = artistsHtml(t.artist || '');
     if (el.lyricsPanel.classList.contains('hidden')) {
       el.lyricsPanel.classList.remove('hidden');
       el.lyricsPanel.setAttribute('aria-hidden', 'false');
-      const key = trackKey(state.currentTrack);
+      const key = trackKey(t);
       if (el.lyricsInlineContent.dataset.trackKey !== key || el.lyricsInlineContent.dataset.loaded !== '1') {
-        loadLyrics(state.currentTrack);
+        loadLyrics(t);
       } else {
         highlightLyrics();
       }
     }
+    updatePlayButtons();
     try { el.lyricsPanel.scrollTop = 0; } catch {}
   }
   function closeLyrics() {
