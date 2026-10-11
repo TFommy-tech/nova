@@ -2144,8 +2144,11 @@
     const rows = box.querySelectorAll('.lyrics-line');
     rows.forEach((r, i) => r.classList.toggle('active', i === idx));
     if (idx >= 0 && rows[idx]) {
-      const target = rows[idx].offsetTop - box.clientHeight / 2 + rows[idx].clientHeight / 2;
-      try { box.scrollTo({ top: Math.max(0, target), behavior: 'smooth' }); } catch {}
+      const row = rows[idx];
+      const boxRect = box.getBoundingClientRect();
+      const rowRect = row.getBoundingClientRect();
+      const delta = rowRect.top - boxRect.top - (box.clientHeight / 2) + (row.clientHeight / 2);
+      try { box.scrollTo({ top: box.scrollTop + delta, behavior: 'smooth' }); } catch {}
     }
   }
   async function loadLyrics(track, force) {
@@ -2199,7 +2202,10 @@
           div.dataset.time = String(l.t); div.dataset.index = String(i);
           div.textContent = l.text;
           div.addEventListener('click', () => {
-            if (Number.isFinite(el.audio.duration)) el.audio.currentTime = l.t;
+            const t = Number(div.dataset.time);
+            if (!Number.isFinite(t)) return;
+            el.audio.currentTime = t;
+            if (el.audio.paused) el.audio.play().catch(() => {});
             highlightLyrics();
           });
           box.appendChild(div);
