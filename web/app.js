@@ -2112,22 +2112,28 @@
     el.settingsView.setAttribute('aria-hidden', 'true');
   }
 
-  let lyricsTimer = null, lyricsLines = [], lyricsActiveIndex = -1, lyricsRetried = false, lyricsPrevWordRow = null;
+  let lyricsTimer = null, lyricsLines = [], lyricsActiveIndex = -1, lyricsRetried = false, lyricsPrevWordRow = null, lyricsOffsetMs = null;
 
   function parseLrc(lrc) {
-    if (!lrc) return [];
+    if (!lrc) return { lines: [], offsetMs: null };
     const out = [];
+    let offsetMs = null;
     const re = /\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\](.*)$/;
+    const offRe = /\[offset:\s*([+-]?\d+)\s*\]/i;
     for (const raw of String(lrc).split(/\r?\n/)) {
+      const om = raw.match(offRe);
+      if (om) offsetMs = Number(om[1]);
       const m = raw.match(re); if (!m) continue;
       const min = Number(m[1]), sec = Number(m[2]);
       const msPart = (m[3] || '0').padEnd(3, '0').slice(0, 3);
-      const t = min * 60 + sec + Number(msPart) / 1000;
+      const rawTime = min * 60 + sec + Number(msPart) / 1000;
       const text = String(m[4] || '').trim();
-      if (text) out.push({ t, text });
+      if (text) out.push({ rawTime, text });
     }
-    out.sort((a, b) => a.t - b.t);
-    return out;
+    const off = offsetMs || 0;
+    const lines = out.map(l => ({ rawTime: l.rawTime, t: l.rawTime - off / 1000, text: l.text }));
+    lines.sort((a, b) => a.t - b.t);
+    return { lines, offsetMs };
   }
   function clearLyricsSync() {
     if (lyricsTimer) { clearInterval(lyricsTimer); lyricsTimer = null; }
@@ -2169,7 +2175,8 @@
           linesLen: lyricsLines.length,
           linesIdxTime: lyricsLines[idx] ? lyricsLines[idx].t : null,
           rowDatasetTime: activeRow ? activeRow.dataset.time : null,
-          rowDatasetIndex: activeRow ? activeRow.dataset.index : null
+          rowDatasetIndex: activeRow ? activeRow.dataset.index : null,
+          lyricsOffsetMs
         });
       }
       words.forEach((w, wi) => {
@@ -2237,9 +2244,11 @@
         return;
       }
       const synced = d.syncedLyrics || '', plain = d.plainLyrics || '';
-      let lines = synced ? parseLrc(synced) : [];
+      let lines = [], offsetMs = null;
+      if (synced) { const p = parseLrc(synced); lines = p.lines; offsetMs = p.offsetMs; }
       if (lines.length) {
         lyricsLines = lines;
+        lyricsOffsetMs = offsetMs;
         box.innerHTML = '';
         lines.forEach((l, i) => {
           const div = document.createElement('div');
@@ -2261,6 +2270,9 @@
         if (window.__karaokeDebug !== false) {
           console.log('[KARAOKE INIT]', {
             linesLen: lyricsLines.length,
+            offset: offsetMs,
+            firstLineRawT: lyricsLines[0] ? lyricsLines[0].rawTime : null,
+            firstLineFinalT: lyricsLines[0] ? lyricsLines[0].t : null,
             firstLine: lyricsLines[0],
             secondLine: lyricsLines[1],
             domRowsCount: box.querySelectorAll('.lyrics-line').length,
