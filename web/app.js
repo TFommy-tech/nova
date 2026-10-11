@@ -2112,7 +2112,7 @@
     el.settingsView.setAttribute('aria-hidden', 'true');
   }
 
-  let lyricsTimer = null, lyricsLines = [], lyricsActiveIndex = -1, lyricsRetried = false;
+  let lyricsTimer = null, lyricsLines = [], lyricsActiveIndex = -1, lyricsRetried = false, lyricsPrevWordRow = null;
 
   function parseLrc(lrc) {
     if (!lrc) return [];
@@ -2131,7 +2131,7 @@
   }
   function clearLyricsSync() {
     if (lyricsTimer) { clearInterval(lyricsTimer); lyricsTimer = null; }
-    lyricsLines = []; lyricsActiveIndex = -1;
+    lyricsLines = []; lyricsActiveIndex = -1; lyricsPrevWordRow = null;
   }
   function highlightLyrics() {
     if (!lyricsLines.length) return;
@@ -2139,15 +2139,38 @@
     const t = el.audio.currentTime || 0;
     let idx = -1;
     for (let i = 0; i < lyricsLines.length; i++) { if (lyricsLines[i].t <= t) idx = i; else break; }
+    const rows = box.querySelectorAll('.lyrics-line');
+    const activeRow = idx >= 0 ? rows[idx] : null;
+    if (lyricsPrevWordRow && lyricsPrevWordRow !== activeRow) {
+      lyricsPrevWordRow.querySelectorAll('.word').forEach(w => { w.classList.remove('lit'); w.style.filter = ''; });
+    }
+    if (activeRow) {
+      const startT = Number(activeRow.dataset.time);
+      const dur = Number(activeRow.dataset.duration) || 1;
+      const progress = Math.min(1, Math.max(0, (t - startT) / dur));
+      const words = activeRow.querySelectorAll('.word');
+      const litWords = progress * words.length;
+      words.forEach((w, wi) => {
+        if (wi < Math.floor(litWords)) {
+          w.classList.add('lit');
+          w.style.filter = '';
+        } else if (wi < litWords) {
+          w.classList.add('lit');
+          w.style.filter = `brightness(${0.6 + (litWords - wi) * 0.4})`;
+        } else {
+          w.classList.remove('lit');
+          w.style.filter = '';
+        }
+      });
+    }
+    lyricsPrevWordRow = activeRow;
     if (idx === lyricsActiveIndex) return;
     lyricsActiveIndex = idx;
-    const rows = box.querySelectorAll('.lyrics-line');
     rows.forEach((r, i) => r.classList.toggle('active', i === idx));
-    if (idx >= 0 && rows[idx]) {
-      const row = rows[idx];
+    if (activeRow) {
       const boxRect = box.getBoundingClientRect();
-      const rowRect = row.getBoundingClientRect();
-      const delta = rowRect.top - boxRect.top - (box.clientHeight / 2) + (row.clientHeight / 2);
+      const rowRect = activeRow.getBoundingClientRect();
+      const delta = rowRect.top - boxRect.top - (box.clientHeight / 2) + (activeRow.clientHeight / 2);
       try { box.scrollTo({ top: box.scrollTop + delta, behavior: 'smooth' }); } catch {}
     }
   }
