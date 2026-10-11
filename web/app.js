@@ -2160,7 +2160,16 @@
           wordCount: words.length,
           lineIndex: activeRow.dataset.index,
           lineDuration: activeRow.dataset.duration,
-          firstWord: words[0] ? { cls: words[0].className, html: words[0].outerHTML.slice(0, 48) } : null
+          firstWord: words[0] ? { cls: words[0].className, html: words[0].outerHTML.slice(0, 48) } : null,
+          paused: el.audio.paused,
+          readyState: el.audio.readyState,
+          audioDur: Number.isFinite(el.audio.duration) ? el.audio.duration.toFixed(2) : 'Inf',
+          idx,
+          rowsLen: rows.length,
+          linesLen: lyricsLines.length,
+          linesIdxTime: lyricsLines[idx] ? lyricsLines[idx].t : null,
+          rowDatasetTime: activeRow ? activeRow.dataset.time : null,
+          rowDatasetIndex: activeRow ? activeRow.dataset.index : null
         });
       }
       words.forEach((w, wi) => {
@@ -2249,6 +2258,16 @@
           });
           box.appendChild(div);
         });
+        if (window.__karaokeDebug !== false) {
+          console.log('[KARAOKE INIT]', {
+            linesLen: lyricsLines.length,
+            firstLine: lyricsLines[0],
+            secondLine: lyricsLines[1],
+            domRowsCount: box.querySelectorAll('.lyrics-line').length,
+            firstDomTime: box.querySelector('.lyrics-line')?.dataset.time,
+            firstDomIdx: box.querySelector('.lyrics-line')?.dataset.index
+          });
+        }
         highlightLyrics();
         lyricsTimer = setInterval(highlightLyrics, 150);
         box.dataset.loaded = '1';
