@@ -2200,7 +2200,10 @@
           const div = document.createElement('div');
           div.className = 'lyrics-line';
           div.dataset.time = String(l.t); div.dataset.index = String(i);
-          div.textContent = l.text;
+          div.dataset.duration = String(i < lines.length - 1 ? (lines[i + 1].t - l.t) : 3);
+          div.innerHTML = l.text.split(' ').map((w, wi) =>
+            `<span class="word" data-word="${wi}">${escapeHtml(w)}</span>`
+          ).join(' ');
           div.addEventListener('click', () => {
             const t = Number(div.dataset.time);
             if (!Number.isFinite(t)) return;
