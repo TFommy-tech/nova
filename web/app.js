@@ -133,7 +133,7 @@
     'favoritesPlay','favoritesShuffle','clearFavorites','favoritesList',
     'createPlaylistBtn','playlistsGrid',
     'playlistHeroImage','playlistHeroName','playlistHeroMeta','playlistPlay','playlistShuffle','playlistDelete','playlistTracks',
-    'lyricsPanel','lyricsClose','lyricsInlineContent','lyricsBackdrop','lyricsOverlayInner','lyricsVideoToggle','lyricsVideoLayer','lyricsVideoIframe','lyricsBg','lyricsCover','lyricsTitle','lyricsArtist','lyricsPrevBtn','lyricsPlayBtn','lyricsNextBtn','videoPickerModal','videoPickerBackdrop','videoSearchInput','videoSearchBtn','videoSearchResults','videoPickerCancel','videoPickerEmbed','videoPickerClose','bigCoverWrap','bigCover',
+    'lyricsPanel','lyricsClose','lyricsInlineContent','lyricsBackdrop','lyricsOverlayInner','lyricsSync','lyricsSyncVal','lyricsSyncReset','lyricsVideoToggle','lyricsVideoLayer','lyricsVideoIframe','lyricsBg','lyricsCover','lyricsTitle','lyricsArtist','lyricsPrevBtn','lyricsPlayBtn','lyricsNextBtn','videoPickerModal','videoPickerBackdrop','videoSearchInput','videoSearchBtn','videoSearchResults','videoPickerCancel','videoPickerEmbed','videoPickerClose','bigCoverWrap','bigCover',
     'nowTitle','nowArtist','nowChips','progress','currentTime','duration',
     'downloadBtn','repeatBtn','prevBtn','largePlayBtn','largePlayIcon','nextBtn','shuffleBtn','favoriteBtn','queueToggleBtn','moreBtn',
     'volumeLarge','equalizerBtn','similarBtn',
@@ -2112,7 +2112,7 @@
     el.settingsView.setAttribute('aria-hidden', 'true');
   }
 
-  let lyricsTimer = null, lyricsLines = [], lyricsActiveIndex = -1, lyricsRetried = false, lyricsPrevWordRow = null, lyricsOffsetMs = null;
+  let lyricsTimer = null, lyricsLines = [], lyricsActiveIndex = -1, lyricsRetried = false, lyricsPrevWordRow = null, lyricsOffsetMs = null, lyricsManualOffset = 0, lyricsOffsetStorageKey = '';
 
   function parseLrc(lrc) {
     if (!lrc) return { lines: [], offsetMs: null };
@@ -2138,6 +2138,27 @@
   function clearLyricsSync() {
     if (lyricsTimer) { clearInterval(lyricsTimer); lyricsTimer = null; }
     lyricsLines = []; lyricsActiveIndex = -1; lyricsPrevWordRow = null;
+  }
+  function lyricsOffsetKey(track) { return 'lyrics_offset_' + trackKey(track); }
+  function updateLyricsSyncUi() {
+    const v = lyricsManualOffset || 0;
+    const sign = v > 0 ? '+' : (v < 0 ? '−' : '');
+    if (el.lyricsSyncVal) el.lyricsSyncVal.textContent = sign + Math.abs(v).toFixed(1) + 'с';
+  }
+  function persistLyricsManualOffset() {
+    if (!lyricsOffsetStorageKey) return;
+    try { localStorage.setItem(lyricsOffsetStorageKey, String(lyricsManualOffset)); } catch {}
+  }
+  function applyLyricsManualOffset() {
+    const box = el.lyricsInlineContent;
+    lyricsLines.forEach((l, i) => {
+      if (l.baseT == null) l.baseT = l.t;
+      l.t = l.baseT - lyricsManualOffset;
+      const row = box ? box.querySelector('.lyrics-line[data-index="' + i + '"]') : null;
+      if (row) row.dataset.time = String(l.t);
+    });
+    updateLyricsSyncUi();
+    highlightLyrics();
   }
   function highlightLyrics() {
     if (!lyricsLines.length) return;
@@ -2212,6 +2233,9 @@
     box.dataset.trackKey = trackKey(track);
     box.dataset.loaded = '0';
     box.innerHTML = '<div class="lyrics-placeholder">Ищу текст…</div>';
+    lyricsOffsetStorageKey = lyricsOffsetKey(track);
+    lyricsManualOffset = Number(localStorage.getItem(lyricsOffsetStorageKey)) || 0;
+    updateLyricsSyncUi();
 
     // Баг A: слать СЫРОЕ название — скобки «(w/ asteria & kets4eki)» нужны серверу
     // для извлечения соавторов и точного /api/get у LRCLIB; чистку делает сервер.
@@ -2253,6 +2277,8 @@
         lines.forEach((l, i) => {
           const div = document.createElement('div');
           div.className = 'lyrics-line';
+          l.baseT = l.t;
+          l.t = l.baseT - lyricsManualOffset;
           div.dataset.time = String(l.t); div.dataset.index = String(i);
           div.dataset.duration = String(i < lines.length - 1 ? (lines[i + 1].t - l.t) : 3);
           div.innerHTML = l.text.split(' ').map((w, wi) =>
@@ -2271,6 +2297,7 @@
           console.log('[KARAOKE INIT]', {
             linesLen: lyricsLines.length,
             offset: offsetMs,
+            lyricsManualOffset,
             firstLineRawT: lyricsLines[0] ? lyricsLines[0].rawTime : null,
             firstLineFinalT: lyricsLines[0] ? lyricsLines[0].t : null,
             firstLine: lyricsLines[0],
@@ -3613,6 +3640,20 @@
   });
   on(el.lyricsBackdrop, 'click', () => closeLyrics());
   on(el.lyricsClose, 'click', () => closeLyrics());
+  on(el.lyricsSync, 'click', e => {
+    const btn = e.target.closest('.lyrics-sync-btn');
+    if (!btn) return;
+    const delta = Number(btn.dataset.delta);
+    if (!Number.isFinite(delta)) return;
+    lyricsManualOffset = (lyricsManualOffset || 0) + delta;
+    persistLyricsManualOffset();
+    applyLyricsManualOffset();
+  });
+  on(el.lyricsSyncReset, 'click', () => {
+    lyricsManualOffset = 0;
+    persistLyricsManualOffset();
+    applyLyricsManualOffset();
+  });
   on(el.lyricsPlayBtn, 'click', togglePlay);
   on(el.lyricsPrevBtn, 'click', playPrev);
   on(el.lyricsNextBtn, 'click', playNext);

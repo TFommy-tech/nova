@@ -536,6 +536,39 @@ body.has-background #backgroundLayer { opacity: 1; }
 .lyrics-close { position: absolute; top: 12px; right: 12px; z-index: 6; }
 .lyrics-close svg { width: 19px; height: 19px; }
 
+/* Панель ручной синхронизации лирики (offset не дал LRCLIB — калибруем вручную) */
+.lyrics-sync {
+  position: absolute; top: 12px; right: 64px; z-index: 6;
+  display: flex; align-items: center; gap: 4px; padding: 5px 7px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.05);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,.1);
+}
+.lyrics-sync-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 9px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.04); color: rgba(255,255,255,.85);
+  font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+  cursor: pointer; transition: background .2s ease, border-color .2s ease, color .2s ease;
+}
+.lyrics-sync-btn:hover { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.35); color: #fff; }
+.lyrics-sync-val {
+  min-width: 60px; text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px; color: #fff; font-variant-numeric: tabular-nums;
+}
+.lyrics-sync-reset {
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.04); color: rgba(255,255,255,.7);
+  font-size: 13px; line-height: 1; cursor: pointer;
+  transition: background .2s ease, border-color .2s ease, color .2s ease;
+}
+.lyrics-sync-reset:hover { background: rgba(255,120,120,.22); border-color: rgba(255,120,120,.45); color: #fff; }
+
 /* Видос-задний план (Spotify-Canvas style) */
 .lyrics-video-layer { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
 .lyrics-video-layer iframe { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .55; pointer-events: none; transition: opacity .6s ease; }
@@ -1335,6 +1368,11 @@ html[data-theme="light"] .lyrics-video-toggle { background: rgba(0,0,0,.08); bor
 html[data-theme="light"] .lyrics-video-toggle:hover { background: rgba(0,0,0,.2); }
 html[data-theme="light"] .lyrics-close { background: rgba(0,0,0,.08); border-color: rgba(0,0,0,.2); color: #0a0a0a; }
 html[data-theme="light"] .lyrics-close:hover { background: rgba(0,0,0,.2); }
+html[data-theme="light"] .lyrics-sync { background: rgba(0,0,0,.05); border-color: rgba(0,0,0,.12); }
+html[data-theme="light"] .lyrics-sync-btn { background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.14); color: rgba(0,0,0,.8); }
+html[data-theme="light"] .lyrics-sync-btn:hover { background: rgba(0,0,0,.16); color: #0a0a0a; }
+html[data-theme="light"] .lyrics-sync-val { color: #0a0a0a; }
+html[data-theme="light"] .lyrics-sync-reset { background: rgba(0,0,0,.04); border-color: rgba(0,0,0,.14); color: rgba(0,0,0,.6); }
 html[data-theme="light"] .lyrics-line { color: rgba(60,60,60,.45); }
 html[data-theme="light"] .lyrics-line:hover { color: rgba(60,60,60,.75); }
 html[data-theme="light"] .lyrics-line.active { color: #0a0a0a; text-shadow: 0 2px 12px rgba(0,0,0,.85), 0 0 40px rgba(0,0,0,.25); }
@@ -1372,6 +1410,10 @@ html[data-theme="light"] .nova-cursor-ring.hover { border-color: rgba(0,0,0,.7);
   .lyrics-video-layer iframe { opacity: .45; }
   .lyrics-close { top: 8px; right: 8px; width: 36px; height: 36px; }
   .lyrics-close svg { width: 16px; height: 16px; }
+  .lyrics-sync { top: 8px; right: 52px; gap: 3px; padding: 4px 5px; }
+  .lyrics-sync-btn { width: 28px; height: 28px; font-size: 10px; }
+  .lyrics-sync-val { min-width: 48px; font-size: 11px; }
+  .lyrics-sync-reset { width: 24px; height: 24px; }
   .settings-grid { grid-template-columns: 1fr; }
   .profile-card { max-height: 92vh; }
   .profile-stats { grid-template-columns: repeat(2, 1fr); }
