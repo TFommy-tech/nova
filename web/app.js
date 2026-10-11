@@ -2150,6 +2150,19 @@
       const progress = Math.min(1, Math.max(0, (t - startT) / dur));
       const words = activeRow.querySelectorAll('.word');
       const litWords = progress * words.length;
+      if (window.__karaokeDebug !== false) {
+        console.log('[KARAOKE]', {
+          t: t.toFixed(2),
+          startT,
+          dur,
+          progress: progress.toFixed(3),
+          litWords: litWords.toFixed(2),
+          wordCount: words.length,
+          lineIndex: activeRow.dataset.index,
+          lineDuration: activeRow.dataset.duration,
+          firstWord: words[0] ? { cls: words[0].className, html: words[0].outerHTML.slice(0, 48) } : null
+        });
+      }
       words.forEach((w, wi) => {
         if (wi < Math.floor(litWords)) {
           w.classList.add('lit');
