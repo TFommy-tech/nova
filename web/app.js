@@ -2112,7 +2112,7 @@
     el.settingsView.setAttribute('aria-hidden', 'true');
   }
 
-  let lyricsTimer = null, lyricsLines = [], lyricsActiveIndex = -1, lyricsRetried = false, lyricsPrevWordRow = null, lyricsOffsetMs = null, lyricsManualOffset = 0, lyricsOffsetStorageKey = '';
+  let lyricsRafId = null, lyricsLines = [], lyricsActiveIndex = -1, lyricsRetried = false, lyricsPrevWordRow = null, lyricsOffsetMs = null, lyricsManualOffset = 0, lyricsOffsetStorageKey = '';
 
   function parseLrc(lrc) {
     if (!lrc) return { lines: [], offsetMs: null };
@@ -2136,8 +2136,22 @@
     return { lines, offsetMs };
   }
   function clearLyricsSync() {
-    if (lyricsTimer) { clearInterval(lyricsTimer); lyricsTimer = null; }
+    stopLyricsRaf();
     lyricsLines = []; lyricsActiveIndex = -1; lyricsPrevWordRow = null;
+  }
+  // rAF-цикл подсветки: слова обновляются каждый кадр (60 fps), вместо setInterval(150мс),
+  // который давал видимые рывки караоке. Остановка — когда lyricsLines пуст.
+  function startLyricsRaf() {
+    if (lyricsRafId) return;
+    const tick = () => {
+      if (!lyricsLines.length) { lyricsRafId = null; return; }
+      highlightLyrics();
+      lyricsRafId = requestAnimationFrame(tick);
+    };
+    lyricsRafId = requestAnimationFrame(tick);
+  }
+  function stopLyricsRaf() {
+    if (lyricsRafId) { cancelAnimationFrame(lyricsRafId); lyricsRafId = null; }
   }
   function lyricsOffsetKey(track) { return 'lyrics_offset_' + trackKey(track); }
   function updateLyricsSyncUi() {
@@ -2214,14 +2228,15 @@
       });
     }
     lyricsPrevWordRow = activeRow;
-    if (idx === lyricsActiveIndex) return;
-    lyricsActiveIndex = idx;
-    rows.forEach((r, i) => r.classList.toggle('active', i === idx));
-    if (activeRow) {
-      const boxRect = box.getBoundingClientRect();
-      const rowRect = activeRow.getBoundingClientRect();
-      const delta = rowRect.top - boxRect.top - (box.clientHeight / 2) + (activeRow.clientHeight / 2);
-      try { box.scrollTo({ top: box.scrollTop + delta, behavior: 'smooth' }); } catch {}
+    if (idx !== lyricsActiveIndex) {
+      lyricsActiveIndex = idx;
+      rows.forEach((r, i) => r.classList.toggle('active', i === idx));
+      if (activeRow) {
+        const boxRect = box.getBoundingClientRect();
+        const rowRect = activeRow.getBoundingClientRect();
+        const delta = rowRect.top - boxRect.top - (box.clientHeight / 2) + (activeRow.clientHeight / 2);
+        try { box.scrollTo({ top: box.scrollTop + delta, behavior: 'smooth' }); } catch {}
+      }
     }
   }
   async function loadLyrics(track, force) {
@@ -2308,7 +2323,7 @@
           });
         }
         highlightLyrics();
-        lyricsTimer = setInterval(highlightLyrics, 150);
+        startLyricsRaf();
         box.dataset.loaded = '1';
         return;
       }
@@ -2346,12 +2361,12 @@
       el.lyricsPanel.setAttribute('aria-hidden', 'false');
       const key = trackKey(t);
       // cached-строки остаются в DOM, но clearLyricsSync() (closeLyrics/playTrack/ended)
-      // обнуляет lyricsLines и гасит lyricsTimer, не трогая dataset.loaded. При
+      // обнуляет lyricsLines и гасит rAF-цикл, не трогая dataset.loaded. При
       // повторном открытии того же трека highlightLyrics() выходил бы сразу
       // (lyricsLines пуст) — строки видны, но ни одна не активна (весь текст
       // приглушён). Если синхронизация сброшена — перезагружаем и пересинхронизируем.
       if (el.lyricsInlineContent.dataset.trackKey !== key || el.lyricsInlineContent.dataset.loaded !== '1' || !lyricsLines.length) {
-        loadLyrics(t, true); // force: восстановить lyricsLines + lyricsTimer
+        loadLyrics(t, true); // force: восстановить lyricsLines + rAF-цикл
       } else {
         highlightLyrics();
       }

@@ -525,7 +525,7 @@ body.has-background #backgroundLayer { opacity: 1; }
 .lyrics-line .word {
   display: inline;
   color: inherit;
-  transition: color .18s ease, text-shadow .18s ease, filter .18s ease;
+  transition: color .08s linear, text-shadow .08s linear, filter .08s linear;
 }
 .lyrics-line .word.lit {
   color: #ffffff;
