@@ -2191,29 +2191,6 @@
       const progress = Math.min(1, Math.max(0, (t - startT) / dur));
       const words = activeRow.querySelectorAll('.word');
       const litWords = progress * words.length;
-      if (window.__karaokeDebug !== false) {
-        console.log('[KARAOKE]', {
-          t: t.toFixed(2),
-          startT,
-          dur,
-          progress: progress.toFixed(3),
-          litWords: litWords.toFixed(2),
-          wordCount: words.length,
-          lineIndex: activeRow.dataset.index,
-          lineDuration: activeRow.dataset.duration,
-          firstWord: words[0] ? { cls: words[0].className, html: words[0].outerHTML.slice(0, 48) } : null,
-          paused: el.audio.paused,
-          readyState: el.audio.readyState,
-          audioDur: Number.isFinite(el.audio.duration) ? el.audio.duration.toFixed(2) : 'Inf',
-          idx,
-          rowsLen: rows.length,
-          linesLen: lyricsLines.length,
-          linesIdxTime: lyricsLines[idx] ? lyricsLines[idx].t : null,
-          rowDatasetTime: activeRow ? activeRow.dataset.time : null,
-          rowDatasetIndex: activeRow ? activeRow.dataset.index : null,
-          lyricsOffsetMs
-        });
-      }
       words.forEach((w, wi) => {
         if (wi < Math.floor(litWords)) {
           w.classList.add('lit');
@@ -2308,20 +2285,6 @@
           });
           box.appendChild(div);
         });
-        if (window.__karaokeDebug !== false) {
-          console.log('[KARAOKE INIT]', {
-            linesLen: lyricsLines.length,
-            offset: offsetMs,
-            lyricsManualOffset,
-            firstLineRawT: lyricsLines[0] ? lyricsLines[0].rawTime : null,
-            firstLineFinalT: lyricsLines[0] ? lyricsLines[0].t : null,
-            firstLine: lyricsLines[0],
-            secondLine: lyricsLines[1],
-            domRowsCount: box.querySelectorAll('.lyrics-line').length,
-            firstDomTime: box.querySelector('.lyrics-line')?.dataset.time,
-            firstDomIdx: box.querySelector('.lyrics-line')?.dataset.index
-          });
-        }
         highlightLyrics();
         startLyricsRaf();
         box.dataset.loaded = '1';
