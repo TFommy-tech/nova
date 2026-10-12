@@ -22,7 +22,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const os = require('os');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 require('dotenv').config();
 
 const PORT = Number(process.env.PORT || 3123);
@@ -2326,6 +2326,13 @@ function startServer(options = {}) {
       console.log('============================================================');
       // Прогреваем youtubei.js в фоне
       getYtClient().catch(() => {});
+      // Warm-up yt-dlp — прогрев холодного старта (node runtime, init)
+      try {
+        execFile(YT_DLP_BIN, ['--version'], { timeout: 15000 }, (err, stdout) => {
+          if (err) console.log('[yt-dlp] warm-up failed:', err.message);
+          else console.log('[yt-dlp] warm-up OK:', String(stdout).trim());
+        });
+      } catch (e) { console.log('[yt-dlp] warm-up spawn error:', e.message); }
       resolve(server);
     });
     server.once('error', reject);
