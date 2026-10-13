@@ -913,7 +913,6 @@
     el.homePopular.innerHTML = '';
     if (popular.length) popular.slice(0, 12).forEach(t => el.homePopular.appendChild(makeMiniCard(t, 'track')));
     else el.homePopular.innerHTML = '<div class="empty" style="grid-column:1/-1"><div>Пока пусто</div></div>';
-    setTimeout(() => prefetchTracks(popular.slice(0, 6)), 500);
 
     const artists = [], seenA = new Set();
     for (const t of state.tracks) {
@@ -1029,7 +1028,6 @@
       state.lastSearchArtists = Array.isArray(d.artists) ? d.artists : [];
       if (el.resultsInfo) el.resultsInfo.textContent = `${state.tracks.length} результатов`;
       renderTracks(); renderSearchArtists(); renderHome();
-      if (state.tracks.length) prefetchTracks(state.tracks.slice(0, 8));
       applySearchFilter();
     } catch (e) {
       if (e.name === 'AbortError' || reqId !== state.searchRequest) return;
@@ -1791,7 +1789,6 @@
           drawTop();
         };
       }
-      setTimeout(() => prefetchTracks(allTracks.slice(0, 3)), 200);
       const albums = d.albums || [];
       el.artistAlbumsSection.style.display = '';
       el.artistAlbums.innerHTML = albums.length ? '' : '<div class="empty">Альбомы недоступны для этого артиста</div>';
@@ -1852,7 +1849,6 @@
       el.albumPlay.onclick = () => { playFromList(tracks, 0, { force: true }); };
       el.albumShuffle.onclick = () => { state.shuffle = true; updateModeButtons(); playFromList(tracks.slice().sort(() => Math.random() - 0.5), 0, { force: true }); };
       el.albumAddToPlaylist.onclick = () => openPlaylistPicker(tracks);
-      setTimeout(() => prefetchTracks(tracks.slice(0, 4)), 200);
     } catch {
       el.albumTracks.innerHTML = '<div class="empty">Не удалось загрузить</div>';
     }

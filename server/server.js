@@ -63,6 +63,32 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 function dbg(...a) { if (DEBUG_RESOLVE) console.log('[resolve]', ...a); }
 
+// ---------- Resolve concurrency semaphore ----------
+// yt-dlp/youtubei не тянут 20+ одновременных resolve — ограничиваем параллелизм
+const RESOLVE_CONCURRENCY = 3;
+let resolveActive = 0;
+const resolveQueue = [];
+
+function acquireResolveSlot() {
+  return new Promise((resolve) => {
+    if (resolveActive < RESOLVE_CONCURRENCY) {
+      resolveActive++;
+      resolve();
+      return;
+    }
+    resolveQueue.push(resolve);
+  });
+}
+
+function releaseResolveSlot() {
+  resolveActive--;
+  if (resolveQueue.length > 0) {
+    resolveActive++;
+    const next = resolveQueue.shift();
+    next();
+  }
+}
+
 // ---------- DB ----------
 function loadJson(p, fb) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return fb; } }
 function saveJson(p, d) { try { fs.writeFileSync(p, JSON.stringify(d, null, 2)); } catch (e) { console.error('[db]', e.message); } }
@@ -804,6 +830,15 @@ function dedupeTracks(list) {
 // ============================================================================
 // PLAYBACK RESOLVER
 // ============================================================================
+async function resolvePlaybackWithSemaphore(track) {
+  await acquireResolveSlot();
+  try {
+    return await resolvePlayback(track);
+  } finally {
+    releaseResolveSlot();
+  }
+}
+
 async function resolvePlayback(track) {
   if (!track) throw makeErr('empty_track', 'No track');
   if (track.source === 'LOCAL' && track.localUrl)
@@ -1557,9 +1592,10 @@ api.post('/api/playback/resolve', async (req, res) => {
   if (!track.title && !track.providerId && !track.videoId)
     return res.status(400).json({ error: { code: 'invalid_track', message: 'No track info' } });
   try {
-    const data = await withTimeout(resolvePlayback(track), 12000, 'resolve_timeout');
+    const data = await withTimeout(resolvePlaybackWithSemaphore(track), 12000, 'resolve_timeout');
     res.json(data);
   } catch (e) {
+    console.log('[resolve error]', track.title || track.query, e.message, e.stack ? e.stack.split('\n')[1] : '');
     if (e.message === 'resolve_timeout')
       return res.status(504).json({ error: { code: 'resolve_timeout', message: 'Источник не ответил вовремя' } });
     if (e.structured) return res.status(502).json({ error: { code: e.code, message: e.message } });
@@ -1577,10 +1613,13 @@ api.get('/api/audio/resolve', async (req, res) => {
   if (hit && Date.now() - hit.time < RESOLVE_TTL)
     return res.json({ ok: true, ...hit.data, cached: true });
   try {
-    const data = await withTimeout(resolvePlayback({ title, artist, duration }), 12000, 'resolve_timeout');
+    const data = await withTimeout(resolvePlaybackWithSemaphore({ title, artist, duration }), 12000, 'resolve_timeout');
     resolveCache.set(ck, { time: Date.now(), data });
     res.json({ ok: true, ...data });
-  } catch (e) { res.status(e.message === 'resolve_timeout' ? 504 : 502).json({ ok: false, error: e.message }); }
+  } catch (e) {
+    console.log('[resolve error]', (title + ' ' + artist).trim(), e.message, e.stack ? e.stack.split('\n')[1] : '');
+    res.status(e.message === 'resolve_timeout' ? 504 : 502).json({ ok: false, error: e.message });
+  }
 });
 
 // Audius stream
