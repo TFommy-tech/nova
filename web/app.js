@@ -813,6 +813,12 @@
     return { key, title, primaryArtist };
   }
 
+  // Собственный таймаут fetch: общий signal отмены (смена трека) + лимит 15с
+  function withTimeoutSignal(signal, ms) {
+    const t = AbortSignal.timeout(ms);
+    return signal ? AbortSignal.any([signal, t]) : t;
+  }
+
   async function resolvePlaybackServer(track, signal) {
     if (track.provider === 'soundcloud' && track.providerId)
       return { provider: 'soundcloud', kind: 'soundcloud', url: '/api/audio/soundcloud/' + encodeURIComponent(track.providerId) };
@@ -843,7 +849,7 @@
           title: track.title, artist: track.artist, duration: track.duration,
           provider: track.provider, providerId: track.providerId, videoId: track.videoId
         }),
-        signal
+        signal: withTimeoutSignal(signal, 15000)
       });
       if (r.ok) {
         const d = await r.json();
@@ -857,7 +863,7 @@
         artist: splitArtistsList(track.artist)[0] || track.artist || '',
         duration: String(track.duration || 0)
       });
-      const r = await fetch(apiBase() + '/api/audio/resolve?' + params, { signal });
+      const r = await fetch(apiBase() + '/api/audio/resolve?' + params, { signal: withTimeoutSignal(signal, 15000) });
       if (r.ok) {
         const d = await r.json();
         const su = d.ok ? (d.url || d.streamUrl) : '';
@@ -1315,7 +1321,12 @@
       };
       el.audio.addEventListener('playing', ok, { once: true });
       el.audio.addEventListener('error', bad, { once: true });
-      setTimeout(() => { if (done) return; done = true; cleanup(); reject(new Error('timeout')); }, 25000);
+      setTimeout(() => {
+        if (done) return; done = true; cleanup();
+        // Таймаут: останавливаем аудио, чтобы не качало в фоне после ошибки
+        try { el.audio.pause(); el.audio.removeAttribute('src'); el.audio.load(); } catch {}
+        reject(new Error('timeout'));
+      }, 25000);
       const tick = setInterval(() => {
         if (myId !== undefined && myId !== playRequestId) { if (done) return; done = true; cleanup(); try { el.audio.pause(); } catch {} reject(new Error('Aborted')); }
       }, 100);
