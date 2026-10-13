@@ -1911,14 +1911,14 @@ function gcMeiDirs() {
   } catch {}
 }
 
-// GC кэша yt-dlp: (1) удаляем yt-*.m4a[.part] старше 2 ч; (2) если суммарный
+// GC кэша yt-dlp: (1) удаляем yt-*.{m4a,webm}[.part] старше 2 ч; (2) если суммарный
 // размер > 2 ГБ — удаляем самые старые, пока не уложимся в 1.5 ГБ.
 function gcYtCache() {
   try {
     const now = Date.now();
     const entries = [];
     for (const f of fs.readdirSync(YT_CACHE_DIR)) {
-      if (!/^yt-[\w-]+\.m4a(\.part)?$/.test(f)) continue;
+      if (!/^yt-[\w-]+\.(m4a|webm)(\.part)?$/.test(f)) continue;
       const p = path.join(YT_CACHE_DIR, f);
       try {
         const st = fs.statSync(p);
@@ -1968,8 +1968,17 @@ function gcLegacyTmp() {
 // GC раз в час (+ первый прогон при старте — см. startServer()).
 setInterval(() => { gcYtCache(); gcLegacyTmp(); }, 60 * 60 * 1000);
 
-function ytDlpFile(vid) {
-  return path.join(YT_CACHE_DIR, `yt-${vid}.m4a`); // в DATA_DIR/yt-cache, не в /tmp
+function ytDlpFile(vid, ext) {
+  return path.join(YT_CACHE_DIR, `yt-${vid}.${ext}`); // в DATA_DIR/yt-cache, не в /tmp
+}
+// Кэш: приоритет webm (opus — основной формат после смены -f), затем легаси m4a,
+// скачанный старой версией кода.
+function findYtDlpFile(vid) {
+  for (const ext of ['webm', 'm4a']) {
+    const p = ytDlpFile(vid, ext);
+    try { if (fs.statSync(p).size > 0) return p; } catch {}
+  }
+  return null;
 }
 
 function runYtDlp(vid, file) {
@@ -1979,7 +1988,7 @@ function runYtDlp(vid, file) {
     gcMeiDirs(); // убрать осиротевшие _MEI* от прошлых (убитых) запусков
     try {
       child = spawn(YT_DLP_BIN, [
-        '-f', 'bestaudio[ext=m4a]/bestaudio',
+        '-f', 'bestaudio[acodec=opus][abr>=128]/bestaudio[acodec=opus]/bestaudio[abr>=192]/bestaudio',
         '--js-runtimes', YT_DLP_NODE.includes(':') ? YT_DLP_NODE : `node:${YT_DLP_NODE}`,
         '-o', file,
         `https://www.youtube.com/watch?v=${vid}`
@@ -2003,15 +2012,15 @@ function runYtDlp(vid, file) {
 }
 
 async function streamViaYtDlp(vid, range, res) {
-  const file = ytDlpFile(vid);
   try {
-    // Кеш по факту наличия файла. Раньше была mtime-TTL 30 минут, но yt-dlp НЕ
-    // перезаписывает существующий файл (печатает "already downloaded") — mtime не
-    // менялся, и КАЖДЫЙ запрос платил ~3 c probe без реальной перекачки (Баг 1).
-    // Отдаём сразу, если файл есть и непустой; yt-dlp — только при отсутствии.
-    let have = false;
-    try { have = fs.statSync(file).size > 0; } catch {}
-    if (!have) {
+    // Кеш по факту наличия файла (webm или легаси m4a). Раньше была mtime-TTL
+    // 30 минут, но yt-dlp НЕ перезаписывает существующий файл (печатает
+    // "already downloaded") — mtime не менялся, и КАЖДЫЙ запрос платил ~3 c probe
+    // без реальной перекачки (Баг 1). Отдаём сразу, если файл есть и непустой;
+    // yt-dlp — только при отсутствии обоих вариантов.
+    let file = findYtDlpFile(vid);
+    if (!file) {
+      file = ytDlpFile(vid, 'webm'); // opus/webm — основной формат; m4a остаётся легаси
       if (!(await runYtDlp(vid, file))) return false;
       try { if (fs.statSync(file).size <= 0) return false; } catch { return false; }
     }
@@ -2059,7 +2068,7 @@ async function streamViaYtDlp(vid, range, res) {
     stream.on('error', () => { try { res.destroy(); } catch {} });
     try { res.req.on('close', () => stream.destroy()); } catch {}
     stream.pipe(res);
-    console.log('[yt-dlp] serve', vid, isPartial ? `206 ${start}-${end}/${total}` : `200 ${total}b`);
+    console.log('[yt-dlp] serve', vid, ct, total, 'bytes', isPartial ? '206 partial' : '200');
     return true;
   } catch (e) {
     console.log('[yt-dlp] serve err', vid, e?.message || '');
