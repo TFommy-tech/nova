@@ -352,7 +352,7 @@ async function youtubeSearchHtml(q, limit = 20) {
         'Accept-Language': 'en-US,en;q=0.9',
         'Cookie': 'SOCS=CAI; CONSENT=YES+cb'
       },
-      timeout: 8000
+      signal: AbortSignal.timeout(8000)
     });
     if (!r.ok) return [];
     const html = await r.text();
@@ -410,7 +410,7 @@ const INVIDIOUS_INSTANCES = [
 async function youtubeSearchPiped(q, limit = 15) {
   const jobs = PIPED_INSTANCES.map(async base => {
     const r = await fetch(`${base}/search?q=${encodeURIComponent(q)}&filter=videos`,
-      { headers: { 'User-Agent': 'Mozilla/5.0' }, timeout: 5500 });
+      { headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(5500) });
     if (!r.ok) throw new Error('piped ' + r.status);
     const d = await r.json();
     return (d?.items || [])
@@ -431,23 +431,41 @@ async function youtubeSearchPiped(q, limit = 15) {
 }
 
 async function youtubeSearch(q, limit = 20) {
-  const [ijs, html, piped] = await Promise.allSettled([
+  const sources = [
     youtubeSearchIjs(q, limit),
     youtubeSearchHtml(q, limit),
     youtubeSearchPiped(q, limit)
-  ]);
-  const out = [];
-  const seen = new Set();
-  for (const res of [ijs, html, piped]) {
-    if (res.status !== 'fulfilled') continue;
-    for (const t of res.value || []) {
-      if (!t.videoId || seen.has(t.videoId)) continue;
-      seen.add(t.videoId);
-      out.push(t);
-      if (out.length >= limit) return out;
-    }
-  }
-  return out;
+  ];
+  // Ждём первую НЕПУСТУЮ ветку; если все вернут []/упадут — вернём []
+  return new Promise((resolve) => {
+    let pending = sources.length;
+    let resolved = false;
+    let fallbackEmpty = null;
+
+    sources.forEach(p => {
+      Promise.resolve(p).then(res => {
+        const arr = Array.isArray(res) ? res : [];
+        if (!resolved) {
+          if (arr.length > 0) {
+            resolved = true;
+            resolve(arr);
+            return;
+          }
+          if (fallbackEmpty === null) fallbackEmpty = arr;
+        }
+        pending--;
+        if (!resolved && pending === 0) resolve(fallbackEmpty || []);
+      }).catch(() => {
+        pending--;
+        if (!resolved && pending === 0) resolve(fallbackEmpty || []);
+      });
+    });
+
+    // Защита от зависания — 12 сек (общий withTimeout resolvePlayback всё равно сработает)
+    setTimeout(() => {
+      if (!resolved) { resolved = true; resolve(fallbackEmpty || []); }
+    }, 12000);
+  });
 }
 
 // ============================================================================
@@ -808,8 +826,14 @@ async function resolvePlayback(track) {
 
   dbg('query:', query, 'dur:', track.duration);
 
+  // 1+2. Audius и YouTube опрашиваем ПАРАЛЛЕЛЬНО — время = max(веток), не сумма
+  const [audiusResult, ytResult] = await Promise.allSettled([
+    audiusSearch(query, 10),
+    youtubeSearch(query, 20)
+  ]);
+
   // 1. Audius (прямой mp3)
-  const audiusRes = await audiusSearch(query, 10);
+  const audiusRes = audiusResult.status === 'fulfilled' ? audiusResult.value : [];
   dbg('audius:', audiusRes.length);
   const bestA = pickBest(audiusRes, track);
   if (bestA) {
@@ -824,7 +848,7 @@ async function resolvePlayback(track) {
   }
 
   // 2. YouTube
-  const ytRes = await youtubeSearch(query, 20);
+  const ytRes = ytResult.status === 'fulfilled' ? ytResult.value : [];
   dbg('youtube:', ytRes.length);
   const bestY = pickBest(ytRes, track);
   if (bestY) {
@@ -1569,7 +1593,7 @@ api.get('/api/audio/audius/:id', async (req, res) => {
     const headers = {};
     if (AUDIUS_API_KEY) headers['X-API-Key'] = AUDIUS_API_KEY;
     if (req.headers.range) headers.Range = req.headers.range;
-    const up = await fetch(url, { headers, redirect: 'follow', timeout: 30000 });
+    const up = await fetch(url, { headers, redirect: 'follow', signal: AbortSignal.timeout(30000) });
     if (!up.ok || !up.body) return res.status(502).end();
     for (const h of ['content-type', 'content-length', 'accept-ranges', 'content-range']) {
       const v = up.headers.get(h); if (v) res.setHeader(h, v);
@@ -1666,7 +1690,7 @@ api.get('/api/audio/soundcloud/:id', async (req, res) => {
     }
     const headers = {};
     if (req.headers.range) headers.Range = req.headers.range;
-    const up = await fetch(url, { headers, redirect: 'follow', timeout: 20000 });
+    const up = await fetch(url, { headers, redirect: 'follow', signal: AbortSignal.timeout(20000) });
     console.log('[sc-stream] cdn fetch', id, 'status=', up.status, 'ct=', up.headers.get('content-type'), 'ok=', up.ok);
     if (!up.ok || !up.body) {
       if (scStreamCache.has(id)) scStreamCache.delete(id); // закэшированный URL протух — сброс
