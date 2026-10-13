@@ -1980,10 +1980,11 @@ function runYtDlp(vid, file) {
     try {
       child = spawn(YT_DLP_BIN, [
         '-f', 'bestaudio[ext=m4a]/bestaudio',
-        '--js-runtimes', `node:${YT_DLP_NODE}`,
+        '--js-runtimes', YT_DLP_NODE.includes(':') ? YT_DLP_NODE : `node:${YT_DLP_NODE}`,
         '-o', file,
         `https://www.youtube.com/watch?v=${vid}`
       ], { stdio: ['ignore', 'ignore', 'pipe'], env: { ...process.env, TMPDIR: YT_TMP_DIR } });
+      console.log('[yt-dlp] spawn', vid, 'runtime:', YT_DLP_NODE.includes(':') ? YT_DLP_NODE : `node:${YT_DLP_NODE}`);
     } catch (e) { console.log('[yt-dlp] spawn err:', e.message); resolve(false); return; }
     const timer = setTimeout(() => {
       console.log('[yt-dlp] budget', YT_DLP_BUDGET_MS, 'ms exceeded, kill, vid=', vid);
