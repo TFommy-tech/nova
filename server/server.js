@@ -1644,6 +1644,51 @@ api.get('/api/audio/audius/:id', async (req, res) => {
   } catch { if (!res.headersSent) res.status(502).end(); }
 });
 
+// ФИКС: SoundCloud API нестабилен — один трек отдаёт transcodings с progressive
+// не с первого запроса (например, 6 transc. без progressive → 8 с progressive).
+// Ретраим до 3 попыток с паузой 300 мс, пока в списке не появится progressive.
+async function fetchTrackData(cid, id, attempts = 3) {
+  let last = null;
+  for (let i = 0; i < attempts; i++) {
+    const rt = await jsonFetch(`https://api-v2.soundcloud.com/tracks/${id}?client_id=${cid}`, {}, 7000);
+    const t = await readJson(rt);
+    const trs = Array.isArray(t?.media?.transcodings) ? t.media.transcodings : [];
+    console.log('[sc-stream] track fetch', id, 'ok=', rt.ok, 'transcodings=', trs.length, 'protocols=', trs.map(x => x?.format?.protocol).join(','));
+    const prog = trs.find(x => x?.format?.protocol === 'progressive' && x.url);
+    last = { rt, t, trs, prog };
+    if (prog) return last; // нашли progressive — выходим сразу
+    if (i < attempts - 1) await new Promise(r => setTimeout(r, 300));
+  }
+  return last; // за все попытки progressive не появился — вызывающий решает (YT-fallback)
+}
+
+// Поиск замены на YouTube по «название + автор» (+ релакс-повтор «автор + первое слово»).
+// Общий для DRM-fallback и hls-only веток SC.
+async function findYtFallbackId(t) {
+  try {
+    const scTitle = String(t?.title || '').trim();
+    const scArtist = String(t?.user?.username || '').trim();
+    const deadline = Date.now() + 9000; // общий бюджет на обе попытки
+    const tryQ = async (query) => {
+      if (!query) return [];
+      const budget = Math.max(1500, deadline - Date.now());
+      const r = await Promise.race([
+        youtubeSearch(query, 1),
+        new Promise(resolve => setTimeout(() => resolve([]), budget))
+      ]);
+      return Array.isArray(r) ? r : [];
+    };
+    let ytRes = await tryQ(`${scTitle} ${scArtist}`.trim());
+    // Релакс-повтор: YouTube часто не находит точную длинную строку из SC,
+    // но находит по «артист + первое слово названия».
+    if (!ytRes[0]?.videoId && scTitle) {
+      const firstWord = scTitle.split(/\s+/)[0];
+      ytRes = await tryQ(`${scArtist} ${firstWord}`.trim());
+    }
+    return ytRes?.[0]?.videoId || '';
+  } catch { return ''; }
+}
+
 // SoundCloud stream (mp3, с поддержкой Range, кэш URL 10 мин)
 api.get('/api/audio/soundcloud/:id', async (req, res) => {
   const id = String(req.params.id);
@@ -1655,23 +1700,27 @@ api.get('/api/audio/soundcloud/:id', async (req, res) => {
     let url = hit ? hit.url : '';
     if (!url) {
       const cid = encodeURIComponent(SOUNDCLOUD_CLIENT_ID);
-      // Шаг 1: данные трека — media.transcodings + track_authorization
-      const rt = await jsonFetch(`https://api-v2.soundcloud.com/tracks/${id}?client_id=${cid}`, {}, 7000);
-      const t = await readJson(rt);
-      const trs = Array.isArray(t?.media?.transcodings) ? t.media.transcodings : [];
-      console.log('[sc-stream] track fetch', id, 'ok=', rt.ok, 'transcodings=', trs.length, 'protocols=', trs.map(x => x?.format?.protocol).join(','));
+      // Шаг 1: данные трека — media.transcodings + track_authorization (с ретраем)
+      const { rt, t, trs, prog } = await fetchTrackData(cid, id);
       // readJson иногда возвращает не трек, а { errors: [...] } — логируем для диагностики 502
       if (Array.isArray(t?.errors) || !t?.media) {
         let raw = ''; try { raw = JSON.stringify(t) || ''; } catch {}
         console.log('[sc-stream] unusual track response', id, raw.slice(0, 300));
       }
       const auth = t?.track_authorization || '';
-      const prog = trs.find(x => x?.format?.protocol === 'progressive' && x.url);
       if (!prog) {
-        console.log('[sc-stream] NO progressive for', id, 'available=', JSON.stringify(trs.map(x => ({ protocol: x?.format?.protocol, preset: x?.preset }))));
+        // ФИКС: раньше здесь был мгновенный 404 hls_only — браузер получал JSON-тело
+        // и отдавал MEDIA_ERR_SRC_NOT_SUPPORTED (error 4). Теперь — fallback на YouTube.
+        console.log('[sc-stream] hls-only, fallback to YT, id=', id, 'presets=', trs.map(x => x && x.preset).join(','));
+        const ytId = await findYtFallbackId(t);
+        if (ytId) {
+          console.log('[sc-redirect]', id, '-> youtube', ytId, 'range=', req.headers.range);
+          return res.redirect(307, '/api/audio/youtube/' + encodeURIComponent(ytId));
+        }
+        console.log('[sc-stream] hls-only, YT not found, id=', id);
         return res.status(404).json({
           error: 'hls_only',
-          message: 'Трек доступен только через HLS, требуется hls.js на клиенте'
+          message: 'Трек доступен только как DRM HLS'
         });
       }
       if (!auth) {
@@ -1689,31 +1738,12 @@ api.get('/api/audio/soundcloud/:id', async (req, res) => {
         console.log('[sc-stream] progressive 404 (likely DRM-only), id=', id, 'status=', rq.status);
         // Фоллбэк на YouTube: ищем трек по «название + автор», редиректим на YouTube-поток.
         // 307 сохраняет метод и Range-заголовки. Лучше неточная замена (миксы/ремиксы), чем пустота.
-        let ytRes = [];
-        try {
-          const scTitle = String(t?.title || '').trim();
-          const scArtist = String(t?.user?.username || '').trim();
-          const deadline = Date.now() + 9000; // общий бюджет на обе попытки
-          const tryQ = async (query) => {
-            if (!query) return [];
-            const budget = Math.max(1500, deadline - Date.now());
-            const r = await Promise.race([
-              youtubeSearch(query, 1),
-              new Promise(resolve => setTimeout(() => resolve([]), budget))
-            ]);
-            return Array.isArray(r) ? r : [];
-          };
-          ytRes = await tryQ(`${scTitle} ${scArtist}`.trim());
-          // Релакс-повтор: YouTube часто не находит точную длинную строку из SC,
-          // но находит по «артист + первое слово названия».
-          if (!ytRes[0]?.videoId && scTitle) {
-            const firstWord = scTitle.split(/\s+/)[0];
-            ytRes = await tryQ(`${scArtist} ${firstWord}`.trim());
-          }
-        } catch {}
-        const ytId = ytRes?.[0]?.videoId || '';
+        const ytId = await findYtFallbackId(t);
         console.log('[sc-stream] drm fallback to youtube id=', id, 'yt=', ytId || 'none');
-        if (ytId) return res.redirect(307, '/api/audio/youtube/' + encodeURIComponent(ytId));
+        if (ytId) {
+          console.log('[sc-redirect]', id, '-> youtube', ytId, 'range=', req.headers.range);
+          return res.redirect(307, '/api/audio/youtube/' + encodeURIComponent(ytId));
+        }
         return res.status(404).json({
           error: 'drm_only',
           message: 'Этот трек защищён DRM (Widevine/FairPlay) и не может быть воспроизведён на этом хостинге. Попробуй найти этот трек через поиск — там могут быть альтернативные версии.'
@@ -2034,6 +2064,7 @@ async function streamViaYtDlp(vid, range, res) {
       fs.closeSync(fd);
       if (b[0] === 0x1A && b[1] === 0x45 && b[2] === 0xDF && b[3] === 0xA3) ct = 'audio/webm';
     } catch {}
+    console.log('[mime]', vid, 'mime=', ct, 'size=', total);
     // Range: bytes=start-end | bytes=start- | bytes=-suffix
     let start = 0, end = total - 1, isPartial = false;
     if (range) {
