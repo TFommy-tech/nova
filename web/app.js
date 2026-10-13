@@ -842,34 +842,48 @@
       }
     }
 
-    try {
-      const r = await fetch(apiBase() + '/api/playback/resolve', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: track.title, artist: track.artist, duration: track.duration,
-          provider: track.provider, providerId: track.providerId, videoId: track.videoId
-        }),
-        signal: withTimeoutSignal(signal, 15000)
-      });
-      if (r.ok) {
-        const d = await r.json();
-        if (d.url) return d;
-      }
-    } catch (e) { if (e.name === 'AbortError') throw e; }
+    // Оба эндпоинта опрашиваем ПАРАЛЛЕЛЬНО; выигрывает первый ответ с рабочим url
+    let abortErr = null;
+    const catchSoft = (e) => { if (e.name === 'AbortError' && !abortErr) abortErr = e; return null; };
 
-    try {
-      const params = new URLSearchParams({
-        title: cleanTitleLocal(track.title) || track.title,
-        artist: splitArtistsList(track.artist)[0] || track.artist || '',
-        duration: String(track.duration || 0)
-      });
-      const r = await fetch(apiBase() + '/api/audio/resolve?' + params, { signal: withTimeoutSignal(signal, 15000) });
-      if (r.ok) {
-        const d = await r.json();
-        const su = d.ok ? (d.url || d.streamUrl) : '';
-        if (su) return { ...d, url: su, kind: d.provider === 'audius' ? 'audius' : 'youtube', videoId: d.videoId };
-      }
-    } catch (e) { if (e.name === 'AbortError') throw e; }
+    const postP = fetch(apiBase() + '/api/playback/resolve', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: track.title, artist: track.artist, duration: track.duration,
+        provider: track.provider, providerId: track.providerId, videoId: track.videoId
+      }),
+      signal: withTimeoutSignal(signal, 15000)
+    }).then(r => r.ok ? r.json() : null)
+      .then(d => (d && d.url) ? d : null)
+      .catch(catchSoft);
+
+    const params = new URLSearchParams({
+      title: cleanTitleLocal(track.title) || track.title,
+      artist: splitArtistsList(track.artist)[0] || track.artist || '',
+      duration: String(track.duration || 0)
+    });
+    const getP = fetch(apiBase() + '/api/audio/resolve?' + params, {
+      signal: withTimeoutSignal(signal, 15000)
+    }).then(r => r.ok ? r.json() : null)
+      .then(d => {
+        const su = d && d.ok ? (d.url || d.streamUrl) : '';
+        return su ? { ...d, url: su, kind: d.provider === 'audius' ? 'audius' : 'youtube', videoId: d.videoId } : null;
+      })
+      .catch(catchSoft);
+
+    // Ждём первый НЕПУСТОЙ результат (с url), не первый fulfilled
+    const winner = await new Promise((resolve, reject) => {
+      let pending = 2;
+      const handle = (res) => {
+        if (res && res.url) { resolve(res); return; }
+        if (--pending === 0)
+          reject(abortErr || new Error('Не удалось найти источник воспроизведения'));
+      };
+      postP.then(handle);
+      getP.then(handle);
+    });
+
+    if (winner && winner.url) return winner;
 
     throw new Error('Не удалось найти источник воспроизведения');
   }
