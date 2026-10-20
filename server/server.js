@@ -89,6 +89,34 @@ function releaseResolveSlot() {
   }
 }
 
+// ---------- yt-dlp concurrency semaphore (ФИКС C: защита от OOM) ----------
+// Гонка источников стартует yt-dlp на КАЖДОМ запросе; 10+ одновременных
+// висящих запусков (deno/node) = 10+ процессов. Ограничиваем параллелизм,
+// как и resolve — остальные ждут слот, юзер не заметит (гонка с Invidious ~3 c).
+const YTDLP_CONCURRENCY = 3;
+let ytdlpActive = 0;
+const ytdlpQueue = [];
+
+function acquireYtdlpSlot() {
+  return new Promise((resolve) => {
+    if (ytdlpActive < YTDLP_CONCURRENCY) {
+      ytdlpActive++;
+      resolve();
+      return;
+    }
+    ytdlpQueue.push(resolve);
+  });
+}
+
+function releaseYtdlpSlot() {
+  ytdlpActive--;
+  if (ytdlpQueue.length > 0) {
+    ytdlpActive++;
+    const next = ytdlpQueue.shift();
+    next();
+  }
+}
+
 // ---------- DB ----------
 function loadJson(p, fb) { try { return JSON.parse(fs.readFileSync(p, 'utf8')); } catch { return fb; } }
 function saveJson(p, d) { try { fs.writeFileSync(p, JSON.stringify(d, null, 2)); } catch (e) { console.error('[db]', e.message); } }
@@ -1834,38 +1862,56 @@ async function streamViaYoutubei(vid, range, res) {
   }
 }
 
-async function tryInvidious(vid, itag, range, res) {
-  for (const base of INVIDIOUS_INSTANCES) {
-    try {
-      const url = `${base}/latest_version?id=${vid}&itag=${itag}&local=true`;
-      const headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
-        'Accept': '*/*'
-      };
-      if (range) headers.Range = range;
-      const up = await fetch(url, { headers, redirect: 'follow', timeout: 12000 });
-      if (!up.ok && up.status !== 206) { try { up.body?.destroy(); } catch {} continue; }
-      const ct = String(up.headers.get('content-type') || '').toLowerCase();
-      const cl = Number(up.headers.get('content-length') || 0);
-      if (!ct.startsWith('audio/') && !ct.startsWith('video/') && !ct.includes('octet-stream')) {
-        try { up.body?.destroy(); } catch {} continue;
-      }
-      if (cl > 0 && cl < 50000) { try { up.body?.destroy(); } catch {} continue; }
-      res.setHeader('Content-Type', ct.startsWith('audio/') || ct.startsWith('video/') ? ct : (itag === '251' ? 'audio/webm' : 'audio/mp4'));
-      res.setHeader('Accept-Ranges', 'bytes');
-      res.setHeader('Cache-Control', 'no-store');
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      if (cl > 0) res.setHeader('Content-Length', String(cl));
-      const cr = up.headers.get('content-range');
-      if (cr) res.setHeader('Content-Range', cr);
-      res.status(up.status === 206 ? 206 : 200);
-      up.body.pipe(res);
-      req_onclose(res, up);
-      dbg('→ invidious stream ok', base);
-      return true;
-    } catch {}
+// Подготовка Invidious: перебирает itag (251→140) и инстансы, возвращает живой
+// апстрим с валидированными заголовками или null. Не пишет в res — чтобы участвовать в гонке.
+async function prepInvidious(vid, range, signal) {
+  for (const itag of ['251', '140']) {
+    for (const base of INVIDIOUS_INSTANCES) {
+      if (signal?.aborted) return null;
+      try {
+        const url = `${base}/latest_version?id=${vid}&itag=${itag}&local=true`;
+        const headers = {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0 Safari/537.36',
+          'Accept': '*/*'
+        };
+        if (range) headers.Range = range;
+        const up = await fetch(url, { headers, redirect: 'follow', timeout: 12000, signal });
+        if (!up.ok && up.status !== 206) { console.log('[invidious]', base, 'status', up.status); try { up.body?.destroy(); } catch {} continue; }
+        const ct = String(up.headers.get('content-type') || '').toLowerCase();
+        const cl = Number(up.headers.get('content-length') || 0);
+        if (!ct.startsWith('audio/') && !ct.startsWith('video/') && !ct.includes('octet-stream')) {
+          try { up.body?.destroy(); } catch {} continue;
+        }
+        if (cl > 0 && cl < 50000) { try { up.body?.destroy(); } catch {} continue; } // json-заглушки
+        if (signal?.aborted) { try { up.body?.destroy(); } catch {} return null; }
+        return { up, ct, cl, status: up.status, itag, base };
+      } catch { /* таймаут/сеть/abort — следующий инстанс */ }
+    }
   }
-  return false;
+  return null;
+}
+
+// Отдача подготовленного Invidious-апстрима в res. true = ответ отправлен.
+function sendInvidious(res, vid, prep) {
+  try {
+    if (res.headersSent) { try { prep.up.body.destroy(); } catch {} return true; }
+    const { up, ct, cl, status, itag, base } = prep;
+    res.setHeader('Content-Type', ct.startsWith('audio/') || ct.startsWith('video/') ? ct : (itag === '251' ? 'audio/webm' : 'audio/mp4'));
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'no-store');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    if (cl > 0) res.setHeader('Content-Length', String(cl));
+    const cr = up.headers.get('content-range');
+    if (cr) res.setHeader('Content-Range', cr);
+    res.status(status === 206 ? 206 : 200);
+    up.body.pipe(res);
+    req_onclose(res, up);
+    console.log('[invidious] serve', vid, base, 'itag=' + itag, ct, cl || '?', 'bytes', status);
+    return true;
+  } catch (e) {
+    console.log('[invidious] serve err', vid, e?.message || '');
+    return false;
+  }
 }
 
 // Piped — вынесен из роута как tryPiped(base, vid, range, res): используется
@@ -2011,9 +2057,15 @@ function findYtDlpFile(vid) {
   return null;
 }
 
-function runYtDlp(vid, file) {
-  return new Promise((resolve) => {
+async function runYtDlp(vid, file) {
+  await acquireYtdlpSlot(); // ФИКС C: максимум YTDLP_CONCURRENCY параллельных процессов
+  try {
+  return await new Promise((resolve) => {
+    const t0 = Date.now();
     let stderr = '';
+    let stdoutTail = ''; // последние ~2000 символов stdout для диагностики висняков
+    let stdoutLine = '';
+    let killedByBudget = false;
     let child;
     gcMeiDirs(); // убрать осиротевшие _MEI* от прошлых (убитых) запусков
     try {
@@ -2022,37 +2074,58 @@ function runYtDlp(vid, file) {
         '--js-runtimes', YT_DLP_NODE.includes(':') ? YT_DLP_NODE : `node:${YT_DLP_NODE}`,
         '-o', file,
         `https://www.youtube.com/watch?v=${vid}`
-      ], { stdio: ['ignore', 'ignore', 'pipe'], env: { ...process.env, TMPDIR: YT_TMP_DIR } });
-      console.log('[yt-dlp] spawn', vid, 'runtime:', YT_DLP_NODE.includes(':') ? YT_DLP_NODE : `node:${YT_DLP_NODE}`);
+      ], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, TMPDIR: YT_TMP_DIR } });
+      console.log('[yt-dlp] spawn', vid, 'runtime:', YT_DLP_NODE.includes(':') ? YT_DLP_NODE : `node:${YT_DLP_NODE}`, 't0=', t0);
     } catch (e) { console.log('[yt-dlp] spawn err:', e.message); resolve(false); return; }
     const timer = setTimeout(() => {
-      console.log('[yt-dlp] budget', YT_DLP_BUDGET_MS, 'ms exceeded, kill, vid=', vid);
+      killedByBudget = true;
+      console.log('[yt-dlp] budget killed', vid, 'elapsed=', Date.now() - t0, 'ms');
+      console.log('[yt-dlp] stdout tail:', stdoutTail.slice(-1000).replace(/\s+/g, ' '));
+      console.log('[yt-dlp] stderr tail:', stderr.slice(-500).replace(/\s+/g, ' '));
       try { child.kill('SIGKILL'); } catch {}
     }, YT_DLP_BUDGET_MS);
+    // stdout: yt-dlp пишет сюда весь прогресс ([youtube]/[info]/[download]) — раньше был
+    // отброшен ('ignore') и мы были слепы к точке висняка. Логируем стадии в реальном времени.
+    child.stdout.on('data', d => {
+      const s = d.toString();
+      stdoutTail = (stdoutTail + s).slice(-2000);
+      stdoutLine += s;
+      let nl;
+      while ((nl = stdoutLine.indexOf('\n')) >= 0) {
+        const line = stdoutLine.slice(0, nl).trim();
+        stdoutLine = stdoutLine.slice(nl + 1);
+        if (line && /^\[(youtube|info|download|Extractors|default|fixup)/i.test(line))
+          console.log('[yt-dlp:out]', vid, line);
+      }
+    });
     child.stderr.on('data', d => { if (stderr.length < 4000) stderr += d.toString(); });
-    child.on('error', e => { clearTimeout(timer); console.log('[yt-dlp] error:', e.message); resolve(false); });
+    child.on('error', e => { clearTimeout(timer); console.log('[yt-dlp] error:', e.message, 'elapsed=', Date.now() - t0, 'ms'); resolve(false); });
     child.on('close', code => {
       clearTimeout(timer);
-      if (code === 0) { resolve(true); return; }
-      console.log('[yt-dlp] exit', code, 'vid=', vid, 'stderr:', stderr.slice(-500).replace(/\s+/g, ' '));
+      if (code === 0) { console.log('[yt-dlp] ok', vid, 'elapsed=', Date.now() - t0, 'ms'); resolve(true); return; }
+      console.log('[yt-dlp] exit', vid, 'code=', code, 'elapsed=', Date.now() - t0, 'ms' + (killedByBudget ? ' (budget-kill)' : ''), 'stderr:', stderr.slice(-500).replace(/\s+/g, ' '));
+      if (!killedByBudget) console.log('[yt-dlp] stdout tail:', stdoutTail.slice(-1000).replace(/\s+/g, ' '));
       try { fs.unlinkSync(file); } catch {} // недокачанный файл не оставляем
       resolve(false);
     });
   });
+  } finally {
+    releaseYtdlpSlot(); // ФИКС C: слот возвращается всегда (успех/ошибка/kill)
+  }
 }
 
-async function streamViaYtDlp(vid, range, res) {
+// ===== ФИКС B: гонка источников (yt-dlp vs Invidious) =====
+// Разделяем "подготовку" (качаем файл / получаем апстрим) и "отдачу" (пишем в res).
+// Гонка ждёт первый ПОДГОТОВЛЕННЫЙ источник; проигравший отменяется.
+
+// Подготовка yt-dlp: кэш-файл или свежая закачка -> { file, total, ct } | null
+async function prepYtDlp(vid) {
   try {
-    // Кеш по факту наличия файла (webm или легаси m4a). Раньше была mtime-TTL
-    // 30 минут, но yt-dlp НЕ перезаписывает существующий файл (печатает
-    // "already downloaded") — mtime не менялся, и КАЖДЫЙ запрос платил ~3 c probe
-    // без реальной перекачки (Баг 1). Отдаём сразу, если файл есть и непустой;
-    // yt-dlp — только при отсутствии обоих вариантов.
     let file = findYtDlpFile(vid);
     if (!file) {
-      file = ytDlpFile(vid, 'webm'); // opus/webm — основной формат; m4a остаётся легаси
-      if (!(await runYtDlp(vid, file))) return false;
-      try { if (fs.statSync(file).size <= 0) return false; } catch { return false; }
+      file = ytDlpFile(vid, 'webm');
+      if (!(await runYtDlp(vid, file))) return null;
+      try { if (fs.statSync(file).size <= 0) return null; } catch { return null; }
     }
     const total = fs.statSync(file).size;
     // Content-Type по первым байтам: EBML(1A45DFA3) = webm/opus, иначе m4a
@@ -2065,6 +2138,18 @@ async function streamViaYtDlp(vid, range, res) {
       if (b[0] === 0x1A && b[1] === 0x45 && b[2] === 0xDF && b[3] === 0xA3) ct = 'audio/webm';
     } catch {}
     console.log('[mime]', vid, 'mime=', ct, 'size=', total);
+    return { file, total, ct };
+  } catch { return null; }
+}
+
+// Отдача yt-dlp файла c Range-логикой. Возвращает true, если ответ отправлен (в т.ч. 416).
+function sendYtFile(res, vid, prep, range) {
+  try {
+    if (res.headersSent) { // ФИКС D: guard — один писатель в res, ловим нарушение инварианта явно
+      console.log('[yt-dlp] serve skipped, headersSent', vid);
+      return false;
+    }
+    const { file, total, ct } = prep;
     // Range: bytes=start-end | bytes=start- | bytes=-suffix
     let start = 0, end = total - 1, isPartial = false;
     if (range) {
@@ -2107,6 +2192,45 @@ async function streamViaYtDlp(vid, range, res) {
   }
 }
 
+// Гонка источников: yt-dlp (качает файл в кэш) и Invidious (отдаёт стрим) стартуют
+// ОДНОВРЕМЕННО. Побеждает первый, чья ПОДГОТОВКА завершилась (файл скачан / апстрим жив).
+// Проигравший Invidious отменяется через AbortController; проигравший yt-dlp продолжает
+// качать в фоне — файл ляжет в кэш (польза на будущие запросы), бюджет сам убьёт.
+// Возвращает строку источника или null (оба не смогли).
+async function raceYoutubeSources(vid, range, res, ac) {
+  const asEntry = (kind, promise) => promise.then(p => ({ kind, p }));
+  const ytEntry = asEntry('yt', prepYtDlp(vid));
+  const invEntry = asEntry('inv', prepInvidious(vid, range, ac.signal));
+
+  const winner = await new Promise((resolve) => {
+    let pending = 2;
+    let done = false;
+    const settle = (entry) => {
+      entry.catch(() => ({ kind: 'unknown', p: null })).then(({ kind, p }) => {
+        if (done) { // гонка уже решена — поздний участник, закрыть его ресурс
+          if (kind === 'inv' && p) { try { p.up.body.destroy(); } catch {} }
+          return;
+        }
+        if (p) { done = true; resolve({ kind, p }); return; }
+        if (--pending === 0) { done = true; resolve(null); }
+      });
+    };
+    settle(ytEntry);
+    settle(invEntry);
+  });
+
+  if (!winner) return null;
+  if (winner.kind === 'inv') {
+    try { ac.abort(); } catch {} // Invidious победил — фоновый yt-dlp пусть докачивает кэш
+    console.log('[race] winner=invidious', vid, winner.p.base, 'itag=' + winner.p.itag);
+    console.log('[race] yt-dlp continues in background for cache, vid=', vid);
+    return sendInvidious(res, vid, winner.p) ? 'invidious' : null;
+  }
+  try { ac.abort(); } catch {} // yt-dlp победил — Invidious больше не нужен
+  console.log('[race] winner=yt-dlp', vid);
+  return sendYtFile(res, vid, winner.p, range) ? 'yt-dlp' : null;
+}
+
 api.get('/api/audio/youtube/:videoId', async (req, res) => {
   const vid = String(req.params.videoId || '');
   if (!/^[A-Za-z0-9_-]{6,20}$/.test(vid)) return res.status(400).end();
@@ -2114,12 +2238,11 @@ api.get('/api/audio/youtube/:videoId', async (req, res) => {
 
   try {
     const result = await withTimeout((async () => {
-      // 1. yt-dlp — качает m4a во временный файл (~20 с), кеш 30 мин
-      if (await streamViaYtDlp(vid, range, res)) return 'yt-dlp';
-      // 2. Invidious
-      for (const itag of ['251', '140']) {
-        if (await tryInvidious(vid, itag, range, res)) return 'invidious';
-      }
+      // 1+2. ГОНКА yt-dlp ↔ Invidious: пока yt-dlp качает файл (30 с бюджета),
+      // Invidious мог бы отдать стрим за ~3 с. Раньше они шли последовательно
+      // и висящий yt-dlp съедал весь бюджет до fallback'ов.
+      const raced = await raceYoutubeSources(vid, range, res, new AbortController());
+      if (raced) return raced;
       // 3. Piped
       for (const base of PIPED_INSTANCES) {
         if (await tryPiped(base, vid, range, res)) return 'piped';
