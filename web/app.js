@@ -3299,10 +3299,10 @@
       }
     }
     function glowColor() {
-      // --glow = "r,g,b" (set by updateAmbientFromCover / theme). Fallback — лиловый.
+      // --glow = "r,g,b" (set by updateAmbientFromCover / theme). Fallback — белый (монохром).
       const g = getComputedStyle(document.documentElement).getPropertyValue('--glow').trim();
       const m = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)$/.exec(g);
-      return m ? { r: +m[1], g: +m[2], b: +m[3] } : { r: 168, g: 85, b: 247 };
+      return m ? { r: +m[1], g: +m[2], b: +m[3] } : { r: 255, g: 255, b: 255 };
     }
     let gc = glowColor(), gcT = 0;
     function draw() {

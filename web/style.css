@@ -10,25 +10,16 @@ a { color: inherit; text-decoration: none; }
 kbd { font-family: inherit; }
 
 :root {
-  /* ── COSMIC OBSERVATORY (Этап 1): палитра + шрифты ── */
-  --cosmos-bg: #05060d;
-  --cosmos-bg-2: #0a0e1a;
-  --cosmos-deep: #02030a;
-  --star-white: #ffffff;
-  --star-dim: rgba(255,255,255,.35);
-  --star-glow: rgba(168, 85, 247, .6);
-  --planet-1: #7a5cff;
-  --planet-2: #22d3ee;
-  --planet-3: #f472b6;
+  /* ── NOVA: монохромная палитра (Этап 1.1в) ── */
   --glass: rgba(255,255,255,.03);
   --glass-2: rgba(255,255,255,.06);
-  --font-display: 'Space Grotesk', system-ui, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
-  --bg: #0a0a0a; --bg-2: #111;
-  --surface: #0d0d0d; --surface-2: #141414; --surface-3: #1a1a1a;
-  --border: #1c1c1c; --border-2: #262626;
-  --text: #fff; --text-2: rgba(255,255,255,.5); --text-3: #7a7a7a; --text-4: #4a4a4a;
-  --accent: #ffffff; --glow: 168,85,247;
+  --font-display: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --bg: #0A0A0A; --bg-2: #111;
+  --surface: #161616; --surface-2: #1C1C1C; --surface-3: #262626;
+  --border: #262626; --border-2: #333333;
+  --text: #F5F5F5; --text-2: #929292; --text-3: #626262; --text-4: #4a4a4a;
+  --accent: #ffffff; --glow: 255,255,255;
   --danger: #f87171; --success: #4ade80;
   --dur-fast: 130ms; --dur: 200ms; --dur-slow: 320ms;
   --ease: cubic-bezier(.4, 0, .2, 1);
@@ -69,7 +60,7 @@ body { color: var(--text); font-family: var(--font-display);
 
 /* THEME PRESETS — намеренно ВЫШЕ правил data-accent (ниже): без атрибута
    data-accent применяется акцент пресета; установленный пикером data-accent перебивает. */
-html[data-theme-preset="dark"]     { --bg: #0a0a0a; --surface: #0d0d0d; --text: #fff; --text-2: rgba(255,255,255,.5); --accent: #ffffff; --glow: 168,85,247; }
+html[data-theme-preset="dark"]     { --bg: #0A0A0A; --surface: #161616; --text: #F5F5F5; --text-2: #929292; --accent: #ffffff; --glow: 255,255,255; }
 html[data-theme-preset="devblog"]  { --bg: #0a0e14; --surface: #0f141c; --text: #e8f1ff; --accent: #5ba3f5; --glow: 91,163,245; }
 html[data-theme-preset="light"]    { --bg: #f5f5f5; --surface: #ffffff; --text: #1a1a1a; --text-2: rgba(0,0,0,.55); --accent: #000000; --glow: 0,0,0; }
 html[data-theme-preset="ocean"]    { --bg: #0a0a1e; --surface: #0f0f28; --text: #fff; --accent: #7a5cff; --glow: 122,92,255; }
@@ -577,7 +568,7 @@ body.has-background #backgroundLayer { opacity: 1; }
 .lyrics-sync-btn:hover { background: rgba(168,85,247,.25); color: #fff; }
 .lyrics-sync-val {
   min-width: 56px; text-align: center;
-  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 12px; color: #fff; font-variant-numeric: tabular-nums;
 }
 .lyrics-sync-reset {
@@ -654,7 +645,8 @@ body.has-background #backgroundLayer { opacity: 1; }
   box-shadow: 0 2px 6px rgba(0,0,0,.5); }
 .progress:hover::-webkit-slider-thumb { opacity: 1; }
 .progress::-webkit-slider-thumb:hover { transform: scale(1.2); }
-.time-row { display: flex; justify-content: space-between; margin-top: 8px; color: var(--text-4); font-size: 11px; font-variant-numeric: tabular-nums; }
+.time-row { display: flex; justify-content: space-between; margin-top: 8px; color: var(--text-4); font-size: 11px; font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono); }
 .controls { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 22px; flex-wrap: wrap; }
 .icon-control { width: 40px; height: 40px; display: grid; place-items: center;
   border-radius: 50%; color: var(--text-2); transition: all var(--dur) var(--ease-spring); }
@@ -766,7 +758,7 @@ body.has-background #backgroundLayer { opacity: 1; }
 .mini-btn.fav-active svg { fill: currentColor; }
 .mini-right { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
 .mini-time { color: rgba(255,255,255,.5); font-size: 12px; font-variant-numeric: tabular-nums;
-  font-family: 'SFMono-Regular', Consolas, monospace; margin-right: 6px; white-space: nowrap; }
+  font-family: var(--font-mono); margin-right: 6px; white-space: nowrap; }
 .mini-volume { display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: var(--radius-sm); transition: background var(--dur-fast) var(--ease); }
 .mini-volume:hover { background: transparent; }
 .mini-vol-icon { width: 18px; height: 18px; stroke: rgba(255,255,255,.6); fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; cursor: pointer; transition: stroke var(--dur-fast) var(--ease); }
@@ -924,7 +916,7 @@ html[data-theme="light"] .image-library-item-actions { background: rgba(255,255,
 html[data-theme="light"] .image-library-item-actions button {
   color: #000; border-color: rgba(0,0,0,.14); background: rgba(0,0,0,.06); }
 html[data-theme="light"] .image-library-item-actions button:hover { background: rgba(0,0,0,.12); }
-.diagnostics { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 11px; line-height: 1.7;
+.diagnostics { font-family: var(--font-mono); font-size: 11px; line-height: 1.7;
   color: var(--text-3); padding: 14px 16px; background: #080808; border: 1px solid var(--border);
   border-radius: var(--radius-md); white-space: pre-wrap; word-break: break-all; }
 .diag-row { display: flex; justify-content: space-between; gap: 12px; padding: 2px 0; }
@@ -1175,7 +1167,7 @@ html[data-theme="light"] .profile-edit-card { background: #fff; border-color: va
 .profile-now-artist { font-size: 11.5px; color: var(--text-3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .profile-now-progress { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
 .profile-now-time { font-size: 10px; color: var(--text-4); font-variant-numeric: tabular-nums; flex: 0 0 auto;
-  font-family: 'SFMono-Regular', Consolas, monospace; }
+  font-family: var(--font-mono); }
 .profile-now-bar { flex: 1; height: 3px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
 .profile-now-fill { height: 100%; width: 0; border-radius: 3px; background: #fff; }
 .profile-now-btn { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 50%; display: grid; place-items: center;
