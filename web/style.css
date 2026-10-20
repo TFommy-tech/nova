@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 /* ============================================================
    NOVA — style.css (v5.2.0)
    ============================================================ */
@@ -23,7 +22,6 @@ kbd { font-family: inherit; }
   --planet-3: #f472b6;
   --glass: rgba(255,255,255,.03);
   --glass-2: rgba(255,255,255,.06);
-  --glass-border: rgba(255,255,255,.08);
   --font-display: 'Space Grotesk', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
   --bg: #0a0a0a; --bg-2: #111;
