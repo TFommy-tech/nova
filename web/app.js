@@ -27,17 +27,15 @@
   if (!Array.isArray(savedHistory)) savedHistory = [];
   if (!Array.isArray(savedLocalTracks)) savedLocalTracks = [];
 
-  const CURSOR_VARIANTS = ['dot', 'ring', 'glow', 'system'];
-  const CURSOR_LABELS = { dot: 'Точка', ring: 'Кольцо', glow: 'Свечение', system: 'Системный' };
   const THEME_PRESETS = ['dark','devblog','light','ocean','sunset','forest','midnight','dawn'];
   const THEMES = [
     { id: 'dark',     name: 'Тёмная',   bg: '#0a0a0a', accent: '#ffffff' },
     { id: 'devblog',  name: 'Devblog',  bg: '#0a0e14', accent: '#5ba3f5' },
     { id: 'light',    name: 'Светлая',  bg: '#f5f5f5', accent: '#000000' },
-    { id: 'ocean',    name: 'Океан',    bg: '#0a0a1e', accent: '#7a5cff' },
+    { id: 'ocean',    name: 'Океан',    bg: '#0a0a1e', accent: '#ffffff' },
     { id: 'sunset',   name: 'Закат',    bg: '#1a0a08', accent: '#ff6b4a' },
     { id: 'forest',   name: 'Forest',   bg: '#0a140a', accent: '#4ade80' },
-    { id: 'midnight', name: 'Midnight', bg: '#050508', accent: '#a855f7' },
+    { id: 'midnight', name: 'Midnight', bg: '#050508', accent: '#ffffff' },
     { id: 'dawn',     name: 'Dawn',     bg: '#1a1510', accent: '#f0a868' }
   ];
   const CUSTOM_THEME_KEY = 'nova_custom_theme';
@@ -51,10 +49,10 @@
     { key: 'border',  token: '--border',  label: 'Бордер' },
     { key: 'border2', token: '--border-2',label: 'Бордер-2' }
   ];
-  const savedCursor = store.get('nova_cursor', 'ring');
-  const initialCursor = CURSOR_VARIANTS.includes(savedCursor) ? savedCursor : 'ring';
-  document.documentElement.setAttribute('data-cursor', initialCursor);
-  document.documentElement.setAttribute('data-accent', store.get('nova_accent', ''));
+  // «purple» удалён из палитры (монохром) — мигрируем сохранённый выбор на «white».
+  const savedAccent = store.get('nova_accent', '');
+  if (savedAccent === 'purple') { store.remove('nova_accent'); }
+  document.documentElement.setAttribute('data-accent', savedAccent === 'purple' ? '' : savedAccent);
 
   const _v = Number(store.get('nova_volume', '100'));
   const initialVolume = Number.isFinite(_v) && _v >= 0 && _v <= 100 ? Math.round(_v) : 100;
@@ -76,7 +74,6 @@
       return ['all', 'soundcloud', 'audius', 'deezer', 'youtube'].includes(v) ? v : 'all';
     })(),
     sourceFilterTouched: store.get('nova_source_filter_set', '0') === '1',
-    cursor: initialCursor,
     eq: (() => {
       try {
         const raw = JSON.parse(store.get('nova_eq', '{"on":false,"bands":[0,0,0,0,0]}'));
@@ -119,7 +116,7 @@
   [
     'sidebar','logoBtn','userSlot','avatarBtn','userMenu','userAvatar','userName','userTag','userLoginBtn','userLogoutBtn','openProfileBtn',
     'topbarBack','searchWrap','searchInput','searchSuggestions','sourceFilter',
-    'backgroundLayer','backgroundShade','ambientGlow','starsCanvas','startupScreen','startupStatus',
+    'backgroundLayer','backgroundShade','startupScreen','startupStatus',
     'backgroundInput','localAudioInput',
     'loginModal','loginClose','loginDiscordBtn','loginTabs','tabLogin','tabRegister','localAuthForm',
     'authUsername','authPassword','authError','authSubmit','authSubmitText','continueAsGuest',
@@ -137,7 +134,7 @@
     'nowTitle','nowArtist','nowChips','progress','currentTime','duration',
     'downloadBtn','repeatBtn','prevBtn','largePlayBtn','largePlayIcon','nextBtn','shuffleBtn','favoriteBtn','queueToggleBtn','moreBtn',
     'volumeLarge','equalizerBtn','similarBtn',
-    'themeToggle','cursorToggle','accentPresets','themePresets','fontSelect','customThemeEditor','customEditorGrid','customBaseLabel',
+    'themeToggle','accentPresets','themePresets','fontSelect','customThemeEditor','customEditorGrid','customBaseLabel',
     'customApplyBtn','customResetBtn','customExportBtn','customImportBtn','customImportInput','backgroundBtn','backgroundResetBtn','bgPresets','settingsVolumeValue',
     'customCoverPreview','customCoverChoose','customCoverReset','bgPreview',
     'imageLibUrl','imageLibAddUrl','imageLibAddFile','imageLibFileInput','imageLibraryGrid',
@@ -171,73 +168,6 @@
 
   function on(node, ev, fn) { if (node && typeof node.addEventListener === 'function') node.addEventListener(ev, fn); }
   function apiBase() { return window.location.origin; }
-
-  let cursorController = null;
-
-  function initCustomCursor() {
-    if (window.matchMedia && !window.matchMedia('(pointer: fine)').matches) return;
-    const dot = document.createElement('div'); dot.className = 'nova-cursor-dot';
-    const ring = document.createElement('div'); ring.className = 'nova-cursor-ring';
-    const glow = document.createElement('div'); glow.className = 'nova-cursor-glow';
-    document.body.append(glow, ring, dot);
-
-    let visible = false, gx = 0, gy = 0, gtx = 0, gty = 0, raf = 0;
-    function show() { if (visible) return; visible = true; dot.classList.add('visible'); ring.classList.add('visible'); glow.classList.add('visible'); }
-    function hide() { visible = false; dot.classList.remove('visible'); ring.classList.remove('visible'); glow.classList.remove('visible'); }
-    function tickGlow() {
-      if (state.cursor !== 'glow') { raf = 0; return; }
-      gx += (gtx - gx) * 0.15; gy += (gty - gy) * 0.15;
-      glow.style.transform = `translate3d(${gx - 90}px,${gy - 90}px,0)`;
-      raf = requestAnimationFrame(tickGlow);
-    }
-    function ensureGlowLoop() { if (state.cursor === 'glow' && !raf) raf = requestAnimationFrame(tickGlow); }
-
-    function onMove(e) {
-      const x = e.clientX, y = e.clientY;
-      gtx = x; gty = y;
-      dot.style.transform = `translate3d(${x - 3}px,${y - 3}px,0)`;
-      ring.style.transform = `translate3d(${x - 14}px,${y - 14}px,0)`;
-      if (!visible) { gx = x; gy = y; show(); }
-      ensureGlowLoop();
-    }
-    window.addEventListener('mousemove', onMove, { passive: true });
-    window.addEventListener('mouseleave', hide);
-    window.addEventListener('mouseenter', show);
-    window.addEventListener('blur', hide);
-
-    function isInteractive(t) { return t?.closest && !!t.closest('button, a, input, textarea, select, .card, .home-mini-card, .list-row, .nav-btn, .queue-row, .suggestion, .eq-preset, .accent-preset, .bg-preset, .artist-link, .player-tab, .small-btn, .inline-control, .context-item, .playlist-card, .playlist-picker-item, .search-filter, .page-tab, .workshop-item, .workshop-item-btn, .workshop-cat-btn'); }
-    function isTextInput(t) { return t?.closest && !!t.closest('input, textarea, [contenteditable="true"]'); }
-
-    document.addEventListener('mouseover', e => {
-      const t = e.target;
-      if (isTextInput(t)) { ring.classList.add('typing'); ring.classList.remove('hover'); dot.classList.remove('hover'); glow.classList.remove('hover'); }
-      else if (isInteractive(t)) { ring.classList.add('hover'); ring.classList.remove('typing'); dot.classList.add('hover'); glow.classList.add('hover'); }
-      else { ring.classList.remove('hover', 'typing'); dot.classList.remove('hover'); glow.classList.remove('hover'); }
-    });
-    document.addEventListener('mousedown', () => { dot.classList.add('click'); ring.classList.add('click'); glow.classList.add('click'); });
-    document.addEventListener('mouseup', () => { dot.classList.remove('click'); ring.classList.remove('click'); glow.classList.remove('click'); });
-
-    cursorController = {
-      destroy() {
-        window.removeEventListener('mousemove', onMove);
-        dot.remove(); ring.remove(); glow.remove();
-        if (raf) cancelAnimationFrame(raf);
-      }
-    };
-  }
-
-  function applyCursor(variant) {
-    state.cursor = CURSOR_VARIANTS.includes(variant) ? variant : 'ring';
-    store.set('nova_cursor', state.cursor);
-    if (cursorController) { cursorController.destroy(); cursorController = null; }
-    if (state.cursor === 'system') {
-      document.documentElement.setAttribute('data-cursor', 'system');
-    } else {
-      document.documentElement.setAttribute('data-cursor', state.cursor);
-      initCustomCursor();
-    }
-    if (el.cursorToggle) el.cursorToggle.textContent = CURSOR_LABELS[state.cursor] || 'Кольцо';
-  }
 
   let audioCtx = null, sourceNode = null, fadeGain = null, volumeGain = null, eqFilters = null, audioGraphReady = false;
   const EQ_BANDS = [
@@ -575,40 +505,6 @@
     const s = [t.title || '', t.artist || '', t.provider || t.source || ''].join('|');
     let h = 0; for (let i = 0; i < s.length; i++) { h = ((h << 5) - h) + s.charCodeAt(i); h |= 0; }
     return 't_' + Math.abs(h);
-  }
-
-  const ambientCache = new Map();
-  function updateAmbientFromCover(url) {
-    if (!url) { document.body.classList.remove('has-ambient'); return; }
-    if (ambientCache.has(url)) {
-      const c = ambientCache.get(url);
-      if (c) { document.documentElement.style.setProperty('--glow', c.join(',')); document.body.classList.add('has-ambient'); }
-      else document.body.classList.remove('has-ambient');
-      return;
-    }
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      try {
-        const canvas = document.createElement('canvas');
-        canvas.width = canvas.height = 24;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, 24, 24);
-        const data = ctx.getImageData(0, 0, 24, 24).data;
-        let r = 0, g = 0, b = 0, n = 0;
-        for (let i = 0; i < data.length; i += 4) {
-          if (data[i + 3] < 128) continue;
-          r += data[i]; g += data[i + 1]; b += data[i + 2]; n++;
-        }
-        if (!n) { ambientCache.set(url, null); document.body.classList.remove('has-ambient'); return; }
-        r = Math.round(r / n); g = Math.round(g / n); b = Math.round(b / n);
-        ambientCache.set(url, [r, g, b]);
-        document.documentElement.style.setProperty('--glow', [r, g, b].join(','));
-        document.body.classList.add('has-ambient');
-      } catch { document.body.classList.remove('has-ambient'); }
-    };
-    img.onerror = () => document.body.classList.remove('has-ambient');
-    img.src = url;
   }
 
   function avatarUrl(u) {
@@ -1228,7 +1124,6 @@
     lastPlaybackError = '';
     resetProgressUI();
     updateMiniPlayer(); updatePlayerView(); updatePlayButtons();
-    updateAmbientFromCover(coverUrl(track.cover));
     addRecentToShuffleHistory(track);
 
     initAudioGraph();
@@ -2728,7 +2623,6 @@
     if (el.defaultSource && el.defaultSource.value !== settings.defaultSource)
       el.defaultSource.value = settings.defaultSource;
     if (el.settingsVolumeValue) el.settingsVolumeValue.textContent = state.volume + '%';
-    if (el.cursorToggle) el.cursorToggle.textContent = CURSOR_LABELS[state.cursor] || 'Кольцо';
     renderAccentPicker(); renderThemePresets(); applyThemePreset(settings.themePreset);
     renderBgPresets(); renderUser();
     if (el.fontSelect) el.fontSelect.value = store.get('nova_font', 'Inter');
@@ -2737,7 +2631,7 @@
   function renderAccentPicker() {
     const c = el.accentPresets; if (!c) return;
     c.innerHTML = '';
-    const list = ['purple','blue','cyan','teal','green','lime','yellow','orange','red','pink','rose','magenta','indigo','white'];
+    const list = ['white','blue','cyan','teal','green','lime','yellow','orange','red','pink','rose','magenta','indigo'];
     const cur = document.documentElement.getAttribute('data-accent');
     list.forEach(a => {
       const b = document.createElement('button');
@@ -2752,7 +2646,6 @@
         }
         c.querySelectorAll('.accent-preset').forEach(x => x.classList.remove('active'));
         b.classList.add('active');
-        if (state.currentTrack?.cover) updateAmbientFromCover(coverUrl(state.currentTrack.cover));
         notify('Цвет: ' + a);
       });
       c.appendChild(b);
@@ -3084,8 +2977,7 @@
       ['volume', state.volume + '%'],
       ['queue', `${state.queue.length} треков`],
       ['favorites', `${state.favorites.length}`],
-      ['history', `${state.history.length}`],
-      ['cursor', state.cursor]
+      ['history', `${state.history.length}`]
     ];
     box.innerHTML = rows.map(([k, v]) =>
       `<div class="diag-row"><span class="diag-key">${escapeHtml(k)}</span><span class="diag-val">${escapeHtml(String(v))}</span></div>`).join('');
@@ -3242,101 +3134,6 @@
     } catch { notify('Не удалось опубликовать', 'error'); }
   }
 
-  // ── COSMIC OBSERVATORY (Этап 1): звёздное небо ──
-  // 150-200 звёзд, медленный дрейф (0.02-0.05 px/кадр), случайное мерцание,
-  // подкраска в --glow (меняется от обложки трека). Self-contained IIFE,
-  // не трогает логику плеера. Уважает prefers-reduced-motion.
-  (function initStars() {
-    const canvas = el.starsCanvas; if (!canvas) return;
-    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const ctx = canvas.getContext('2d');
-    let W = 0, H = 0, raf = null;
-    let stars = [];
-    // Плотность из площади экрана, зажатая в диапазон 200-300 звёзд (ярче фон).
-    function starCount() {
-      return Math.max(200, Math.min(300, Math.floor((window.innerWidth * window.innerHeight) / 5000)));
-    }
-    // Берём размеры из окна (НЕ из getBoundingClientRect — на момент init layout
-    // ещё не применён и canvas отдаёт дефолт 300×150, из-за чего звёзды кучковались
-    // в углу). Явно задаём CSS-размер и буфер под DPR, затем ПЕРЕсоздаём звёзды.
-    function resizeCanvas() {
-      const dpr = window.devicePixelRatio || 1;
-      W = window.innerWidth; H = window.innerHeight;
-      canvas.style.width = W + 'px';
-      canvas.style.height = H + 'px';
-      canvas.width = Math.floor(W * dpr);
-      canvas.height = Math.floor(H * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      seed();
-    }
-    function seed() {
-      const n = starCount();
-      stars = Array.from({ length: n }, (_, i) => {
-        // ~30% звёзд получают лёгкий оттенок --glow (цвета обложки)
-        const tinted = Math.random() < 0.3;
-        return {
-          x: Math.random() * W, y: Math.random() * H,
-          r: Math.random() * 1.4 + 0.6,               // базовые 0.6-2.0px
-          vx: (Math.random() * 0.03 + 0.02) * (Math.random() < 0.5 ? -1 : 1),
-          vy: (Math.random() * 0.03 + 0.02) * (Math.random() < 0.5 ? -1 : 1),
-          base: Math.random() * 0.5 + 0.5,            // яркость 0.5-1.0
-          tw: Math.random() * Math.PI * 2, twSpd: Math.random() * 0.02 + 0.005,
-          big: false, tinted
-        };
-      });
-      // 10-15 «крупных» звёзд: r 2-3px, ярче, с мягким halo.
-      const bigN = 10 + Math.floor(Math.random() * 6); // 10..15
-      for (let i = 0; i < bigN; i++) {
-        stars.push({
-          x: Math.random() * W, y: Math.random() * H,
-          r: Math.random() * 1 + 2,                   // 2.0-3.0px
-          vx: (Math.random() * 0.02 + 0.01) * (Math.random() < 0.5 ? -1 : 1),
-          vy: (Math.random() * 0.02 + 0.01) * (Math.random() < 0.5 ? -1 : 1),
-          base: Math.random() * 0.2 + 0.8,            // 0.8-1.0
-          tw: Math.random() * Math.PI * 2, twSpd: Math.random() * 0.015 + 0.004,
-          big: true, tinted: Math.random() < 0.3
-        });
-      }
-    }
-    function glowColor() {
-      // --glow = "r,g,b" (set by updateAmbientFromCover / theme). Fallback — белый (монохром).
-      const g = getComputedStyle(document.documentElement).getPropertyValue('--glow').trim();
-      const m = /^(\d+)\s*,\s*(\d+)\s*,\s*(\d+)$/.exec(g);
-      return m ? { r: +m[1], g: +m[2], b: +m[3] } : { r: 255, g: 255, b: 255 };
-    }
-    let gc = glowColor(), gcT = 0;
-    function draw() {
-      ctx.clearRect(0, 0, W, H);
-      if (++gcT % 60 === 0) gc = glowColor(); // обновляем окраc раз в ~1 c
-      for (const s of stars) {
-        s.x += s.vx; s.y += s.vy; s.tw += s.twSpd;
-        if (s.x < -3) s.x = W + 3; else if (s.x > W + 3) s.x = -3;
-        if (s.y < -3) s.y = H + 3; else if (s.y > H + 3) s.y = -3;
-        // заметное мерцание: alpha *= 0.7 + 0.3*sin
-        let a = s.base * (0.7 + 0.3 * Math.sin(s.tw));
-        a = Math.max(0.05, Math.min(1, a));
-        // цвет: белый; для tinted-звёзд (~30%) — лёгкий оттенок --glow
-        let r = 255, gg = 255, b = 255;
-        if (s.tinted) {
-          r = Math.round(255 + (gc.r - 255) * 0.5);
-          gg = Math.round(255 + (gc.g - 255) * 0.5);
-          b = Math.round(255 + (gc.b - 255) * 0.5);
-        }
-        ctx.beginPath();
-        ctx.fillStyle = `rgba(${r},${gg},${b},${a})`;
-        if (s.big) { ctx.shadowBlur = 8; ctx.shadowColor = 'rgba(255,255,255,.6)'; }
-        else { ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; }
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.shadowBlur = 0;
-      raf = requestAnimationFrame(draw);
-    }
-    function start() { resizeCanvas(); if (raf) cancelAnimationFrame(raf); draw(); }
-    window.addEventListener('resize', resizeCanvas, { passive: true });
-    start();
-  })();
-
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const v = btn.dataset.view;
@@ -3462,12 +3259,6 @@
 
   on(el.themeToggle, 'click', () => {
     applyThemePreset(settings.theme === 'dark' ? 'light' : 'dark', true);
-  });
-  on(el.cursorToggle, 'click', () => {
-    const idx = CURSOR_VARIANTS.indexOf(state.cursor);
-    const next = CURSOR_VARIANTS[(idx + 1) % CURSOR_VARIANTS.length];
-    applyCursor(next);
-    notify('Курсор: ' + CURSOR_LABELS[next]);
   });
   on(el.notificationsToggle, 'click', () => {
     settings.notifications = !settings.notifications;
@@ -3910,7 +3701,6 @@
   }
 
   applyTheme();
-  applyCursor(initialCursor);
   setVolume(state.volume);
   updateModeButtons();
   renderUser();
@@ -3960,7 +3750,7 @@
   }
   startup();
 
-  window.NOVA = { state, settings, playTrack, doSearch, showView, applyCursor, openWorkshop };
+  window.NOVA = { state, settings, playTrack, doSearch, showView, openWorkshop };
 
   function togglePlay() {
     if (!state.currentTrack) return;

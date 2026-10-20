@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru" data-accent="purple" data-theme="dark" data-cursor="ring">
+<html lang="ru" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -14,9 +14,7 @@
 <body>
 
 <div id="backgroundLayer"></div>
-<canvas id="starsCanvas" class="stars-canvas" aria-hidden="true"></canvas>
 <div id="backgroundShade"></div>
-<div id="ambientGlow" class="ambient-glow" aria-hidden="true"></div>
 
 <div id="startupScreen" class="startup">
   <div class="startup-inner">
@@ -165,14 +163,13 @@
                 <defs>
                   <linearGradient id="starGrad" x1="0.5" y1="0" x2="0.5" y2="1">
                     <stop offset="0%" stop-color="#ffffff"/>
-                    <stop offset="40%" stop-color="#f0e8ff"/>
-                    <stop offset="70%" stop-color="#c4a8ff"/>
-                    <stop offset="100%" stop-color="#7a5cff"/>
+                    <stop offset="55%" stop-color="#e5e5e5"/>
+                    <stop offset="100%" stop-color="#929292"/>
                   </linearGradient>
                   <radialGradient id="starAura" cx="0.5" cy="0.5" r="0.5">
-                    <stop offset="0%" stop-color="#a855f7" stop-opacity="0.35"/>
-                    <stop offset="55%" stop-color="#7a5cff" stop-opacity="0.10"/>
-                    <stop offset="100%" stop-color="#7a5cff" stop-opacity="0"/>
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.25"/>
+                    <stop offset="55%" stop-color="#ffffff" stop-opacity="0.08"/>
+                    <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
                   </radialGradient>
                   <filter id="starGlow" x="-100%" y="-100%" width="300%" height="300%">
                     <feGaussianBlur stdDeviation="2.5" result="b1"/>
@@ -929,13 +926,6 @@
         <div class="settings-section">
           <div class="settings-section-title">Интерфейс</div>
           <div class="settings-grid">
-            <div class="setting">
-              <div class="setting-copy">
-                <div class="setting-label">Курсор</div>
-                <div class="setting-hint">Точка / Кольцо / Свечение / Системный.</div>
-              </div>
-              <div class="setting-value"><button id="cursorToggle" class="settings-action">Кольцо</button></div>
-            </div>
             <div class="setting">
               <div class="setting-copy">
                 <div class="setting-label">Уведомления</div>
