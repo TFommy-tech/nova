@@ -1299,8 +1299,8 @@ function seedWorkshop() {
       value: 'linear-gradient(180deg,#001018 0%,#000 100%)', system: true },
     { id: 'sys_graphite', name: 'Графит', author: 'NOVA', tag: 'background', category: 'background', kind: 'css',
       value: 'linear-gradient(180deg,#101010 0%,#000 100%)', system: true },
-    { id: 'sys_purple_glow', name: 'Пурпурное свечение', author: 'NOVA', tag: 'gradient', category: 'background', kind: 'css',
-      value: 'radial-gradient(circle at bottom right,#3a0a3a 0%,#000 60%)', system: true },
+    { id: 'sys_purple_glow', name: 'Тёмный круг', author: 'NOVA', tag: 'gradient', category: 'background', kind: 'css',
+      value: 'radial-gradient(circle at bottom right,#1a1a1a 0%,#000 60%)', system: true },
     { id: 'sys_pulse', name: 'Пульс', author: 'NOVA', tag: 'animation', category: 'animation', kind: 'css',
       value: 'linear-gradient(90deg, #0a0a0a, #1a1a2e, #0a0a0a)', system: true },
     { id: 'sys_star', name: 'Звезда', author: 'NOVA', tag: 'icon', category: 'icon', kind: 'svg',
@@ -1955,13 +1955,18 @@ async function tryPiped(base, vid, range, res) {
 // «свежесть» по mtime бессмысленна — кэш по факту наличия, чистим по GC.
 const YT_DLP_BIN = process.env.YT_DLP_BIN || '/usr/local/bin/yt-dlp';
 const YT_DLP_NODE = process.env.YT_DLP_NODE || '/usr/bin/node';
+// Cloudflare WARP (SOCKS5, режим proxy) — обход плохой ноды RetnNet до
+// googlevideo.com. По умолчанию включён; пустая строка = без прокси.
+const YT_DLP_PROXY = process.env.YT_DLP_PROXY !== undefined
+  ? process.env.YT_DLP_PROXY
+  : 'socks5://127.0.0.1:40000';
 const YT_CACHE_DIR = path.join(DATA_DIR, 'yt-cache'); // кэш yt-*.m4a (на диске)
 const YT_TMP_DIR = path.join(DATA_DIR, 'yt-tmp');     // TMPDIR для PyInstaller _MEI*
 const YT_DLP_GC_MS = 2 * 60 * 60 * 1000;              // TTL кэша: 2 часа
 const YT_CACHE_MAX_BYTES = 2 * 1024 * 1024 * 1024;    // порог кэша: 2 ГБ
 const YT_CACHE_TRIM_TO = 1.5 * 1024 * 1024 * 1024;    // обрезаем до 1.5 ГБ
 const YT_MEI_TTL_MS = 5 * 60 * 1000;                  // _MEI* старше 5 мин — мусор
-const YT_DLP_BUDGET_MS = 30000; // внутри общего withTimeout(40000)
+const YT_DLP_BUDGET_MS = 90000; // внутри общего withTimeout(120000)
 
 // Папки кэша/tmp создаём при старте (recursive — на случай отсутствия data/).
 for (const _d of [YT_CACHE_DIR, YT_TMP_DIR]) {
@@ -2057,7 +2062,7 @@ function findYtDlpFile(vid) {
   return null;
 }
 
-async function runYtDlp(vid, file) {
+async function runYtDlp(vid, file, opts = {}) {
   await acquireYtdlpSlot(); // ФИКС C: максимум YTDLP_CONCURRENCY параллельных процессов
   try {
   return await new Promise((resolve) => {
@@ -2069,13 +2074,18 @@ async function runYtDlp(vid, file) {
     let child;
     gcMeiDirs(); // убрать осиротевшие _MEI* от прошлых (убитых) запусков
     try {
-      child = spawn(YT_DLP_BIN, [
+      const args = [
         '-f', 'bestaudio[acodec=opus][abr>=128]/bestaudio[acodec=opus]/bestaudio[abr>=192]/bestaudio',
         '--js-runtimes', YT_DLP_NODE.includes(':') ? YT_DLP_NODE : `node:${YT_DLP_NODE}`,
-        '-o', file,
-        `https://www.youtube.com/watch?v=${vid}`
-      ], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, TMPDIR: YT_TMP_DIR } });
-      console.log('[yt-dlp] spawn', vid, 'runtime:', YT_DLP_NODE.includes(':') ? YT_DLP_NODE : `node:${YT_DLP_NODE}`, 't0=', t0);
+      ];
+      // Трафик к googlevideo.com идёт через Cloudflare WARP (SOCKS5) — плохая
+      // нода RetnNet до Google CDN рвёт соединение (read timeout ~20 c).
+      // opts.noProxy — аварийный заход напрямую, если WARP недоступен.
+      const proxy = opts.noProxy ? '' : YT_DLP_PROXY;
+      if (proxy) args.push('--proxy', proxy);
+      args.push('-o', file, `https://www.youtube.com/watch?v=${vid}`);
+      child = spawn(YT_DLP_BIN, args, { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, TMPDIR: YT_TMP_DIR } });
+      console.log('[yt-dlp] spawn', vid, 'runtime:', YT_DLP_NODE.includes(':') ? YT_DLP_NODE : `node:${YT_DLP_NODE}`, 'proxy:', proxy || 'none', 't0=', t0);
     } catch (e) { console.log('[yt-dlp] spawn err:', e.message); resolve(false); return; }
     const timer = setTimeout(() => {
       killedByBudget = true;
@@ -2124,7 +2134,14 @@ async function prepYtDlp(vid) {
     let file = findYtDlpFile(vid);
     if (!file) {
       file = ytDlpFile(vid, 'webm');
-      if (!(await runYtDlp(vid, file))) return null;
+      let ok = await runYtDlp(vid, file);
+      // Fallback: если через WARP не вышло (прокси мёртв/не поднят) — пробуем напрямую.
+      if (!ok && YT_DLP_PROXY) {
+        console.log('[yt-dlp] WARP не дал результата, fallback без прокси:', vid);
+        try { fs.unlinkSync(file); } catch {} // недокачанный остаток не мешает повтору
+        ok = await runYtDlp(vid, file, { noProxy: true });
+      }
+      if (!ok) return null;
       try { if (fs.statSync(file).size <= 0) return null; } catch { return null; }
     }
     const total = fs.statSync(file).size;
@@ -2250,10 +2267,10 @@ api.get('/api/audio/youtube/:videoId', async (req, res) => {
       // 4. youtubei.js — последним (ломается на SABR/decipher)
       if (await streamViaYoutubei(vid, range, res)) return 'youtubei';
       return null;
-    })(), 40000, 'yt_total_timeout');
+    })(), 120000, 'yt_total_timeout');
     if (!result && !res.headersSent) res.status(502).end();
   } catch (e) {
-    if (!res.headersSent) res.status(504).json({ error: 'timeout', message: 'YouTube недоступен за 40с' });
+    if (!res.headersSent) res.status(504).json({ error: 'timeout', message: 'YouTube недоступен за 120с' });
   }
 });
 

@@ -1233,7 +1233,7 @@
         // Таймаут: останавливаем аудио, чтобы не качало в фоне после ошибки
         try { el.audio.pause(); el.audio.removeAttribute('src'); el.audio.load(); } catch {}
         reject(new Error('timeout'));
-      }, 25000);
+      }, 60000);
       const tick = setInterval(() => {
         if (myId !== undefined && myId !== playRequestId) { if (done) return; done = true; cleanup(); try { el.audio.pause(); } catch {} reject(new Error('Aborted')); }
       }, 100);
