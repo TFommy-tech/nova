@@ -156,12 +156,30 @@ function grantOwnerTag(u) {
 }
 
 // ---- валидаторы полей профиля (используются в /api/profile/update на Этапе 3) ----
-function validateBanner(v) {
+// Строгая проверка URL изображения: только http(s) без кавычек/пробелов/спецсимволов
+// либо data:image с base64 (png/jpeg/webp/gif). Всё остальное отбрасывается —
+// иначе значение попадёт в CSS/HTML клиента и даёт stored XSS.
+function validateImageUrl(v) {
   const s = typeof v === 'string' ? v.trim() : '';
   if (!s) return '';
-  if (/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]{10,}$/i.test(s)) return s.slice(0, 3 * 1024 * 1024);
-  if (/^https?:\/\/\S+$/i.test(s) && s.length <= 2048) return s;
-  return '';
+  if (s.length > 3 * 1024 * 1024) return '';
+  // data:image — только растровые форматы в base64 (svg и «сырой» data отбрасываем)
+  if (/^data:/i.test(s)) {
+    if (!/^data:image\/(png|jpe?g|webp|gif);base64,[A-Za-z0-9+/=\s]{10,}$/i.test(s)) return '';
+    return s;
+  }
+  if (s.length > 2048) return '';
+  if (!/^https?:\/\//i.test(s)) return '';
+  // никаких кавычек, пробелов, угловых скобок и обратных слэшей
+  if (/["'<>\\\s]/.test(s)) return '';
+  try {
+    const u = new URL(s);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+  } catch { return ''; }
+  return s;
+}
+function validateBanner(v) {
+  return validateImageUrl(v);
 }
 function validateColor(v) {
   const s = typeof v === 'string' ? v.trim() : '';

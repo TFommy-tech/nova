@@ -252,6 +252,29 @@
     return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;')
       .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
   }
+  // Безопасный URL для <img src>: только http(s) или data:image — иначе пустая строка.
+  // Дополнительно режем кавычки/пробелы, чтобы значение нельзя было вырвать из атрибута.
+  function safeImageUrl(v, allowSvgData) {
+    const s = String(v == null ? '' : v).trim();
+    if (!s) return '';
+    if (/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(s)) return s.replace(/["'<>\\\s]/g, '');
+    // svg-data разрешён только для внутренне генерируемых иконок (defaultAvatarSvg),
+    // пользовательские данные сюда не попадают (сервер отбрасывает svg).
+    if (allowSvgData && /^data:image\/svg\+xml/i.test(s) && !/["'<>]/.test(s)) return s;
+    if (!/^https?:\/\//i.test(s)) return '';
+    if (/["'<>\\\s]/.test(s)) return '';
+    try {
+      const u = new URL(s);
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return '';
+    } catch { return ''; }
+    return s;
+  }
+  // Безопасное значение для CSS url("...") — кавычки экранируются, спецсимволы режутся.
+  function safeCssUrl(v) {
+    const s = safeImageUrl(v);
+    if (!s) return '';
+    return s.replace(/["'()\\]/g, '');
+  }
   function formatTime(s) {
     if (!Number.isFinite(s) || s < 0) return '0:00';
     const sec = Math.floor(s), m = Math.floor(sec / 60), r = String(sec % 60).padStart(2, '0');
@@ -525,7 +548,7 @@
     if (u) {
       el.avatarBtn.classList.add('logged-in');
       const url = u.provider === 'discord' ? avatarUrl(u) : defaultAvatarSvg();
-      el.avatarBtn.innerHTML = `<img src="${url}" alt="">`;
+      el.avatarBtn.innerHTML = `<img src="${escapeHtml(safeImageUrl(url, true))}" alt="">`;
       el.userAvatar.src = url;
       el.userName.textContent = u.username || 'User';
       el.userTag.textContent = u.provider === 'discord' ? 'Discord аккаунт' : 'Локальный аккаунт';
@@ -848,7 +871,7 @@
     t.textContent = track.title || track.album || '—';
     const s = document.createElement('div');
     s.className = 'home-mini-sub';
-    s.innerHTML = kind === 'artist' ? 'Исполнитель' : kind === 'album' ? (track.artist || 'Альбом') : artistsHtml(track.artist);
+    s.innerHTML = kind === 'artist' ? 'Исполнитель' : kind === 'album' ? (escapeHtml(track.artist || 'Альбом')) : artistsHtml(track.artist);
     d.append(img, t, s);
     if (kind === 'artist') d.addEventListener('click', () => showArtist(track.artistId || '', track.artist || ''));
     else if (kind === 'album') d.addEventListener('click', () => { if (track.albumId) showAlbum(track.albumId); });
@@ -1969,8 +1992,9 @@
     el.songInfoMeta.textContent = [track.duration ? formatTime(track.duration) : '', track.releaseDate?.slice(0, 4)].filter(Boolean).join(' · ') || '—';
     const providerLabel = { soundcloud: 'SoundCloud', audius: 'Audius', deezer: 'Deezer', youtube: 'YouTube', local: 'Локальный файл' }[track.provider]
       || String(track.provider || track.source || 'CATALOG').toUpperCase();
-    el.songInfoSource.innerHTML = track.sourceUrl
-      ? `Провайдер: <a href="${escapeHtml(track.sourceUrl)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline">${escapeHtml(providerLabel)} ↗</a>`
+    const sourceHref = /^https?:\/\//i.test(String(track.sourceUrl || '')) ? String(track.sourceUrl) : '';
+    el.songInfoSource.innerHTML = sourceHref
+      ? `Провайдер: <a href="${escapeHtml(sourceHref)}" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline">${escapeHtml(providerLabel)} ↗</a>`
       : `Провайдер: ${escapeHtml(providerLabel)}`;
     el.songInfoFavorite.textContent = isFavorite(track) ? '♥ В избранном' : '♡ В избранное';
     el.songInfoModal.classList.add('open');
@@ -2793,7 +2817,7 @@
   function openProfileEdit() {
     const u = state.user; if (!u) return notify('Войди', 'error');
     profileEditBanner = null;
-    if (u.banner) { el.peBannerPreview.style.backgroundImage = `url("${u.banner}")`; }
+    if (u.banner) { const b = safeCssUrl(u.banner); el.peBannerPreview.style.backgroundImage = b ? `url("${b}")` : ''; }
     else { el.peBannerPreview.style.backgroundImage = ''; el.peBannerPreview.style.backgroundColor = u.bannerColor || '#1DB954'; }
     el.peBannerColor.value = /^#[0-9a-f]{6}$/i.test(u.bannerColor || '') ? u.bannerColor.toLowerCase() : '#1DB954';
     el.peBio.value = u.bio || '';
@@ -2818,7 +2842,7 @@
     const reader = new FileReader();
     reader.onload = () => {
       profileEditBanner = String(reader.result || '');
-      el.peBannerPreview.style.backgroundImage = `url("${profileEditBanner}")`;
+      el.peBannerPreview.style.backgroundImage = `url("${safeCssUrl(profileEditBanner)}")`;
       notify('Баннер загружен');
     };
     reader.onerror = () => notify('Не удалось прочитать файл', 'error');
@@ -2873,10 +2897,11 @@
     }
     const u = state.user;
     if (u) {
-      if (u.banner) { el.profileBanner.style.backgroundImage = `url("${u.banner}")`; el.profileBanner.style.backgroundColor = ''; }
+      const bannerUrl = safeCssUrl(u.banner);
+      if (bannerUrl) { el.profileBanner.style.backgroundImage = `url("${bannerUrl}")`; el.profileBanner.style.backgroundColor = ''; }
       else { el.profileBanner.style.backgroundImage = ''; el.profileBanner.style.backgroundColor = u.bannerColor || '#1DB954'; }
       const url = u.provider === 'discord' ? avatarUrl(u) : (u.avatar ? u.avatar : defaultAvatarSvg());
-      el.profileAvatarBig.innerHTML = `<img src="${url}" alt="">`;
+      el.profileAvatarBig.innerHTML = `<img src="${escapeHtml(safeImageUrl(url, true))}" alt="">`;
       el.profileName.textContent = u.username || 'User';
       el.profileTags.innerHTML = (u.tags || []).map(profileTagPill).join('');
       el.profileTag.textContent = '@' + (u.username || 'user').toLowerCase();
@@ -2884,7 +2909,7 @@
       el.profileSocials.innerHTML = renderProfileSocials(u.socials || {});
     } else {
       el.profileBanner.style.backgroundImage = ''; el.profileBanner.style.backgroundColor = '#1DB954';
-      el.profileAvatarBig.innerHTML = `<img src="${defaultAvatarSvg()}" alt="">`;
+      el.profileAvatarBig.innerHTML = `<img src="${escapeHtml(safeImageUrl(defaultAvatarSvg(), true))}" alt="">`;
       el.profileName.textContent = 'Гость';
       el.profileTags.innerHTML = '';
       el.profileTag.textContent = '@guest';
