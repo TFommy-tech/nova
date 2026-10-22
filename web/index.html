@@ -64,7 +64,7 @@
       <img src="logo.png" alt="NOVA" width="26" height="26">
     </button>
 
-    <nav class="nav">
+    <nav class="nav" aria-label="Основные разделы">
       <button class="nav-btn active" data-view="home" data-label="Главная">
         <svg viewBox="0 0 24 24"><path d="m4 10 8-6 8 6v10H4z"/><path d="M9 20v-6h6v6"/></svg>
         <span class="nav-label">Главная</span>
@@ -535,7 +535,7 @@
     <div id="queueContent" class="queue-list">Очередь пуста</div>
   </aside>
 
-  <div id="miniPlayer" class="mini-player">
+  <footer id="miniPlayer" class="mini-player" aria-label="Плеер">
     <input id="miniProgress" class="mini-progress" type="range" min="0" max="1000" value="0" aria-label="Прогресс">
     <div class="mini-track" id="miniTrackClick" title="Открыть полный плеер">
       <img id="miniCover" class="mini-cover" alt="">
@@ -579,7 +579,7 @@
         <input id="volumeMini" class="mini-volume-range" type="range" min="0" max="100" value="100" aria-label="Громкость">
       </div>
     </div>
-  </div>
+  </footer>
 
   <div id="songInfoModal" class="song-info-modal" aria-hidden="true">
     <div class="song-info-card">
