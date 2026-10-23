@@ -1244,6 +1244,7 @@
             if (r.status === 404) {
               const j = await r.json().catch(() => null);
               if (j && j.error === 'drm_only') { err = new Error(j.message || 'Трек защищён DRM'); err.drmOnly = true; }
+              else if (j && j.error) { err = new Error('К сожалению, этот трек недоступен на SoundCloud и YouTube'); }
             }
           } catch {}
         }

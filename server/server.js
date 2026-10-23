@@ -1659,7 +1659,7 @@ api.get('/api/audio/resolve', async (req, res) => {
   if (hit && Date.now() - hit.time < RESOLVE_TTL)
     return res.json({ ok: true, ...hit.data, cached: true });
   try {
-    const data = await withTimeout(resolvePlaybackWithSemaphore({ title, artist, duration }), 12000, 'resolve_timeout');
+    const data = await withTimeout(resolvePlaybackWithSemaphore({ title, artist, duration }), 25000, 'resolve_timeout');
     resolveCache.set(ck, { time: Date.now(), data });
     res.json({ ok: true, ...data });
   } catch (e) {
@@ -1710,11 +1710,21 @@ async function fetchTrackData(cid, id, attempts = 3) {
 
 // Поиск замены на YouTube по «название + автор» (+ релакс-повтор «автор + первое слово»).
 // Общий для DRM-fallback и hls-only веток SC.
+async function cleanYtQuery(v) {
+  if (!v) return '';
+  // Убираем всё в скобках: (feat. ...), [Official Audio], (prod. ...)
+  let s = String(v).replace(/\([^)]*\)/g, '').replace(/\[[^\]]*\]/g, '');
+  // Убирать всё после " - " только если перед ним есть текст (чтобы не срезать само название)
+  s = s.replace(/\s+-\s+.+/g, '').trim();
+  // Убираем лишние пробелы
+  return s.replace(/\s+/g, ' ');
+}
+
 async function findYtFallbackId(t) {
   try {
-    const scTitle = String(t?.title || '').trim();
-    const scArtist = String(t?.user?.username || '').trim();
-    const deadline = Date.now() + 9000; // общий бюджет на обе попытки
+    const scTitle = cleanYtQuery(String(t?.title || ''));
+    const scArtist = cleanYtQuery(String(t?.user?.username || ''));
+    const deadline = Date.now() + 12000; // общий бюджет на обе попытки
     const tryQ = async (query) => {
       if (!query) return [];
       const budget = Math.max(1500, deadline - Date.now());
@@ -1724,7 +1734,12 @@ async function findYtFallbackId(t) {
       ]);
       return Array.isArray(r) ? r : [];
     };
+    // Сначала пробуем точный поиск: «название + автор»
     let ytRes = await tryQ(`${scTitle} ${scArtist}`.trim());
+    // Если не нашли — пробуем только по названию
+    if (!ytRes[0]?.videoId && scTitle) {
+      ytRes = await tryQ(scTitle);
+    }
     // Релакс-повтор: YouTube часто не находит точную длинную строку из SC,
     // но находит по «артист + первое слово названия».
     if (!ytRes[0]?.videoId && scTitle) {
