@@ -2280,12 +2280,29 @@
     clearLyricsSync();
     if (el.lyricsVideoLayer) el.lyricsVideoLayer.classList.add('off');
   }
+  function updateUrl(view, params) {
+    const base = '';
+    const paths = {
+      home: '/',
+      search: '/search',
+      artist: '/artist/' + (params || ''),
+      album: '/album/' + (params || ''),
+      library: '/library',
+      favorites: '/favorites',
+      playlists: '/playlists',
+      playlist: '/playlist/' + (params || ''),
+      player: '/'
+    };
+    const path = paths[view] || '/';
+    history.pushState({ view: view, params: params }, '', base + path);
+  }
+
   function showLyrics() {
     if (state.view !== 'player') showView('player');
     openLyrics();
   }
 
-  function showView(view) {
+  function showView(view, isPopState) {
     if (state.view === view) return;
     if (state.view !== 'player') state.lastNonPlayerView = state.view;
     state.view = view;
@@ -2308,7 +2325,20 @@
     if (view === 'favorites') renderFavorites();
     if (view === 'playlists') { loadPlaylists(); renderPlaylists(); }
     if (view === 'player') { updatePlayerView(); updateQueue(); }
+    if (!isPopState) updateUrl(view);
   }
+  window.addEventListener('popstate', (e) => {
+    const path = location.pathname || '/';
+    if (path === '/' || path === '') showView('home', true);
+    else if (path.startsWith('/search')) showView('search', true);
+    else if (path.startsWith('/artist/')) showView('artist', true);
+    else if (path.startsWith('/album/')) showView('album', true);
+    else if (path === '/library') showView('library', true);
+    else if (path === '/favorites') showView('favorites', true);
+    else if (path === '/playlists') showView('playlists', true);
+    else if (path === '/playlist/') showView('playlist', true);
+    else showView('home', true);
+  });
   function goBack() {
     if (state.view === 'playlist') { showView('playlists'); return; }
     showView(state.lastNonPlayerView || 'home');
