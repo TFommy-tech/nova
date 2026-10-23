@@ -2321,14 +2321,17 @@
   }
 
   function showView(view, isPopState) {
-    if (state.view === view) return;
-    if (state.view !== 'player') state.lastNonPlayerView = state.view;
-    state.view = view;
-    const map = {
-      home: $('homeView'), search: $('searchView'), library: $('libraryView'),
-      favorites: $('favoritesView'), playlists: $('playlistsView'), playlist: $('playlistView'),
-      player: $('playerView'), artist: $('artistView'), album: $('albumView')
-    };
+  if (state.view === view) return;
+  if (state.view !== 'player') state.lastNonPlayerView = state.view;
+  state.view = view;
+  
+  const map = {
+    home: $('homeView'), search: $('searchView'), library: $('libraryView'), 
+    favorites: $('favoritesView'), playlists: $('playlistsView'), playlist: $('playlistView'), 
+    player: $('playerView'), artist: $('artistView'), album: $('albumView')
+  };
+
+  const updateDOM = () => {
     Object.entries(map).forEach(([k, node]) => { if (node) node.classList.toggle('hidden', k !== view); });
     document.querySelectorAll('.nav-btn').forEach(b => {
       const v = b.dataset.view;
@@ -2336,27 +2339,36 @@
       b.classList.toggle('active', active);
     });
     const isNested = ['artist', 'album', 'playlist', 'player'].includes(view);
-    el.topbarBack.classList.toggle('hidden', !isNested);
-    if (view === 'home') renderHome();
-    if (view === 'search') applyDefaultSource();
-    if (view === 'library') { renderHistory(); renderLocal(); }
-    if (view === 'favorites') renderFavorites();
-    if (view === 'playlists') { loadPlaylists(); renderPlaylists(); }
-    if (view === 'player') { updatePlayerView(); updateQueue(); }
-    if (!isPopState) updateUrl(view);
+    if (el.topbarBack) el.topbarBack.classList.toggle('hidden', !isNested);
+    if (view === 'home' && typeof renderHome === 'function') renderHome();
+    if (view === 'search' && typeof applyDefaultSource === 'function') applyDefaultSource();
+    if (view === 'library') { if(typeof renderHistory==='function') renderHistory(); if(typeof renderLocal==='function') renderLocal(); }
+    if (view === 'favorites' && typeof renderFavorites === 'function') renderFavorites();
+    if (view === 'playlists') { if(typeof loadPlaylists==='function') loadPlaylists(); if(typeof renderPlaylists==='function') renderPlaylists(); }
+    if (view === 'player') { if(typeof updatePlayerView==='function') updatePlayerView(); if(typeof updateQueue==='function') updateQueue(); }
+  };
+
+  if (document.startViewTransition) {
+    document.startViewTransition(updateDOM);
+  } else {
+    updateDOM();
   }
-  window.addEventListener('popstate', (e) => {
-    const path = location.pathname || '/';
-    if (path === '/' || path === '') showView('home', true);
-    else if (path.startsWith('/search')) showView('search', true);
-    else if (path.startsWith('/artist/')) showView('artist', true);
-    else if (path.startsWith('/album/')) showView('album', true);
-    else if (path === '/library') showView('library', true);
-    else if (path === '/favorites') showView('favorites', true);
-    else if (path === '/playlists') showView('playlists', true);
-    else if (path === '/playlist/') showView('playlist', true);
-    else showView('home', true);
-  });
+  
+  if (!isPopState) updateUrl(view);
+}
+
+window.addEventListener('popstate', () => {
+  const path = location.pathname || '/';
+  if (path === '/' || path === '') showView('home', true);
+  else if (path.startsWith('/search')) showView('search', true);
+  else if (path.startsWith('/artist/')) showView('artist', true);
+  else if (path.startsWith('/album/')) showView('album', true);
+  else if (path === '/library') showView('library', true);
+  else if (path === '/favorites') showView('favorites', true);
+  else if (path === '/playlists') showView('playlists', true);
+  else if (path.startsWith('/playlist/')) showView('playlist', true);
+  else showView('home', true);
+});
   function goBack() {
     if (state.view === 'playlist') { showView('playlists'); return; }
     showView(state.lastNonPlayerView || 'home');
