@@ -1653,7 +1653,7 @@
     });
   }  async function showArtist(id, name) {
     showView('artist');
-    el.artistHeroName.textContent = name || 'Исполнитель';
+    el.artistName.textContent = name || 'Исполнитель';
     el.artistHeroImage.removeAttribute('src');
     el.artistHeroMeta.innerHTML = '';
     el.artistBannerBg.style.backgroundImage = 'none';
@@ -1674,7 +1674,7 @@
       let artistId = id, picture = '';
       if (!artistId && name) artistId = 'name:' + name;
       if (!artistId) {
-        el.artistHeroName.textContent = name || 'Исполнитель';
+        el.artistName.textContent = name || 'Исполнитель';
         el.artistTracks.innerHTML = '<div class="empty">Нет данных</div>';
         return;
       }
@@ -1684,8 +1684,22 @@
       if (!r.ok) throw Object.assign(new Error(d.error || 'unavailable'), { status: r.status });
       const artist = d.artist || {};
       const pic = artist.picture || picture || '';
-      el.artistHeroName.textContent = artist.name || name || 'Исполнитель';
+      el.artistName.textContent = artist.name || name || 'Исполнитель';
+      // Generate unique accent color from artist name
+      let hash = 0;
+      if (artist.name) {
+        for (let i = 0; i < artist.name.length; i++) {
+          hash = artist.name.charCodeAt(i) + ((hash << 5) - hash);
+        }
+      }
+      const colors = ['#ff2a6d', '#00f5d4', '#f2c14e', '#28666e', '#f0442e'];
+      const chosenColor = colors[Math.abs(hash) % colors.length];
+      el.artistView.style.setProperty('--artist-accent', chosenColor);
       if (pic) el.artistHeroImage.src = coverUrl(pic);
+      // Set background banner
+      if (pic) el.artistHeroBg.style.backgroundImage = `url("${coverUrl(pic)}")`;
+      // Set avatar
+      if (pic) el.artistAvatar.style.backgroundImage = `url("${coverUrl(pic)}")`;
       const meta = [];
       if (artist.nbFan) meta.push(`<span>${formatNumber(artist.nbFan)} фанатов</span>`);
       if (d.top_tracks?.length) meta.push(`<span>${d.top_tracks.length} треков</span>`);
@@ -1695,8 +1709,8 @@
       const allTracks = (d.top_tracks || []).map(normalizeTrack).filter(Boolean);
       let expanded = false; const INITIAL = 5;
       const drawTop = () => {
-        if (!allTracks.length) { el.artistTracks.innerHTML = '<div class="empty">Артист не найден в SoundCloud/Audius. Попробуй поиск</div>'; return; }
-        renderList(el.artistTracks, expanded ? allTracks : allTracks.slice(0, INITIAL), { context: 'artist' });
+        if (!allTracks.length) { el.artistTopTracks.innerHTML = '<div class="empty">Треки не найдены</div>'; return; }
+        renderList(el.artistTopTracks, expanded ? allTracks : allTracks.slice(0, INITIAL), { context: 'artist' });
       };
       drawTop();
       if (allTracks.length > INITIAL) {
@@ -1709,19 +1723,23 @@
         };
       }
       const albums = d.albums || [];
-      el.artistAlbumsSection.style.display = '';
-      el.artistAlbums.innerHTML = albums.length ? '' : '<div class="empty">Альбомы недоступны для этого артиста</div>';
-      albums.forEach(a => el.artistAlbums.appendChild(makeMiniCard({
-        id: a.providerId, albumId: a.providerId, album: a.title,
-        title: a.title, artist: artist.name || name, cover: a.cover
-      }, 'album')));
+      el.artistDiscography.innerHTML = albums.length ? '' : '<div class="empty">Альбомы недоступны для этого артиста</div>';
+      albums.forEach(a => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const title = a.title || 'Альбом';
+        card.innerHTML = '<div class="card-cover" style="background-image: url(\'' + a.cover + '\')"></div><div class="card-body"><h3 class="card-title">' + title + '</h3></div>';
+        el.artistDiscography.appendChild(card);
+      });
       const singles = d.singles || [];
-      el.artistSinglesSection.style.display = '';
-      el.artistSingles.innerHTML = singles.length ? '' : '<div class="empty">Синглы недоступны для этого артиста</div>';
-      singles.forEach(a => el.artistSingles.appendChild(makeMiniCard({
-        id: a.providerId, albumId: a.providerId, album: a.title,
-        title: a.title, artist: artist.name || name, cover: a.cover
-      }, 'album')));
+      el.artistDiscography.innerHTML += singles.length ? '' : '<div class="empty">Синглы недоступны для этого артиста</div>';
+      singles.forEach(a => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        const title = a.title || 'Сингл';
+        card.innerHTML = '<div class="card-cover" style="background-image: url(\'' + a.cover + '\')"></div><div class="card-body"><h3 class="card-title">' + title + '</h3></div>';
+        el.artistDiscography.appendChild(card);
+      });
     } catch (e) {
       el.artistTracks.innerHTML = '<div class="empty">' +
         (e && e.status === 404

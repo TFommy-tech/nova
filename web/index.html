@@ -232,39 +232,33 @@
         </div>
       </section>
 
-      <section id="artistView" class="view hidden" data-view="artist">
-        <div class="artist-page">
-          <div class="artist-banner" id="artistBanner">
-            <div class="artist-banner-bg" id="artistBannerBg"></div>
-            <div class="artist-banner-shade"></div>
-            <div class="artist-banner-content">
-              <img id="artistHeroImage" class="artist-photo-large" alt="">
-              <div class="artist-banner-info">
-                <div class="player-overline">ARTIST</div>
-                <h1 id="artistHeroName" class="artist-name-large">Исполнитель</h1>
-                <div id="artistHeroMeta" class="artist-meta-large"></div>
-              </div>
-            </div>
-          </div>
-          <div class="artist-body">
-            <div class="home-section" id="artistTracksSection">
-              <div class="home-section-head">
-                <h2>Популярные треки</h2>
-                <button id="artistShowAllBtn" class="section-action hidden">Показать все</button>
-              </div>
-              <div id="artistTracks" class="list"></div>
-            </div>
-            <div class="home-section" id="artistAlbumsSection">
-              <div class="home-section-head"><h2>Альбомы</h2></div>
-              <div id="artistAlbums" class="home-row"></div>
-            </div>
-            <div class="home-section" id="artistSinglesSection">
-              <div class="home-section-head"><h2>Синглы и EP</h2></div>
-              <div id="artistSingles" class="home-row"></div>
-            </div>
-          </div>
-        </div>
-      </section>
+      <section id="artistView" class="view hidden" data-view="artist" data-artist-color="var(--accent)">
+  <div class="artist-hero">
+    <div class="artist-hero-bg" id="artistHeroBg"></div>
+    <div class="artist-hero-content">
+      <div class="artist-avatar" id="artistAvatar"></div>
+      <div class="artist-info">
+        <span class="artist-verified">Verified Artist</span>
+        <h1 class="artist-name" id="artistName">Имя</h1>
+        <div class="artist-stats" id="artistStats">Слушатели • Треки</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="artist-content">
+    <!-- Блок 1: Популярные треки -->
+    <div class="artist-section">
+      <h2 class="section-title">Популярное</h2>
+      <div class="track-list" id="artistTopTracks"></div>
+    </div>
+
+    <!-- Блок 2: Дискография (Альбомы/Синглы) -->
+    <div class="artist-section">
+      <h2 class="section-title">Дискография</h2>
+      <div class="album-grid" id="artistDiscography"></div>
+    </div>
+  </div>
+</section>
 
       <section id="albumView" class="view hidden" data-view="album">
         <div class="album-view">
