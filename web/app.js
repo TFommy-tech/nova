@@ -151,7 +151,7 @@
     'songInfoModal','songInfoClose','songInfoCover','songInfoSource','songInfoTitle','songInfoArtist','songInfoAlbum','songInfoMeta',
     'songInfoPlay','songInfoFavorite','songInfoQueue','songInfoDownload',
     'equalizerModal','equalizerClose','equalizerPresets','equalizerBands','eqNotice',
-    'profileModal','profileModalClose','profileBanner','profileAvatarBig','profileName','profileTags','profileTag',
+    'profileModal','profileModalClose','profileBanner','profileAvatarBig','profileName','profileTags','profileTag','userTags',
     'profileBio','profileSocials',
     'profileNow','profileNowEmpty','profileNowBody','profileNowProvider','profileNowCover','profileNowTitle',
     'profileNowArtist','profileNowCur','profileNowFill','profileNowDur','profileNowBtn','profileNowPlayIcon',
@@ -2948,6 +2948,14 @@
       el.profileAvatarBig.innerHTML = `<img src="${escapeHtml(safeImageUrl(url, true))}" alt="">`;
       el.profileName.textContent = u.username || 'User';
       el.profileTags.innerHTML = (u.tags || []).map(profileTagPill).join('');
+      // Render user artist tags as chips
+      const artistTagsContainer = el.userTags;
+      artistTagsContainer.style.display = (u.artistTags && u.artistTags.length > 0) ? '' : 'none';
+      if (u.artistTags && u.artistTags.length > 0) {
+        artistTagsContainer.innerHTML = u.artistTags.map(t => `<span class="user-tag" onclick="openArtist('${t.id}')">#${t.name}</span>`).join(' ');
+      } else {
+        artistTagsContainer.innerHTML = '';
+      }
       el.profileTag.textContent = '@' + (u.username || 'user').toLowerCase();
       el.profileBio.textContent = u.bio || '';
       el.profileSocials.innerHTML = renderProfileSocials(u.socials || {});
