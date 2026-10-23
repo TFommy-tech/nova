@@ -5,7 +5,7 @@
 body, .sidebar, .topbar, .mini-player, .card, .home-mini-card, button, input, .view {
   transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease;
 }
-html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background-color: var(--bg) !important; color: var(--text) !important; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { border: 0; cursor: pointer; background: transparent; padding: 0; font-family: inherit; }
 img { display: block; max-width: 100%; }
@@ -182,6 +182,14 @@ html[data-theme-preset="sunset"]   { --bg: #0A0A0A; --surface: #00F5D4; --text: 
 html[data-theme-preset="forest"]   { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 74,222,128; }
 html[data-theme-preset="midnight"] { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 255,255,255; }
 html[data-theme-preset="dawn"]     { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 240,168,104; }
+html[data-theme="dark"]     { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 255,255,255; }
+html[data-theme="devblog"]  { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 91,163,245; }
+html[data-theme="light"]    { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 0,0,0; }
+html[data-theme="ocean"]    { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 255,255,255; }
+html[data-theme="sunset"]   { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 255,107,74; }
+html[data-theme="forest"]   { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 74,222,128; }
+html[data-theme="midnight"] { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 255,255,255; }
+html[data-theme="dawn"]     { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 240,168,104; }
 
 /* CUSTOM THEME («Своя тема»): реальные значения применяет JS через documentElement.style.setProperty(...)
    инлайн-стилем — он сильнее пресетов и блока html[data-theme="light"]. Исключение: для --accent/--glow
