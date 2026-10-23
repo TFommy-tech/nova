@@ -2,6 +2,9 @@
    NOVA — style.css (v5.2.0)
    ============================================================ */
 * { box-sizing: border-box; }
+body, .sidebar, .topbar, .mini-player, .card, .home-mini-card, button, input, .view {
+  transition: background-color 300ms ease, color 300ms ease, border-color 300ms ease;
+}
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { border: 0; cursor: pointer; background: transparent; padding: 0; font-family: inherit; }
@@ -171,14 +174,14 @@ body { color: var(--text); font-family: var(--font-display);
 
 /* THEME PRESETS — намеренно ВЫШЕ правил data-accent (ниже): без атрибута
    data-accent применяется акцент пресета; установленный пикером data-accent перебивает. */
-html[data-theme-preset="dark"]     { --bg: #0A0A0A; --surface: #161616; --text: #F5F5F5; --text-2: #929292; --accent: #ffffff; --glow: 255,255,255; }
-html[data-theme-preset="devblog"]  { --bg: #0a0e14; --surface: #0f141c; --text: #e8f1ff; --accent: #5ba3f5; --glow: 91,163,245; }
-html[data-theme-preset="light"]    { --bg: #f5f5f5; --surface: #ffffff; --text: #1a1a1a; --text-2: rgba(0,0,0,.55); --accent: #000000; --glow: 0,0,0; }
-html[data-theme-preset="ocean"]    { --bg: #0a0a1e; --surface: #0f0f28; --text: #fff; --accent: #ffffff; --glow: 255,255,255; }
-html[data-theme-preset="sunset"]   { --bg: #1a0a08; --surface: #24100c; --text: #fff; --accent: #ff6b4a; --glow: 255,107,74; }
-html[data-theme-preset="forest"]   { --bg: #0a140a; --surface: #0f1c0f; --text: #fff; --accent: #4ade80; --glow: 74,222,128; }
-html[data-theme-preset="midnight"] { --bg: #050508; --surface: #0a0a10; --text: #fff; --accent: #ffffff; --glow: 255,255,255; }
-html[data-theme-preset="dawn"]     { --bg: #1a1510; --surface: #241c15; --text: #fff; --accent: #f0a868; --glow: 240,168,104; }
+html[data-theme-preset="dark"]     { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 255,255,255; }
+html[data-theme-preset="devblog"]  { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 91,163,245; }
+html[data-theme-preset="light"]    { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 0,0,0; }
+html[data-theme-preset="ocean"]    { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 255,255,255; }
+html[data-theme-preset="sunset"]   { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 255,107,74; }
+html[data-theme-preset="forest"]   { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 74,222,128; }
+html[data-theme-preset="midnight"] { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 255,255,255; }
+html[data-theme-preset="dawn"]     { --bg: #0A0A0A; --surface: #00F5D4; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --accent: #FF2A6D; --glow: 240,168,104; }
 
 /* CUSTOM THEME («Своя тема»): реальные значения применяет JS через documentElement.style.setProperty(...)
    инлайн-стилем — он сильнее пресетов и блока html[data-theme="light"]. Исключение: для --accent/--glow
@@ -1619,11 +1622,11 @@ html[data-theme="light"] .workshop-search input { color: var(--text); }
 .theme-swatch.active { border-color: #fff; box-shadow: 0 0 0 3px rgba(255,255,255,0.6); transform: scale(1.08); }
 
 /* Глобальные цветовые темы оформления через data-theme (в конце файла, чтобы перебивать пресеты) */
-html[data-theme="neon-mint"] { --bg: #00F5D4; --surface: #00e0c2; --surface-2: #00ccb0; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --border: rgba(10,10,10,0.15); --accent: #FF2A6D; }
-html[data-theme="nuovo-pink"] { --bg: #FF2A6D; --surface: #e62562; --surface-2: #cc2056; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --border: rgba(10,10,10,0.15); --accent: #00F5D4; }
-html[data-theme="dark-gray"] { --bg: #171717; --surface: #262626; --surface-2: #333333; --text: #FFFFFF; --text-2: rgba(255,255,255,0.6); --border: rgba(255,255,255,0.1); --accent: #00F5D4; }
-html[data-theme="dirty-white"] { --bg: #F5F0DC; --surface: #EBE6D2; --surface-2: #E0DBC7; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --border: rgba(10,10,10,0.1); --accent: #F0442E; }
-html[data-theme="red-orange"] { --bg: #F0442E; --surface: #D93B27; --surface-2: #C23321; --text: #171717; --text-2: rgba(23,23,23,0.6); --border: rgba(23,23,23,0.15); --accent: #F5F0DC; }
-html[data-theme="vintage-yellow"] { --bg: #F2C14E; --surface: #E0B040; --surface-2: #CC9F32; --text: #171717; --text-2: rgba(23,23,23,0.6); --border: rgba(23,23,23,0.15); --accent: #28666E; }
-html[data-theme="petrol"] { --bg: #28666E; --surface: #20545B; --surface-2: #184248; --text: #F4EDE0; --text-2: rgba(244,237,224,0.6); --border: rgba(244,237,224,0.15); --accent: #F2C14E; }
-html[data-theme="paper"] { --bg: #F4EDE0; --surface: #EAE2D3; --surface-2: #DFD6C5; --text: #171717; --text-2: rgba(23,23,23,0.6); --border: rgba(23,23,23,0.1); --accent: #C09A35; }
+html[data-theme="neon-mint"] { --bg: #0A0A0A; --surface: #00F5D4; --surface-2: #00e0c0; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --border: rgba(10,10,10,0.15); --accent: #FF2A6D; }
+html[data-theme="nuovo-pink"] { --bg: #0A0A0A; --surface: #00F5D4; --surface-2: #00e0c0; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --border: rgba(10,10,10,0.15); --accent: #FF2A6D; }
+html[data-theme="dark-gray"] { --bg: #0A0A0A; --surface: #00F5D4; --surface-2: #00e0c0; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --border: rgba(10,10,10,0.15); --accent: #FF2A6D; }
+html[data-theme="dirty-white"] { --bg: #0A0A0A; --surface: #00F5D4; --surface-2: #00e0c0; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --border: rgba(10,10,10,0.15); --accent: #FF2A6D; }
+html[data-theme="red-orange"] { --bg: #0A0A0A; --surface: #00F5D4; --surface-2: #00e0c0; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --border: rgba(10,10,10,0.15); --accent: #FF2A6D; }
+html[data-theme="vintage-yellow"] { --bg: #0A0A0A; --surface: #00F5D4; --surface-2: #00e0c0; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --border: rgba(10,10,10,0.15); --accent: #FF2A6D; }
+html[data-theme="petrol"] { --bg: #0A0A0A; --surface: #00F5D4; --surface-2: #00e0c0; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --border: rgba(10,10,10,0.15); --accent: #FF2A6D; }
+html[data-theme="paper"] { --bg: #0A0A0A; --surface: #00F5D4; --surface-2: #00e0c0; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --border: rgba(10,10,10,0.15); --accent: #FF2A6D; }
