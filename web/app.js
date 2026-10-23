@@ -2024,7 +2024,7 @@
     el.songInfoModal.setAttribute('aria-hidden', 'true');
   }
 
-  const SETTINGS_TABS = ['general', 'interface', 'playback', 'account', 'data'];
+  const SETTINGS_TABS = ['general', 'interface', 'playback', 'account', 'data', 'themes'];
   let settingsTabTimer = null;
   function setSettingsTab(tab, animate = true) {
     const t = SETTINGS_TABS.includes(tab) ? tab : 'general';
@@ -3598,6 +3598,18 @@ window.addEventListener('popstate', () => {
   document.querySelectorAll('.settings-nav-btn').forEach(btn => {
     btn.addEventListener('click', () => setSettingsTab(btn.dataset.settingsTab));
   });
+  document.querySelectorAll('.theme-swatch').forEach(sw => {
+    sw.addEventListener('click', () => {
+      const name = sw.dataset.themeName;
+      if (!name) return;
+      document.documentElement.setAttribute('data-theme', name);
+      document.documentElement.removeAttribute('data-theme-preset');
+      localStorage.setItem('nova_theme', name);
+      settings.theme = name;
+      document.querySelectorAll('.theme-swatch').forEach(s =>
+        s.classList.toggle('active', s.dataset.themeName === name));
+    });
+  });
   on(el.workshopSearch, 'input', e => {
     workshopQuery = e.target.value.trim();
     clearTimeout(workshopSearchTimer);
@@ -3802,7 +3814,16 @@ window.addEventListener('popstate', () => {
   renderAccentPicker();
   renderCustomEditor();
   renderThemePresets();
+  // Восстановление сохранённой темы оформления (data-theme) при старте:
+  // nova_theme из localStorage, иначе дефолтная тёмная тема.
+  // Читаем ДО applyThemePreset(), т.к. applyTheme() внутри перезаписывает nova_theme.
+  const savedColorTheme = localStorage.getItem('nova_theme') || 'dark';
   applyThemePreset(settings.themePreset);
+  settings.theme = savedColorTheme;
+  document.documentElement.setAttribute('data-theme', savedColorTheme);
+  applyTheme();
+  document.querySelectorAll('.theme-swatch').forEach(s =>
+    s.classList.toggle('active', s.dataset.themeName === savedColorTheme));
   applyFont(store.get('nova_font', 'Inter'));
   if (el.fontSelect) el.fontSelect.value = store.get('nova_font', 'Inter');
   on(el.fontSelect, 'change', () => applyFont(el.fontSelect.value));
