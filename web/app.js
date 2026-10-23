@@ -2123,7 +2123,7 @@
     const rows = box.querySelectorAll('.lyrics-line');
     const activeRow = idx >= 0 ? rows[idx] : null;
     if (lyricsPrevWordRow && lyricsPrevWordRow !== activeRow) {
-      lyricsPrevWordRow.querySelectorAll('.word').forEach(w => { w.classList.remove('lit'); w.style.filter = ''; });
+      lyricsPrevWordRow.querySelectorAll('.word').forEach(w => { w.classList.remove('lit'); });
     }
     if (activeRow) {
       const startT = Number(activeRow.dataset.time);
@@ -2132,15 +2132,10 @@
       const words = activeRow.querySelectorAll('.word');
       const litWords = progress * words.length;
       words.forEach((w, wi) => {
-        if (wi < Math.floor(litWords)) {
+        if (wi < litWords) {
           w.classList.add('lit');
-          w.style.filter = '';
-        } else if (wi < litWords) {
-          w.classList.add('lit');
-          w.style.filter = `brightness(${0.6 + (litWords - wi) * 0.4})`;
         } else {
           w.classList.remove('lit');
-          w.style.filter = '';
         }
       });
     }
