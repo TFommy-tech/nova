@@ -1057,12 +1057,12 @@ html[data-theme="light"] .image-library-item-actions button:hover { background: 
 /* MODALS */
 .login-modal, .song-info-modal, .eq-modal, .profile-modal, .workshop-modal, .settings-modal {
   position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center;
-  background: rgba(0,0,0,.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  background: var(--surface); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   opacity: 0; visibility: hidden; transition: opacity .25s var(--ease-out), visibility .25s var(--ease-out);
   padding: 20px; }
 .login-modal.open, .song-info-modal.open, .eq-modal.open, .profile-modal.open, .workshop-modal.open, .settings-modal.open { opacity: 1; visibility: visible; }
 .login-card, .song-info-card, .eq-card, .profile-card, .workshop-card, .settings-modal-card {
-  position: relative; background: rgba(20,20,20,.85);
+  position: relative; background: var(--surface); border: 1px solid var(--border);
   -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px);
   border: 1px solid rgba(255,255,255,.08);
   border-radius: var(--radius-xl); box-shadow: 0 40px 100px rgba(0,0,0,.85);
@@ -1082,12 +1082,12 @@ html[data-theme="light"] .image-library-item-actions button:hover { background: 
   font-size: 18px; transition: all var(--dur-fast) var(--ease); }
 .login-close:hover, .song-info-close:hover, .settings-modal-close:hover { color: #fff; background: rgba(255,255,255,.06); }
 .login-logo-wrap { width: 56px; height: 56px; margin: 0 auto 18px; display: grid; place-items: center;
-  background: #151515; color: #fff; border: 1px solid var(--border-2); border-radius: var(--radius-lg); overflow: hidden; }
+  background: var(--surface); color: var(--text); border: 1px solid var(--border-2); border-radius: var(--radius-lg); overflow: hidden; }
 .login-logo-wrap img { width: 40px; height: 40px; }
 .login-title { font-size: 20px; font-weight: 800; letter-spacing: -.4px; margin: 0 0 8px; }
 .login-sub { color: var(--text-3); font-size: 12.5px; line-height: 1.5; margin: 0 0 22px; }
-.login-discord { width: 100%; height: 44px; border-radius: var(--radius-md); background: #5865F2;
-  color: #fff; font-size: 13px; font-weight: 600; display: flex; align-items: center;
+.login-discord { width: 100%; height: 44px; border-radius: var(--radius-md); background: var(--accent);
+  color: var(--bg); font-size: 13px; font-weight: 600; display: flex; align-items: center;
   justify-content: center; gap: 10px; transition: all var(--dur) var(--ease); }
 .login-discord:hover { background: #4752c4; }
 .login-divider { display: flex; align-items: center; gap: 12px; margin: 18px 0; color: var(--text-4); font-size: 11px; }
@@ -1116,12 +1116,12 @@ select.login-input { background-image: url("data:image/svg+xml;charset=UTF-8,%3C
 .login-guest:hover { color: #fff; }
 /* PROFILE EDIT MODAL */
 .profile-edit-modal { position: fixed; inset: 0; z-index: 1001; display: grid; place-items: center;
-  background: rgba(0,0,0,.7); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  background: var(--surface); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   opacity: 0; visibility: hidden; transition: opacity .25s var(--ease-out), visibility .25s var(--ease-out);
   padding: 20px; }
 .profile-edit-modal.open { opacity: 1; visibility: visible; }
 .profile-edit-card { position: relative; width: min(460px, 100%); max-height: 92vh; overflow-y: auto;
-  padding: 28px 26px 22px; background: rgba(20,20,20,.9);
+  padding: 28px 26px 22px; background: var(--surface);
   -webkit-backdrop-filter: blur(30px); backdrop-filter: blur(30px);
   border: 1px solid rgba(255,255,255,.08); border-radius: 20px; box-shadow: 0 40px 100px rgba(0,0,0,.85);
   transform: translateY(16px) scale(.97); opacity: 0;
