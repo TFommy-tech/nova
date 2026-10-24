@@ -1616,12 +1616,14 @@ api.get('/api/artist/:id/full', async (req, res) => {
     singles = albumList.filter(a => (a.recordType || 'album') !== 'album');
   }
 
+  // Recent Release: первый альбом, или первый сингл если альбомов нет
+  const recent_release = (albums && albums.length ? albums[0] : (singles && singles.length ? singles[0] : null));
   const isEmpty = !allTracks.length && !albums.length && !singles.length;
   const ck = 'artistfull:v1:' + id;
   const hit = artistCache.get(ck);
   if (hit && Date.now() - hit.time < (hit.ttl || ARTIST_TTL)) return res.json(hit.data);
-  artistCache.set(ck, { time: Date.now(), data: { artist, top_tracks: allTracks, albums, singles, all_tracks: allTracks, _scRedirect: payload._scRedirect }, ttl: isEmpty ? ARTIST_EMPTY_TTL : ARTIST_TTL });
-  res.json({ artist, top_tracks: allTracks, albums, singles, all_tracks: allTracks, _scRedirect: payload._scRedirect });
+  artistCache.set(ck, { time: Date.now(), data: { artist, top_tracks: allTracks, albums, singles, all_tracks: allTracks, _scRedirect: payload._scRedirect, recent_release }, ttl: isEmpty ? ARTIST_EMPTY_TTL : ARTIST_TTL });
+  res.json({ artist, top_tracks: allTracks, albums, singles, all_tracks: allTracks, _scRedirect: payload._scRedirect, recent_release });
 });
 api.get('/api/album/:id', async (req, res) => {
   const id = String(req.params.id);

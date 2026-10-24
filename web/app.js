@@ -1748,6 +1748,34 @@
           drawTop();
         };
       }
+      // Recent Release block (before "Популярное")
+      const recentRelease = d.recent_release;
+      const artistContent = el.artistTopTracks.closest('.artist-content');
+      if (recentRelease && artistContent) {
+        const existing = artistContent.querySelector('.artist-recent-release');
+        if (existing) existing.remove();
+        const block = document.createElement('div');
+        block.className = 'artist-recent-release';
+        const cover = coverUrl(recentRelease.cover || '');
+        const title = escapeHtml(recentRelease.title || 'Релиз');
+        const type = (recentRelease.recordType || recentRelease.type || 'Альбом') + (recentRelease.release_date ? ' • ' + String(recentRelease.release_date).slice(0,4) : '');
+        block.innerHTML =
+          '<div class="recent-release-cover">' +
+          '<img src="' + cover + '" alt="" onerror="this.src=\'data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22120%22 height=%22120%22><rect fill=%22%231a1a1a%22 width=%22120%22 height=%22120%22/><text x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22central%22 text-anchor=%22middle%22 fill=%22%23666%22 font-size=%2214%22>NO COVER</text></svg>\'">' +
+          '<button class="recent-release-play" aria-label="Играть">▶</button>' +
+          '</div>' +
+          '<div class="recent-release-info">' +
+          '<div class="recent-release-title">' + title + '</div>' +
+          '<div class="recent-release-type">' + escapeHtml(type) + '</div>' +
+          '</div>';
+        artistContent.insertBefore(block, el.artistTopTracks.parentElement);
+        const playBtn = block.querySelector('.recent-release-play');
+        playBtn.onclick = (e) => {
+          e.stopPropagation();
+          // Try to play the recent release's first track if available, otherwise just play artist top track
+          if (allTracks.length) playFromList(allTracks, 0, { force: true });
+        };
+      }
       const albums = d.albums || [];
       const singles = d.singles || [];
       el.artistDiscography.innerHTML = '';
@@ -1764,7 +1792,7 @@
             card.className = 'card';
             const title = a.title || 'Альбом';
             const coverUrlStr = coverUrl(a.cover || '');
-            card.innerHTML = '<div class="card-cover" style="background-image: url(\'' + coverUrlStr + '\')"></div><div class="card-body"><h3 class="card-title">' + escapeHtml(title) + '</h3></div>';
+            card.innerHTML = '<div class="card-cover"><img src="' + coverUrlStr + '" alt="" class="card-cover-img" onerror="this.style.display=\'none\'"></div><div class="card-body"><h3 class="card-title">' + escapeHtml(title) + '</h3></div>';
             el.artistDiscography.appendChild(card);
           });
         }
@@ -1778,7 +1806,7 @@
             card.className = 'card';
             const title = a.title || 'Сингл';
             const coverUrlStr = coverUrl(a.cover || '');
-            card.innerHTML = '<div class="card-cover" style="background-image: url(\'' + coverUrlStr + '\')"></div><div class="card-body"><h3 class="card-title">' + escapeHtml(title) + '</h3></div>';
+            card.innerHTML = '<div class="card-cover"><img src="' + coverUrlStr + '" alt="" class="card-cover-img" onerror="this.style.display=\'none\'"></div><div class="card-body"><h3 class="card-title">' + escapeHtml(title) + '</h3></div>';
             el.artistDiscography.appendChild(card);
           });
         }

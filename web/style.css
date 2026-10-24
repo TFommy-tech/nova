@@ -63,7 +63,8 @@ kbd { font-family: inherit; }
   inset: 0;
   background-size: cover;
   background-position: center;
-  filter: blur(20px) brightness(0.4);
+  filter: blur(30px) brightness(0.4);
+  opacity: 0.6;
   z-index: -1;
 }
 
@@ -78,11 +79,12 @@ kbd { font-family: inherit; }
 
 /* Artist name styling */
 .artist-name {
-  font-size: 48px;
+  font-size: clamp(48px, 8vw, 96px);
   font-weight: 800;
   color: var(--text);
   line-height: 1.1;
   margin-bottom: 8px;
+  text-shadow: 0 2px 24px rgba(0,0,0,.6);
 }
 
 /* ===== Artist Section ===== */
@@ -105,21 +107,90 @@ kbd { font-family: inherit; }
   gap: 8px;
 }
 
-/* Track item */
+/* Track item — premium music list row */
 .track-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
+  gap: 14px;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: color var(--dur-fast) var(--ease);
+  transition: background var(--dur-fast) var(--ease);
 }
 .track-item:hover {
-  color: var(--text);
+  background: var(--surface-2);
 }
 .track-item.active {
+  background: var(--surface-2);
   color: var(--artist-accent);
+}
+.track-item .track-index {
+  flex: 0 0 auto;
+  width: 28px;
+  color: var(--text-4);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+.track-item .track-cover {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-xs);
+  object-fit: cover;
+  background: #141414;
+}
+.track-item .track-main {
+  flex: 1;
+  min-width: 0;
+}
+.track-item .track-title {
+  display: block;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.track-item .track-artist {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.track-item .track-duration {
+  flex: 0 0 auto;
+  width: 48px;
+  color: var(--text-4);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.track-item .track-play {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(0,0,0,.7);
+  color: #fff;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease), background var(--dur-fast) var(--ease);
+  font-size: 12px;
+  line-height: 1;
+}
+.track-item:hover .track-play {
+  opacity: 1;
+}
+.track-item .track-play:hover {
+  background: var(--accent);
+  color: #000;
 }
 
 /* ===== Album Grid ===== */
@@ -463,11 +534,104 @@ body.has-background #backgroundLayer { opacity: 1; }
 .card-artist .artist-link { color: var(--text-2); }
 .card-artist .artist-link:hover { color: var(--text); }
 
-/* LIST */
+/* Card cover image for discography */
+.card-cover {
+  position: relative;
+  aspect-ratio: 1/1;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: #141414;
+  border: 1px solid var(--border);
+  flex: 0 0 auto;
+}
+.card-cover-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.card:hover .card-cover { border-color: var(--border-2); }
+
+/* Recent Release block */
+.artist-recent-release {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 24px 30px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+  border: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.recent-release-cover {
+  position: relative;
+  flex: 0 0 auto;
+  width: 120px;
+  height: 120px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: #141414;
+  border: 1px solid var(--border);
+}
+.recent-release-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.recent-release-play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgba(0,0,0,.45);
+  color: #fff;
+  font-size: 24px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity var(--dur) var(--ease), background var(--dur) var(--ease);
+  cursor: pointer;
+}
+.recent-release-cover:hover .recent-release-play {
+  opacity: 1;
+}
+.recent-release-play:hover {
+  background: var(--accent);
+  color: #000;
+}
+.recent-release-info {
+  flex: 1;
+  min-width: 0;
+}
+.recent-release-title {
+  display: block;
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -.4px;
+  margin-bottom: 4px;
+}
+.recent-release-type {
+  display: block;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+}
+
+/* LIST - keep existing .list-row styles but ensure artist context looks premium */
 .list { display: grid; gap: 4px; max-width: 1000px; }
-.list-row { display: grid; grid-template-columns: 44px 1fr auto; align-items: center; gap: 12px;
-  padding: 7px 10px; border-radius: 8px; cursor: pointer;
-  transition: background var(--dur-fast) var(--ease); }
+.list-row {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease);
+}
 .list-row:hover { background: rgba(255,255,255,.04); }
 .list-row.active { background: rgba(255,255,255,.06); }
 .list-row.active .list-main strong { color: var(--accent); }
