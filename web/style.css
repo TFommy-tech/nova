@@ -72,6 +72,7 @@ kbd { font-family: inherit; }
   height: 160px;
   border-radius: 50%;
   background-size: cover;
+  background-color: var(--surface-2, #1a1a1a);
   border: 2px solid var(--border);
 }
 

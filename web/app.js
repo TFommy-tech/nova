@@ -123,7 +123,7 @@
     'homeGreeting','homeContinue','homeContinueSection','homeRecommendations','recommendationsSection','recommendationsSub',
     'homePopular','homePopularSection','homeArtists','artistsSection','homeAlbums','homeAlbumsSection',
     'searchFilters','resultsInfo','searchArtistsBlock','searchArtists','searchTracksBlock','searchTracksTitle','trackGrid',
-    'artistBanner','artistBannerBg','artistHeroImage','artistHeroName','artistHeroMeta','artistTracks','artistAlbums','artistSingles',
+    'artistBanner','artistBannerBg','artistHeroImage','artistHeroName','artistHeroMeta','artistHeroBg','artistAvatar','artistName','artistStats','artistTracks','artistAlbums','artistSingles','artistTopTracks','artistDiscography','artistView',
     'artistShowAllBtn','artistTracksSection','artistAlbumsSection','artistSinglesSection',
     'albumHeroImage','albumHeroType','albumHeroName','albumHeroArtist','albumHeroMeta','albumPlay','albumShuffle','albumAddToPlaylist','albumTracks',
     'libraryTabs','clearHistory','historyList','localList','localDrop','openLocalFileBtn',
@@ -873,7 +873,7 @@
     s.className = 'home-mini-sub';
     s.innerHTML = kind === 'artist' ? 'Исполнитель' : kind === 'album' ? (escapeHtml(track.artist || 'Альбом')) : artistsHtml(track.artist);
     d.append(img, t, s);
-    if (kind === 'artist') d.addEventListener('click', () => showArtist(track.artistId || '', track.artist || ''));
+    if (kind === 'artist') d.addEventListener('click', () => { if (track.artistId) updateUrl('artist', track.artistId); showArtist(track.artistId || '', track.artist || ''); });
     else if (kind === 'album') d.addEventListener('click', () => { if (track.albumId) showAlbum(track.albumId); });
     else {
       d.addEventListener('click', () => playByTrackObject(track));
@@ -1669,14 +1669,18 @@
       row.addEventListener('mouseenter', () => prefetchTrack(track), { once: true });
       container.appendChild(row);
     });
-  }  async function showArtist(id, name) {
-    showView('artist');
+  }  async function showArtist(id, name, skipUrl = false) {
+    showView('artist', true);
+    if (!skipUrl) {
+      if (id) updateUrl('artist', id);
+      else if (name) updateUrl('artist', name);
+    }
     el.artistName.textContent = name || 'Исполнитель';
     el.artistHeroImage.removeAttribute('src');
     el.artistHeroMeta.innerHTML = '';
     el.artistBannerBg.style.backgroundImage = 'none';
     el.artistBannerBg.classList.remove('loaded');
-    el.artistTracks.innerHTML = '<div class="empty">Загрузка…</div>';
+    el.artistTopTracks.innerHTML = '<div class="empty">Загрузка…</div>';
     el.artistAlbums.innerHTML = ''; el.artistSingles.innerHTML = '';
     el.artistShowAllBtn.classList.add('hidden');
 
@@ -1686,18 +1690,18 @@
       el.artistBannerBg.classList.add('loaded');
     };
 
-    if (!name && !id) { el.artistTracks.innerHTML = '<div class="empty">Нет данных</div>'; return; }
+    if (!name && !id) { el.artistTopTracks.innerHTML = '<div class="empty">Нет данных</div>'; return; }
     try {
       // Сервер сам ищет: id вида name:<имя> / sc_<uid> / dz_<id>; ?name= — подсказка.
       let artistId = id, picture = '';
       if (!artistId && name) artistId = 'name:' + name;
       if (!artistId) {
         el.artistName.textContent = name || 'Исполнитель';
-        el.artistTracks.innerHTML = '<div class="empty">Нет данных</div>';
+        el.artistTopTracks.innerHTML = '<div class="empty">Нет данных</div>';
         return;
       }
       const qs = name ? '?name=' + encodeURIComponent(name) : '';
-      const r = await fetch(apiBase() + '/api/artist/' + encodeURIComponent(artistId) + qs);
+      const r = await fetch(apiBase() + '/api/artist/' + encodeURIComponent(artistId) + '/full' + qs);
       const d = await r.json().catch(() => ({}));
       if (!r.ok) throw Object.assign(new Error(d.error || 'unavailable'), { status: r.status });
       const artist = d.artist || {};
@@ -1725,7 +1729,7 @@
       if (totalRel) meta.push(`<span>${totalRel} релизов</span>`);
       el.artistHeroMeta.innerHTML = meta.join('');
       const allTracks = (d.top_tracks || []).map(normalizeTrack).filter(Boolean);
-      let expanded = false; const INITIAL = 5;
+      let expanded = false; const INITIAL = 10;
       const drawTop = () => {
         if (!allTracks.length) { el.artistTopTracks.innerHTML = '<div class="empty">Треки не найдены</div>'; return; }
         renderList(el.artistTopTracks, expanded ? allTracks : allTracks.slice(0, INITIAL), { context: 'artist' });
@@ -1741,25 +1745,42 @@
         };
       }
       const albums = d.albums || [];
-      el.artistDiscography.innerHTML = albums.length ? '' : '<div class="empty">Альбомы недоступны для этого артиста</div>';
-      albums.forEach(a => {
-        const card = document.createElement('div');
-        card.className = 'card';
-        const title = a.title || 'Альбом';
-        card.innerHTML = '<div class="card-cover" style="background-image: url(\'' + a.cover + '\')"></div><div class="card-body"><h3 class="card-title">' + title + '</h3></div>';
-        el.artistDiscography.appendChild(card);
-      });
       const singles = d.singles || [];
-      el.artistDiscography.innerHTML += singles.length ? '' : '<div class="empty">Синглы недоступны для этого артиста</div>';
-      singles.forEach(a => {
-        const card = document.createElement('div');
-        card.className = 'card';
-        const title = a.title || 'Сингл';
-        card.innerHTML = '<div class="card-cover" style="background-image: url(\'' + a.cover + '\')"></div><div class="card-body"><h3 class="card-title">' + title + '</h3></div>';
-        el.artistDiscography.appendChild(card);
-      });
+      el.artistDiscography.innerHTML = '';
+      if (!albums.length && !singles.length) {
+        el.artistDiscography.innerHTML = '<div class="empty">Дискография недоступна для этого артиста</div>';
+      } else {
+        if (albums.length) {
+          const h = document.createElement('h3');
+          h.className = 'artist-discography-label';
+          h.textContent = 'Альбомы';
+          el.artistDiscography.appendChild(h);
+          albums.forEach(a => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            const title = a.title || 'Альбом';
+            const coverUrlStr = coverUrl(a.cover || '');
+            card.innerHTML = '<div class="card-cover" style="background-image: url(\'' + coverUrlStr + '\')"></div><div class="card-body"><h3 class="card-title">' + escapeHtml(title) + '</h3></div>';
+            el.artistDiscography.appendChild(card);
+          });
+        }
+        if (singles.length) {
+          const h = document.createElement('h3');
+          h.className = 'artist-discography-label';
+          h.textContent = 'Синглы';
+          el.artistDiscography.appendChild(h);
+          singles.forEach(a => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            const title = a.title || 'Сингл';
+            const coverUrlStr = coverUrl(a.cover || '');
+            card.innerHTML = '<div class="card-cover" style="background-image: url(\'' + coverUrlStr + '\')"></div><div class="card-body"><h3 class="card-title">' + escapeHtml(title) + '</h3></div>';
+            el.artistDiscography.appendChild(card);
+          });
+        }
+      }
     } catch (e) {
-      el.artistTracks.innerHTML = '<div class="empty">' +
+      el.artistTopTracks.innerHTML = '<div class="empty">' +
         (e && e.status === 404
           ? 'Артист не найден в SoundCloud/Audius. Попробуй поиск'
           : 'Не удалось загрузить данные артиста') + '</div>';
@@ -1989,7 +2010,7 @@
       { divider: true },
       { label: 'Открыть исполнителя', icon: '⌕', action: () => {
         const a = splitArtistsList(track.artist)[0];
-        if (a) showArtist(track.artistId || '', a);
+        if (a) { if (track.artistId) updateUrl('artist', track.artistId); showArtist(track.artistId || '', a); }
       }},
       { label: 'Открыть альбом', icon: '▤', action: () => {
         if (track.albumId) showAlbum(track.albumId); else notify('Альбом недоступен');
@@ -2379,7 +2400,12 @@ window.addEventListener('popstate', () => {
   const path = location.pathname || '/';
   if (path === '/' || path === '') showView('home', true);
   else if (path.startsWith('/search')) showView('search', true);
-  else if (path.startsWith('/artist/')) showView('artist', true);
+  else if (path.startsWith('/artist/')) {
+    showView('artist', true);
+    const artistParam = decodeURIComponent(path.slice('/artist/'.length));
+    if (artistParam.startsWith('sc_') || artistParam.startsWith('dz_') || artistParam.startsWith('au_')) showArtist(artistParam, '', true);
+    else if (artistParam) showArtist('', artistParam, true);
+  }
   else if (path.startsWith('/album/')) showView('album', true);
   else if (path === '/library') showView('library', true);
   else if (path === '/favorites') showView('favorites', true);
@@ -3019,7 +3045,7 @@ window.addEventListener('popstate', () => {
         el.profileTopArtists.innerHTML = s.topArtists.map((a, i) =>
           `<div class="profile-panel-item" data-artist="${escapeHtml(a.name)}"><div class="profile-panel-num">${i + 1}</div><div class="profile-panel-info"><div class="profile-panel-title">${escapeHtml(a.name)}</div><div class="profile-panel-sub">Артист</div></div><div class="profile-panel-count">${a.count}</div></div>`).join('');
         el.profileTopArtists.querySelectorAll('.profile-panel-item').forEach(it => it.addEventListener('click', () => {
-          closeProfile(); showArtist('', it.dataset.artist);
+          closeProfile(); updateUrl('artist', it.dataset.artist); showArtist('', it.dataset.artist);
         }));
       } else el.profileTopArtists.innerHTML = '<div class="profile-panel-empty">Нет данных</div>';
       if (s.topTracks?.length) {
@@ -3730,7 +3756,7 @@ window.addEventListener('popstate', () => {
     if (!link) return;
     e.preventDefault(); e.stopPropagation();
     const name = link.dataset.artist || link.textContent || '';
-    if (name) showArtist('', name);
+    if (name) { updateUrl('artist', name); showArtist('', name); }
   }, true);
 
   window.addEventListener('beforeunload', persist);

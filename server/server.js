@@ -1558,6 +1558,54 @@ api.get('/api/artist/:id', async (req, res) => {
   artistCache.set(ck, { time: Date.now(), data: payload, ttl: isEmpty ? ARTIST_EMPTY_TTL : ARTIST_TTL });
   res.json(payload);
 });
+// Полная дискография артиста: все треки + альбомы + синглы
+api.get('/api/artist/:id/full', async (req, res) => {
+  const id = String(req.params.id);
+  const fallbackName = String(req.query.name || '').trim().slice(0, 200);
+  // Базовые данные артиста (через существующий resolveArtist)
+  const payload = await resolveArtist(id, fallbackName);
+  if (!payload) return res.status(404).json({ error: 'not found' });
+  const artist = payload.artist || {};
+  let allTracks = [];
+  let albums = payload.albums || [];
+  let singles = payload.singles || [];
+
+  if (id.startsWith('sc_')) {
+    const scId = id.slice(3);
+    // Все треки артиста с пагинацией (до 100)
+    allTracks = await soundcloudUserTracks(scId, 100);
+    // Плейлисты → альбомы/синглы
+    const playlists = await soundcloudUserPlaylists(scId, 100);
+    albums = playlists.filter(p => (p.trackCount || 0) >= 4);
+    singles = playlists.filter(p => (p.trackCount || 0) >= 1 && (p.trackCount || 0) < 4);
+  } else if (id.startsWith('dz_')) {
+    const dzId = id.slice(3);
+    // Топ-треки Deezer
+    allTracks = await deezerArtistTop(dzId);
+    const albumList = await deezerArtistAlbums(dzId);
+    albums = albumList.filter(a => (a.recordType || 'album') === 'album');
+    singles = albumList.filter(a => (a.recordType || 'album') !== 'album');
+  } else if (id.startsWith('au_') || id.startsWith('name:')) {
+    const name = fallbackName || artist.name || '';
+    if (name) {
+      const found = await audiusSearch(name, 100);
+      allTracks = found.filter(t => normalize(t.artist || '') === normalize(name));
+    }
+  } else {
+    // Legacy: голый числовой id = Deezer
+    allTracks = await deezerArtistTop(id);
+    const albumList = await deezerArtistAlbums(id);
+    albums = albumList.filter(a => (a.recordType || 'album') === 'album');
+    singles = albumList.filter(a => (a.recordType || 'album') !== 'album');
+  }
+
+  const isEmpty = !allTracks.length && !albums.length && !singles.length;
+  const ck = 'artistfull:v1:' + id;
+  const hit = artistCache.get(ck);
+  if (hit && Date.now() - hit.time < (hit.ttl || ARTIST_TTL)) return res.json(hit.data);
+  artistCache.set(ck, { time: Date.now(), data: { artist, top_tracks: allTracks, albums, singles, all_tracks: allTracks }, ttl: isEmpty ? ARTIST_EMPTY_TTL : ARTIST_TTL });
+  res.json({ artist, top_tracks: allTracks, albums, singles, all_tracks: allTracks });
+});
 api.get('/api/album/:id', async (req, res) => {
   const id = String(req.params.id);
   // Плейлист SoundCloud приходит со страницы артиста как «альбом» (scpl_…).
