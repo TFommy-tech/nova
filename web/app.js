@@ -2696,7 +2696,8 @@ window.addEventListener('popstate', () => {
     btn.classList.toggle('off', !on);
   }
   function renderSettingsUi() {
-    applyTheme();
+    // NOTE: Do NOT call applyTheme() here — opening Settings must NOT reset the active theme.
+    // The theme is only read to highlight the active swatch in renderThemePresets().
     applyToggle(el.notificationsToggle, settings.notifications);
     applyToggle(el.hotkeysToggle, settings.hotkeys);
     applyToggle(el.autoplayToggle, settings.autoplay);

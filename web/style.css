@@ -229,7 +229,7 @@ body.has-background #backgroundLayer { opacity: 1; }
 .startup-loader::after { content: ""; display: block; width: 40%; height: 100%; background: #fff; animation: startLoad 1.2s ease-in-out infinite; }
 
 #app { position: relative; z-index: 2; width: 100%; height: 100%; display: grid;
-  grid-template-columns: var(--sidebar-collapsed) 1fr; animation: fadeIn .4s var(--ease-out); }
+  grid-template-columns: var(--sidebar-collapsed) 1fr; animation: fadeIn .4s var(--ease-out); background: var(--bg); }
 
 /* SIDEBAR */
 .sidebar { position: relative; z-index: 60; display: flex; flex-direction: column;
@@ -293,7 +293,7 @@ body.has-background #backgroundLayer { opacity: 1; }
 .user-menu-logout { background: #141414; color: #9a9a9a; border: 1px solid var(--border); }
 .user-menu-logout:hover { color: #fff; background: #1a1a1a; }
 
-.workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
 
 .topbar { height: 56px; flex: 0 0 56px; display: flex; align-items: center; gap: 10px;
   padding: 0 18px;
@@ -345,7 +345,7 @@ body.has-background #backgroundLayer { opacity: 1; }
   text-transform: uppercase; color: var(--text-4); }
 
 .view-root { position: relative; flex: 1; min-height: 0; overflow: hidden; }
-.view { position: absolute; inset: 0; overflow: auto; animation: fadeIn .25s var(--ease-out); padding-bottom: calc(var(--mini-h) + 12px); }
+.view { position: absolute; inset: 0; overflow: auto; animation: fadeIn .25s var(--ease-out); padding-bottom: calc(var(--mini-h) + 12px); background: var(--bg); }
 .view.hidden { display: none; }
 
 /* HOME */
@@ -1630,11 +1630,11 @@ html[data-theme="dark"], :root {
   --border: #262626;
   --accent: #FFFFFF;
 }
-html[data-theme="neon-mint"] { --bg: #00F5D4; --surface: #00e0c2; --surface-2: #00ccb0; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --border: rgba(10,10,10,0.15); --accent: #FF2A6D; }
-html[data-theme="nuovo-pink"] { --bg: #FF2A6D; --surface: #e62562; --surface-2: #cc2056; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --border: rgba(10,10,10,0.15); --accent: #00F5D4; }
+html[data-theme="neon-mint"] { --bg: #00F5D4; --surface: #00e0c2; --surface-2: #00ccb0; --text: #0A0A0A; --text-2: rgba(10,10,10,0.7); --border: rgba(10,10,10,0.2); --accent: #FF2A6D; }
+html[data-theme="nuovo-pink"] { --bg: #FF2A6D; --surface: #e62562; --surface-2: #cc2056; --text: #0A0A0A; --text-2: rgba(10,10,10,0.7); --border: rgba(10,10,10,0.2); --accent: #00F5D4; }
 html[data-theme="dark-gray"] { --bg: #171717; --surface: #262626; --surface-2: #333333; --text: #FFFFFF; --text-2: rgba(255,255,255,0.6); --border: rgba(255,255,255,0.1); --accent: #00F5D4; }
-html[data-theme="dirty-white"] { --bg: #F5F0DC; --surface: #EBE6D2; --surface-2: #E0DBC7; --text: #0A0A0A; --text-2: rgba(10,10,10,0.6); --border: rgba(10,10,10,0.1); --accent: #F0442E; }
-html[data-theme="red-orange"] { --bg: #F0442E; --surface: #D93B27; --surface-2: #C23321; --text: #171717; --text-2: rgba(23,23,23,0.6); --border: rgba(23,23,23,0.15); --accent: #F5F0DC; }
-html[data-theme="vintage-yellow"] { --bg: #F2C14E; --surface: #E0B040; --surface-2: #CC9F32; --text: #171717; --text-2: rgba(23,23,23,0.6); --border: rgba(23,23,23,0.15); --accent: #28666E; }
+html[data-theme="dirty-white"] { --bg: #F5F0DC; --surface: #EBE6D2; --surface-2: #E0DBC7; --text: #0A0A0A; --text-2: rgba(10,10,10,0.7); --border: rgba(10,10,10,0.15); --accent: #F0442E; }
+html[data-theme="red-orange"] { --bg: #F0442E; --surface: #D93B27; --surface-2: #C23321; --text: #171717; --text-2: rgba(23,23,23,0.7); --border: rgba(23,23,23,0.2); --accent: #F5F0DC; }
+html[data-theme="vintage-yellow"] { --bg: #F2C14E; --surface: #E0B040; --surface-2: #CC9F32; --text: #171717; --text-2: rgba(23,23,23,0.7); --border: rgba(23,23,23,0.2); --accent: #28666E; }
 html[data-theme="petrol"] { --bg: #28666E; --surface: #20545B; --surface-2: #184248; --text: #F4EDE0; --text-2: rgba(244,237,224,0.6); --border: rgba(244,237,224,0.15); --accent: #F2C14E; }
-html[data-theme="paper"] { --bg: #F4EDE0; --surface: #EAE2D3; --surface-2: #DFD6C5; --text: #171717; --text-2: rgba(23,23,23,0.6); --border: rgba(23,23,23,0.1); --accent: #C09A35; }
+html[data-theme="paper"] { --bg: #F4EDE0; --surface: #EAE2D3; --surface-2: #DFD6C5; --text: #171717; --text-2: rgba(23,23,23,0.7); --border: rgba(23,23,23,0.15); --accent: #C09A35; }
