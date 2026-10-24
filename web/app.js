@@ -100,7 +100,7 @@
   };
 
   let playRequestId = 0, playAbort = null, userIntent = 'idle';
-  let mutedBefore = 100, lastPlaybackError = '';
+  let mutedBefore = 100, lastPlaybackError = '', fadePauseTimer = null;
 
   const localResolveCache = new Map();
   const LOCAL_RESOLVE_TTL = 25 * 60 * 1000;
@@ -1122,6 +1122,21 @@
     playTrack(i, opts || {});
   }
 
+  function fadeAudio(targetVolume, duration) {
+    const startVolume = el.audio.volume;
+    const startTime = performance.now();
+
+    function step(currentTime) {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      el.audio.volume = startVolume + (targetVolume - startVolume) * progress;
+      if (progress < 1) {
+        requestAnimationFrame(step);
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
   async function playTrack(index, opts = {}) {
     if (!Number.isInteger(index) || index < 0 || index >= state.queue.length) return;
     const track = state.queue[index];
@@ -1137,9 +1152,9 @@
 
     clearLyricsSync();
 
-    const shouldFade = audioGraphReady && state.currentTrack && (userIntent === 'playing');
-    if (shouldFade) await fadeOutAndWait(160);
-    try { el.audio.pause(); } catch {}
+    if (fadePauseTimer) { clearTimeout(fadePauseTimer); fadePauseTimer = null; }
+    fadeAudio(0, 300);
+    fadePauseTimer = setTimeout(() => { try { el.audio.pause(); } catch {} fadePauseTimer = null; }, 300);
 
     state.currentIndex = index;
     state.currentTrack = track;
@@ -1261,6 +1276,9 @@
       const tick = setInterval(() => {
         if (myId !== undefined && myId !== playRequestId) { if (done) return; done = true; cleanup(); try { el.audio.pause(); } catch {} reject(new Error('Aborted')); }
       }, 100);
+      if (fadePauseTimer) { clearTimeout(fadePauseTimer); fadePauseTimer = null; }
+      el.audio.volume = 0;
+      fadeAudio(1, 400);
       el.audio.play().catch(bad);
     });
     if (audioGraphReady && fadeGain) fadeIn(280);
@@ -3846,7 +3864,7 @@ window.addEventListener('popstate', () => {
 
   function togglePlay() {
     if (!state.currentTrack) return;
-    if (el.audio.paused) { el.audio.play().catch(() => {}); } else { el.audio.pause(); }
+    if (el.audio.paused) { if (fadePauseTimer) { clearTimeout(fadePauseTimer); fadePauseTimer = null; } el.audio.volume = 0; fadeAudio(1, 400); el.audio.play().catch(() => {}); } else { fadeAudio(0, 300); fadePauseTimer = setTimeout(() => { try { el.audio.pause(); } catch {} fadePauseTimer = null; }, 300); }
     updatePlayButtons();
   }
   function playPrev() { previous(); }
