@@ -601,7 +601,6 @@ async function deezerArtistTop(id) {
     const items = Array.isArray(d?.data) ? d.data : [];
     return items
       .filter(t => !isNoise(t.title_short || t.title || ''))
-      .filter(t => t.artist?.id && String(t.artist.id) === String(id))
       .map(deezerToNorm).filter(Boolean);
   } catch { return []; }
 }
@@ -610,7 +609,6 @@ async function deezerArtistAlbums(id) {
     const r = await jsonFetch(`https://api.deezer.com/artist/${encodeURIComponent(id)}/albums?limit=100`, {}, 8000);
     const d = await readJson(r);
     return (d?.data || [])
-      .filter(a => a.artist?.id && String(a.artist.id) === String(id))
       .map(a => ({
         provider: 'deezer', providerId: String(a.id), id: String(a.id),
         title: a.title || '', cover: a.cover_xl || a.cover_big || a.cover_medium || '',
@@ -1566,11 +1564,30 @@ api.get('/api/artist/:id/full', async (req, res) => {
   const payload = await resolveArtist(id, fallbackName);
   if (!payload) return res.status(404).json({ error: 'not found' });
   const artist = payload.artist || {};
+  const artistName = artist.name || fallbackName || '';
   let allTracks = [];
   let albums = payload.albums || [];
   let singles = payload.singles || [];
 
-  if (id.startsWith('sc_')) {
+  // Smart Artist: попробуем найти полный каталог на SoundCloud сначала
+  let scUser = null;
+  if (artistName) {
+    scUser = await soundcloudFindUser(artistName);
+    console.log('[artist-full]', artistName, 'found on SC:', !!scUser);
+  }
+  if (scUser && scUser.id) {
+    // SoundCloud профиль найден — используем его треки как основные
+    allTracks = await soundcloudUserTracks(scUser.id, 100);
+    // Плейлисты SoundCloud → альбомы/синглы (дополняем дискографию)
+    const playlists = await soundcloudUserPlaylists(scUser.id, 100);
+    const scAlbums = playlists.filter(p => (p.trackCount || 0) >= 4);
+    const scSingles = playlists.filter(p => (p.trackCount || 0) >= 1 && (p.trackCount || 0) < 4);
+    // Если Deezer'albums уже есть, не перезаписываем — дополняем
+    if (!albums.length) albums = scAlbums;
+    if (!singles.length) singles = scSingles;
+    // Также помечаем источник для фронтенда (опциональный URL-редирект)
+    payload._scRedirect = 'sc_' + scUser.id;
+  } else if (id.startsWith('sc_')) {
     const scId = id.slice(3);
     // Все треки артиста с пагинацией (до 100)
     allTracks = await soundcloudUserTracks(scId, 100);
@@ -1603,8 +1620,8 @@ api.get('/api/artist/:id/full', async (req, res) => {
   const ck = 'artistfull:v1:' + id;
   const hit = artistCache.get(ck);
   if (hit && Date.now() - hit.time < (hit.ttl || ARTIST_TTL)) return res.json(hit.data);
-  artistCache.set(ck, { time: Date.now(), data: { artist, top_tracks: allTracks, albums, singles, all_tracks: allTracks }, ttl: isEmpty ? ARTIST_EMPTY_TTL : ARTIST_TTL });
-  res.json({ artist, top_tracks: allTracks, albums, singles, all_tracks: allTracks });
+  artistCache.set(ck, { time: Date.now(), data: { artist, top_tracks: allTracks, albums, singles, all_tracks: allTracks, _scRedirect: payload._scRedirect }, ttl: isEmpty ? ARTIST_EMPTY_TTL : ARTIST_TTL });
+  res.json({ artist, top_tracks: allTracks, albums, singles, all_tracks: allTracks, _scRedirect: payload._scRedirect });
 });
 api.get('/api/album/:id', async (req, res) => {
   const id = String(req.params.id);
