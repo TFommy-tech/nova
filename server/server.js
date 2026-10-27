@@ -17,6 +17,7 @@ process.on('uncaughtException', (err) => {
 const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
+const { SocksProxyAgent } = require('socks-proxy-agent');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
@@ -70,7 +71,7 @@ async function getSoundcloudClientId() {
         if (m) { _scClientId = m[1]; return _scClientId; }
       } catch {}
     }
-  } catch {}
+  } catch (e) { console.error('[SC client_id] Failed:', e.message); }
   return process.env.SOUNDCLOUD_CLIENT_ID || 'dkevB9EsY4jIoSm8RfddPNUKyn6hurXF';
 }
 // Логин владельца: при создании/миграции аккаунта ему автоматически выдаётся тег owner
@@ -386,7 +387,9 @@ async function getYtClient() {
     const Innertube = mod.Innertube;
     if (!Innertube) throw new Error('no Innertube export');
     dbg('initializing youtubei.js...');
+    const warpAgent = new SocksProxyAgent('socks5://127.0.0.1:40000');
     ytClient = await Innertube.create({
+      fetch: (url, options) => fetch(url, { ...options, agent: warpAgent }),
       retrieve_player: true,
       generate_session_locally: true,
       enable_safety_mode: false,
@@ -394,6 +397,7 @@ async function getYtClient() {
       location: 'US'
     });
     console.log('[youtubei] initialized');
+     console.log('[youtubei] Proxy connected');
     return ytClient;
   } catch (e) {
     ytInitFailed = true;
@@ -740,7 +744,9 @@ function scCover(url) {
   return String(url || '').replace(/-large\./, '-t500x500.');
 }
 async function soundcloudFindUser(name) {
+  console.log('[SC search] Starting search for:', name);
   const SOUNDCLOUD_CLIENT_ID = await getSoundcloudClientId();
+  if (!SOUNDCLOUD_CLIENT_ID) throw new Error('SC client_id null');
   try {
     const params = new URLSearchParams({ q: name, client_id: SOUNDCLOUD_CLIENT_ID, limit: '5' });
     const r = await jsonFetch(`https://api-v2.soundcloud.com/search/users?${params}`, {}, 7000);
