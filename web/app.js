@@ -1675,8 +1675,8 @@
       else if (name) updateUrl('artist', name);
     }
     el.artistName.textContent = name || 'Исполнитель';
-    el.artistHeroImage.removeAttribute('src');
-    el.artistHeroMeta.innerHTML = '';
+    if (el.artistHeroImage) el.artistHeroImage.removeAttribute('src');
+         if (el.artistHeroMeta) el.artistHeroMeta.innerHTML = '';
     el.artistBannerBg.style.backgroundImage = 'none';
     el.artistBannerBg.classList.remove('loaded');
     el.artistTopTracks.innerHTML = '<div class="empty">Загрузка…</div>';
