@@ -727,6 +727,7 @@ async function soundcloudFindUser(name) {
     const params = new URLSearchParams({ q: name, client_id: SOUNDCLOUD_CLIENT_ID, limit: '5' });
     const r = await jsonFetch(`https://api-v2.soundcloud.com/search/users?${params}`, {}, 7000);
     const d = await readJson(r);
+    console.log('[SC raw]', JSON.stringify(d).slice(0, 200));
     const list = Array.isArray(d?.collection) ? d.collection : [];
     if (!list.length) return null;
     const norm = normalize(name);
@@ -2670,6 +2671,7 @@ function startServer(options = {}) {
   const host = options.host || HOST;
   return new Promise((resolve, reject) => {
     const server = api.listen(port, host, () => {
+       console.log('[network] Testing WARP...');
       console.log('============================================================');
       console.log(`[NOVA] v5.2.0 env=${NODE_ENV}`);
       console.log(`[NOVA] listening on http://${host}:${port}`);
