@@ -1596,12 +1596,23 @@ api.get('/api/artist/:id/full', async (req, res) => {
     albums = playlists.filter(p => (p.trackCount || 0) >= 4);
     singles = playlists.filter(p => (p.trackCount || 0) >= 1 && (p.trackCount || 0) < 4);
   } else if (id.startsWith('dz_')) {
+    const dzArtist = await resolveArtist(id);
+    const artistName = dzArtist ? dzArtist.name : '';
+    
+    if (artistName) {
+      const scUser = await soundcloudFindUser(artistName);
+      if (scUser && scUser.id) {
+        const scTracks = await soundcloudUserTracks(scUser.id, 100);
+        return res.json({
+          artist: { name: scUser.username, picture: scUser.avatar_url },
+          top_tracks: scTracks, all_tracks: scTracks, albums: [], singles: [],
+          _scRedirect: 'sc_' + scUser.id
+        });
+      }
+    }
     const dzId = id.slice(3);
-    // Топ-треки Deezer
-    allTracks = await deezerArtistTop(dzId);
-    const albumList = await deezerArtistAlbums(dzId);
-    albums = albumList.filter(a => (a.recordType || 'album') === 'album');
-    singles = albumList.filter(a => (a.recordType || 'album') !== 'album');
+    const dzTracks = await deezerArtistTop(dzId);
+    return res.json({ artist: dzArtist, top_tracks: dzTracks, all_tracks: dzTracks, albums: [], singles: [] });
   } else if (id.startsWith('au_') || id.startsWith('name:')) {
     const name = fallbackName || artist.name || '';
     if (name) {

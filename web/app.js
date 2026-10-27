@@ -1733,6 +1733,14 @@
       if (totalRel) meta.push(`<span>${totalRel} релизов</span>`);
       el.artistHeroMeta.innerHTML = meta.join('');
       const allTracks = (d.top_tracks || []).map(normalizeTrack).filter(Boolean);
+  const playBtn = document.getElementById('artistPlayBtn');
+  const followBtn = document.getElementById('artistFollowBtn');
+  if (playBtn) playBtn.onclick = () => { if (allTracks.length > 0) playFromList(allTracks, 0); };
+  if (followBtn) followBtn.onclick = () => {
+    const isFollowing = followBtn.textContent === 'Вы подписаны';
+    followBtn.textContent = isFollowing ? 'Подписаться' : 'Вы подписаны';
+    followBtn.style.background = isFollowing ? 'transparent' : 'var(--surface-2)';
+  };
       let expanded = false; const INITIAL = 10;
       const drawTop = () => {
         if (!allTracks.length) { el.artistTopTracks.innerHTML = '<div class="empty">Треки не найдены</div>'; return; }
