@@ -55,7 +55,24 @@ const DISCORD_REDIRECT_URI = process.env.DISCORD_REDIRECT_URI ||
   (PUBLIC_URL ? PUBLIC_URL + '/api/auth/discord/callback' : '');
 const AUDIUS_API_KEY = process.env.AUDIUS_API_KEY || '';
 // SoundCloud client_id периодически ротируется — на Render добавить в Environment (fallback в коде есть)
-const SOUNDCLOUD_CLIENT_ID = process.env.SOUNDCLOUD_CLIENT_ID || 'dkevB9EsY4jIoSm8RfddPNUKyn6hurXF';
+let _scClientId = null;
+async function getSoundcloudClientId() {
+  if (_scClientId) return _scClientId;
+  try {
+    const r = await fetch('https://soundcloud.com/');
+    const html = await r.text();
+    const scripts = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(m => m[1]);
+    for (const src of scripts) {
+      try {
+        const rr = await fetch(src.startsWith('http') ? src : 'https://soundcloud.com' + src);
+        const js = await rr.text();
+        const m = js.match(/client_id:"([a-zA-Z0-9]{32})"/);
+        if (m) { _scClientId = m[1]; return _scClientId; }
+      } catch {}
+    }
+  } catch {}
+  return process.env.SOUNDCLOUD_CLIENT_ID || 'dkevB9EsY4jIoSm8RfddPNUKyn6hurXF';
+}
 // Логин владельца: при создании/миграции аккаунта ему автоматически выдаётся тег owner
 const OWNER_USERNAME = (process.env.OWNER_USERNAME || 'pozornik').trim().toLowerCase();
 
@@ -723,6 +740,7 @@ function scCover(url) {
   return String(url || '').replace(/-large\./, '-t500x500.');
 }
 async function soundcloudFindUser(name) {
+  const SOUNDCLOUD_CLIENT_ID = await getSoundcloudClientId();
   try {
     const params = new URLSearchParams({ q: name, client_id: SOUNDCLOUD_CLIENT_ID, limit: '5' });
     const r = await jsonFetch(`https://api-v2.soundcloud.com/search/users?${params}`, {}, 7000);
@@ -750,6 +768,7 @@ async function soundcloudUserById(userId) {
   } catch { return null; }
 }
 async function soundcloudUserTracks(userId, limit = 50) {
+  const SOUNDCLOUD_CLIENT_ID = await getSoundcloudClientId();
   try {
     // Пагинация по next_href (Баг 2): SoundCloud отдаёт 1 трек на 1-й странице
     // (linked_partitioning), остальное — по next_href. Раньше бралась только
@@ -1616,6 +1635,9 @@ api.get('/api/artist/:id/full', async (req, res) => {
     const dzId = id.slice(3);
     const dzTracks = await deezerArtistTop(dzId);
     console.log('[Deezer fallback] Tracks:', dzTracks.length);
+    if (!scUser) {
+      return res.json({ artist: { name: dzArtist ? dzArtist.name : '', picture: (dzArtist && (dzArtist.picture_medium || dzArtist.picture_big || dzArtist.picture)) || '' }, top_tracks: [], all_tracks: [], albums: [], singles: [] });
+    }
     return res.json({ artist: { name: dzArtist ? dzArtist.name : '', picture: (dzArtist && (dzArtist.picture_medium || dzArtist.picture_big || dzArtist.picture)) || '' }, top_tracks: dzTracks, all_tracks: dzTracks, albums: [], singles: [] });
   } else if (id.startsWith('au_') || id.startsWith('name:')) {
     const name = fallbackName || artist.name || '';
