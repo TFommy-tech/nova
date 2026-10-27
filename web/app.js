@@ -109,7 +109,7 @@
   function $(id) { return document.getElementById(id); }
   function safeEl(id) {
     let n = $(id);
-    if (!n) { console.warn('[init] missing:', id); n = document.createElement('div'); n.style.display = 'none'; }
+    if (!n) { n = document.createElement('div'); n.style.display = 'none'; }
     return n;
   }
   const el = {};
@@ -123,8 +123,7 @@
     'homeGreeting','homeContinue','homeContinueSection','homeRecommendations','recommendationsSection','recommendationsSub',
     'homePopular','homePopularSection','homeArtists','artistsSection','homeAlbums','homeAlbumsSection',
     'searchFilters','resultsInfo','searchArtistsBlock','searchArtists','searchTracksBlock','searchTracksTitle','trackGrid',
-    'artistBanner','artistBannerBg','artistHeroImage','artistHeroName','artistHeroMeta','artistHeroBg','artistAvatar','artistName','artistStats','artistTracks','artistAlbums','artistSingles','artistTopTracks','artistDiscography','artistView',
-    'artistShowAllBtn','artistTracksSection','artistAlbumsSection','artistSinglesSection',
+    'artistHeroBg','artistAvatar','artistName','artistStats','artistTopTracks','artistDiscography','artistView',
     'albumHeroImage','albumHeroType','albumHeroName','albumHeroArtist','albumHeroMeta','albumPlay','albumShuffle','albumAddToPlaylist','albumTracks',
     'libraryTabs','clearHistory','historyList','localList','localDrop','openLocalFileBtn',
     'favoritesPlay','favoritesShuffle','clearFavorites','favoritesList',
