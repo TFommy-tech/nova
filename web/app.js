@@ -1678,10 +1678,10 @@
     if (el.artistHeroImage) el.artistHeroImage.removeAttribute('src');
          if (el.artistHeroMeta) el.artistHeroMeta.innerHTML = '';
          if (el.artistBannerBg) el.artistBannerBg.style.backgroundImage = 'none';
-    el.artistBannerBg.classList.remove('loaded');
-    el.artistTopTracks.innerHTML = '<div class="empty">Загрузка…</div>';
-    el.artistAlbums.innerHTML = ''; el.artistSingles.innerHTML = '';
-    el.artistShowAllBtn.classList.add('hidden');
+         if (el.artistBannerBg) el.artistBannerBg.classList.remove('loaded');
+         if (el.artistTopTracks) el.artistTopTracks.innerHTML = '<div class="empty">Загрузка…</div>';
+         if (el.artistDiscography) el.artistDiscography.innerHTML = '';
+         // removed artistShowAllBtn line
 
     el.artistHeroImage.onload = () => {
       const src = el.artistHeroImage.src; if (!src) return;
