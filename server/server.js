@@ -1600,7 +1600,9 @@ api.get('/api/artist/:id/full', async (req, res) => {
     const artistName = dzArtist ? dzArtist.name : '';
     
     if (artistName) {
+      console.log('[SC search] Query:', artistName);
       const scUser = await soundcloudFindUser(artistName);
+      console.log('[SC search] Found:', scUser ? scUser.username : 'NULL');
       if (scUser && scUser.id) {
         const scTracks = await soundcloudUserTracks(scUser.id, 100);
         return res.json({
@@ -1612,7 +1614,8 @@ api.get('/api/artist/:id/full', async (req, res) => {
     }
     const dzId = id.slice(3);
     const dzTracks = await deezerArtistTop(dzId);
-    return res.json({ artist: dzArtist, top_tracks: dzTracks, all_tracks: dzTracks, albums: [], singles: [] });
+    console.log('[Deezer fallback] Tracks:', dzTracks.length);
+    return res.json({ artist: { name: dzArtist ? dzArtist.name : '', picture: (dzArtist && (dzArtist.picture_medium || dzArtist.picture_big || dzArtist.picture)) || '' }, top_tracks: dzTracks, all_tracks: dzTracks, albums: [], singles: [] });
   } else if (id.startsWith('au_') || id.startsWith('name:')) {
     const name = fallbackName || artist.name || '';
     if (name) {

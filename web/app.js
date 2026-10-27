@@ -1726,6 +1726,7 @@
       if (pic) el.artistHeroBg.style.backgroundImage = `url("${coverUrl(pic)}")`;
       // Set avatar
       if (pic) el.artistAvatar.style.backgroundImage = `url("${coverUrl(pic)}")`;
+       if (el.artistAvatar) { el.artistAvatar.src = d.artist.picture || d.artist.avatar_url || '/logo.svg'; }
       const meta = [];
       if (artist.nbFan) meta.push(`<span>${formatNumber(artist.nbFan)} фанатов</span>`);
       if (d.top_tracks?.length) meta.push(`<span>${d.top_tracks.length} треков</span>`);
