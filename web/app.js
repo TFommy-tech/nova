@@ -1683,8 +1683,8 @@
          if (el.artistDiscography) el.artistDiscography.innerHTML = '';
          // removed artistShowAllBtn line
 
-    el.artistHeroImage.onload = () => {
-      const src = el.artistHeroImage.src; if (!src) return;
+    
+      
       el.artistBannerBg.style.backgroundImage = `url("${src.replace(/"/g, '\\"')}")`;
       el.artistBannerBg.classList.add('loaded');
     };
