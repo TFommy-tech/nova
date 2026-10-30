@@ -1685,9 +1685,6 @@
 
     
       
-      el.artistBannerBg.style.backgroundImage = `url("${src.replace(/"/g, '\\"')}")`;
-      el.artistBannerBg.classList.add('loaded');
-    };
 
     if (!name && !id) { el.artistTopTracks.innerHTML = '<div class="empty">Нет данных</div>'; return; }
     try {
