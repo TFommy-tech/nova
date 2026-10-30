@@ -18,6 +18,7 @@ const express = require('express');
 const cors = require('cors');
 const fetch = require('node-fetch');
 const { SocksProxyAgent } = require('socks-proxy-agent');
+const warpAgent = new SocksProxyAgent('socks5://127.0.0.1:40000');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
@@ -60,7 +61,7 @@ let _scClientId = null;
 async function getSoundcloudClientId() {
   if (_scClientId) return _scClientId;
   try {
-    const r = await fetch('https://soundcloud.com/');
+    const r = await fetch('https://soundcloud.com/', { agent: warpAgent });
     const html = await r.text();
     const scripts = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(m => m[1]);
     for (const src of scripts) {
@@ -355,7 +356,8 @@ async function jsonFetch(url, opts = {}, ms = 10000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
   const headers = { Accept: 'application/json', 'User-Agent': 'NOVA/5.2', ...(opts.headers || {}) };
-  return fetch(url, { ...opts, headers, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+  const agent = url.includes('soundcloud.com') ? warpAgent : undefined;
+  return fetch(url, { ...opts, headers, signal: ctrl.signal, agent }).finally(() => clearTimeout(timer));
 }
 async function readJson(res) {
   const txt = await res.text();
