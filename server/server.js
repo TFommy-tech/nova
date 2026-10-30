@@ -1613,19 +1613,27 @@ api.get('/api/artist/:id/full', async (req, res) => {
     if (!singles.length) singles = scSingles;
     // Также помечаем источник для фронтенда (опциональный URL-редирект)
     payload._scRedirect = 'sc_' + scUser.id;
-  } else if (id.startsWith('sc_')) {
+  }
+  if (id.startsWith('sc_')) {
     const scId = id.slice(3);
     console.log('[artist-full] Fetching SC user:', scId);
-    const scTracks = await soundcloudUserTracks(scId, 100);
-    console.log('[artist-full] SC tracks received:', scTracks ? scTracks.length : 'null');
-    const playlists = await soundcloudUserPlaylists(scId, 100);
-    if (!scTracks) return res.status(404).json({ error: 'Not found' });
-    return res.json({
-      artist: { name: 'Artist', picture: '' },
-      top_tracks: scTracks, all_tracks: scTracks,
-      albums: playlists.filter(p => (p.trackCount || 0) >= 4),
-      singles: playlists.filter(p => (p.trackCount || 0) >= 1 && (p.trackCount || 0) < 4)
-    });
+    try {
+      const scTracks = await soundcloudUserTracks(scId, 100);
+      const playlists = await soundcloudUserPlaylists(scId, 100);
+      const albums = playlists.filter(p => (p.trackCount || 0) >= 4);
+      const singles = playlists.filter(p => (p.trackCount || 0) >= 1 && (p.trackCount || 0) < 4);
+      
+      return res.json({
+        artist: { name: 'Artist', picture: '' },
+        top_tracks: scTracks || [],
+        all_tracks: scTracks || [],
+        albums: albums || [],
+        singles: singles || []
+      });
+    } catch (e) {
+      console.error('[artist-full] SC error:', e.message);
+      return res.status(500).json({ error: 'SC fetch failed' });
+    }
   } else if (id.startsWith('dz_')) {
     const dzArtist = await resolveArtist(id);
     const artistName = dzArtist ? dzArtist.name : '';
