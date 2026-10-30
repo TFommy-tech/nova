@@ -1615,7 +1615,9 @@ api.get('/api/artist/:id/full', async (req, res) => {
     payload._scRedirect = 'sc_' + scUser.id;
   } else if (id.startsWith('sc_')) {
     const scId = id.slice(3);
+    console.log('[artist-full] Fetching SC user:', scId);
     const scTracks = await soundcloudUserTracks(scId, 100);
+    console.log('[artist-full] SC tracks received:', scTracks ? scTracks.length : 'null');
     const playlists = await soundcloudUserPlaylists(scId, 100);
     if (!scTracks) return res.status(404).json({ error: 'Not found' });
     return res.json({
