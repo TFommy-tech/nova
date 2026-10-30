@@ -1669,6 +1669,7 @@
       container.appendChild(row);
     });
   }  async function showArtist(id, name, skipUrl = false) {
+    console.log('[DEBUG] showArtist called with id:', id);
     showView('artist', true);
     if (!skipUrl) {
       if (id) updateUrl('artist', id);
