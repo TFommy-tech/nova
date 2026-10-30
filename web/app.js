@@ -1700,7 +1700,7 @@
       const qs = name ? '?name=' + encodeURIComponent(name) : '';
       const r = await fetch(apiBase() + '/api/artist/' + encodeURIComponent(artistId) + '/full' + qs);
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw Object.assign(new Error(d.error || 'unavailable'), { status: r.status });
+             if (!r.ok) { if (el.artistTopTracks) el.artistTopTracks.innerHTML = 'Ошибка загрузки треков'; return; }
       // Если бэкенд нашёл того же артиста на SoundCloud — редиректим URL на SC-профиль
       if (d._scRedirect) {
         updateUrl('artist', d._scRedirect);

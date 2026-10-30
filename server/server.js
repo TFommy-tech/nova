@@ -1615,12 +1615,15 @@ api.get('/api/artist/:id/full', async (req, res) => {
     payload._scRedirect = 'sc_' + scUser.id;
   } else if (id.startsWith('sc_')) {
     const scId = id.slice(3);
-    // Все треки артиста с пагинацией (до 100)
-    allTracks = await soundcloudUserTracks(scId, 100);
-    // Плейлисты → альбомы/синглы
+    const scTracks = await soundcloudUserTracks(scId, 100);
     const playlists = await soundcloudUserPlaylists(scId, 100);
-    albums = playlists.filter(p => (p.trackCount || 0) >= 4);
-    singles = playlists.filter(p => (p.trackCount || 0) >= 1 && (p.trackCount || 0) < 4);
+    if (!scTracks) return res.status(404).json({ error: 'Not found' });
+    return res.json({
+      artist: { name: 'Artist', picture: '' },
+      top_tracks: scTracks, all_tracks: scTracks,
+      albums: playlists.filter(p => (p.trackCount || 0) >= 4),
+      singles: playlists.filter(p => (p.trackCount || 0) >= 1 && (p.trackCount || 0) < 4)
+    });
   } else if (id.startsWith('dz_')) {
     const dzArtist = await resolveArtist(id);
     const artistName = dzArtist ? dzArtist.name : '';
