@@ -2450,6 +2450,7 @@ window.addEventListener('popstate', () => {
   else if (path.startsWith('/playlist/')) showView('playlist', true);
   else showView('home', true);
 });
+window.dispatchEvent(new PopStateEvent('popstate'));
   function goBack() {
     if (state.view === 'playlist') { showView('playlists'); return; }
     showView(state.lastNonPlayerView || 'home');
