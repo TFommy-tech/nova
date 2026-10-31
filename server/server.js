@@ -61,7 +61,7 @@ let _scClientId = null;
 async function getSoundcloudClientId() {
   if (_scClientId) return _scClientId;
   try {
-    const r = await fetch('https://soundcloud.com/', { agent: warpAgent });
+    const r = await fetch('https://soundcloud.com/', { agent: warpAgent, signal: AbortSignal.timeout(8000) });
     const html = await r.text();
     const scripts = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map(m => m[1]);
     for (const src of scripts) {
