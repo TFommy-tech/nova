@@ -1670,6 +1670,7 @@
     });
   }  async function showArtist(id, name, skipUrl = false) {
     console.log('[DEBUG] showArtist called with id:', id);
+    if (el.artistName) el.artistName.textContent = 'Загрузка...';
     showView('artist', true);
     if (!skipUrl) {
       if (id) updateUrl('artist', id);
